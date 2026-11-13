@@ -213,3 +213,56 @@ describe("Several active Players", () => {
     expect(onDeck(state)).toEqual(["eve", "fay"]);
   });
 });
+
+describe("Changing the number of active slots mid-Game", () => {
+  it("lowering the slots keeps everyone active; On Deck moves up only once the active count is below the new limit", () => {
+    const state = play(
+      { activeSlots: 3, maxSteals: 3 },
+      [
+        ...addPlayers("ann", "bob", "cat", "dan", "eve", "fay", "gus", "hal"),
+        { type: "StartGame" },
+        { type: "ChangeSettings", settings: { activeSlots: 1 } },
+        { type: "OpenGift", playerId: "bob", giftId: "g1", name: "Chia Pet" },
+        { type: "OpenGift", playerId: "cat", giftId: "g2", name: "Lava Lamp" },
+      ],
+      // Exactly six Draws: lowering must not trigger any more.
+      scriptedDraw(["bob", "cat", "dan", "eve", "fay", "gus"]),
+    );
+
+    expect(activePlayers(state)).toEqual(["dan"]);
+    expect(onDeck(state)).toEqual(["eve", "fay", "gus"]);
+  });
+
+  it("once the last over-limit Player opens a Gift, the next On Deck Player becomes active", () => {
+    const state = play(
+      { activeSlots: 3, maxSteals: 3 },
+      [
+        ...addPlayers("ann", "bob", "cat", "dan", "eve", "fay", "gus", "hal"),
+        { type: "StartGame" },
+        { type: "ChangeSettings", settings: { activeSlots: 1 } },
+        { type: "OpenGift", playerId: "bob", giftId: "g1", name: "Chia Pet" },
+        { type: "OpenGift", playerId: "cat", giftId: "g2", name: "Lava Lamp" },
+        { type: "OpenGift", playerId: "dan", giftId: "g3", name: "Fondue Set" },
+      ],
+      scriptedDraw(["bob", "cat", "dan", "eve", "fay", "gus"]),
+    );
+
+    expect(activePlayers(state)).toEqual(["eve"]);
+    expect(onDeck(state)).toEqual(["fay", "gus"]);
+  });
+
+  it("raising the slots fills them immediately, plus the same number On Deck", () => {
+    const state = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [
+        ...addPlayers("ann", "bob", "cat", "dan", "eve", "fay", "gus", "hal"),
+        { type: "StartGame" },
+        { type: "ChangeSettings", settings: { activeSlots: 3 } },
+      ],
+      scriptedDraw(["bob", "cat", "dan", "eve", "fay", "gus"]),
+    );
+
+    expect(activePlayers(state)).toEqual(["bob", "cat", "dan"]);
+    expect(onDeck(state)).toEqual(["eve", "fay", "gus"]);
+  });
+});

@@ -51,10 +51,13 @@ export interface GameState {
   players: Player[];
   /** Every Player ever drawn, in order; never offered to the Draw again. */
   called: PlayerId[];
-  /** Drawn Players who have not yet taken their Turn, in order. */
-  drawn: PlayerId[];
-  /** Players whose Gift was stolen and who must act next, in order. */
-  victims: PlayerId[];
+  /**
+   * Players who must act now: drawn Players and Victims. Can exceed activeSlots after the
+   * Host lowers it; nobody is taken out of action, the limit applies as they finish.
+   */
+  active: PlayerId[];
+  /** Drawn Players waiting for an active slot, in the order they were drawn. */
+  onDeck: PlayerId[];
   /** For each Victim, the Gift just taken from them, which they may not steal straight back. */
   takenFrom: Record<PlayerId, GiftId>;
   gifts: Gift[];
@@ -62,32 +65,21 @@ export interface GameState {
 }
 
 export function newGame(settings: GameSettings): GameState {
-  return { settings, players: [], called: [], drawn: [], victims: [], takenFrom: {}, gifts: [], picks: 0 };
+  return { settings, players: [], called: [], active: [], onDeck: [], takenFrom: {}, gifts: [], picks: 0 };
 }
 
 export function decide(state: GameState, command: Command, draw: DrawFn): Event[] | RuleError {
   switch (command.type) {
     case "AddPlayer":
       return [{ type: "PlayerAdded", playerId: command.playerId, name: command.name }];
-    case "StartGame": {
-      const events: Event[] = [{ type: "GameStarted" }];
-      const pool = notYetCalled(state);
-      // Fill the active slots, plus the same number On Deck.
-      for (let i = 0; i < 2 * state.settings.activeSlots && pool.length > 0; i++) {
-        const playerId = draw(pool);
-        pool.splice(pool.indexOf(playerId), 1);
-        events.push({ type: "PlayerDrawn", playerId });
-      }
-      return events;
-    }
-    case "OpenGift": {
-      const events: Event[] = [
-        { type: "GiftOpened", playerId: command.playerId, giftId: command.giftId, name: command.name },
-      ];
-      const pool = notYetCalled(state);
-      if (pool.length > 0) events.push({ type: "PlayerDrawn", playerId: draw(pool) });
-      return events;
-    }
+    case "StartGame":
+      return withDraws(state, [{ type: "GameStarted" }], draw);
+    case "OpenGift":
+      return withDraws(
+        state,
+        [{ type: "GiftOpened", playerId: command.playerId, giftId: command.giftId, name: command.name }],
+        draw,
+      );
     case "Steal": {
       const gift = state.gifts.find((g) => g.id === command.giftId);
       if (!gift) return { code: "GiftNotOpened", message: `No opened Gift ${command.giftId}` };
@@ -102,7 +94,7 @@ export function decide(state: GameState, command: Command, draw: DrawFn): Event[
       ];
     }
     case "ChangeSettings":
-      return [{ type: "SettingsChanged", settings: command.settings }];
+      return withDraws(state, [{ type: "SettingsChanged", settings: command.settings }], draw);
   }
 }
 
@@ -113,31 +105,30 @@ export function evolve(state: GameState, event: Event): GameState {
     case "GameStarted":
       return state;
     case "PlayerDrawn":
-      return {
+      return moveUp({
         ...state,
         called: [...state.called, event.playerId],
-        drawn: [...state.drawn, event.playerId],
-      };
+        onDeck: [...state.onDeck, event.playerId],
+      });
     case "GiftOpened":
-      return {
+      return moveUp({
         ...state,
-        drawn: state.drawn.filter((id) => id !== event.playerId),
-        victims: state.victims.filter((id) => id !== event.playerId),
+        active: state.active.filter((id) => id !== event.playerId),
         takenFrom: without(state.takenFrom, event.playerId),
         gifts: [...state.gifts, { id: event.giftId, name: event.name, holderId: event.playerId, steals: 0 }],
         picks: state.picks + 1,
-      };
+      });
     case "GiftStolen":
       return {
         ...state,
-        drawn: state.drawn.filter((id) => id !== event.playerId),
-        victims: [...state.victims.filter((id) => id !== event.playerId), event.fromPlayerId],
+        // The stealer is done; the Victim takes their place, whatever the slot limit.
+        active: [...state.active.filter((id) => id !== event.playerId), event.fromPlayerId],
         takenFrom: { ...without(state.takenFrom, event.playerId), [event.fromPlayerId]: event.giftId },
         gifts: state.gifts.map((g) => (g.id === event.giftId ? { ...g, holderId: event.playerId, steals: g.steals + 1 } : g)),
         picks: state.picks + 1,
       };
     case "SettingsChanged":
-      return { ...state, settings: { ...state.settings, ...event.settings } };
+      return moveUp({ ...state, settings: { ...state.settings, ...event.settings } });
   }
 }
 
@@ -151,14 +142,40 @@ function notYetCalled(state: GameState): PlayerId[] {
   return state.players.map((p) => p.id).filter((id) => !state.called.includes(id));
 }
 
-/** Victims act first, then drawn Players in the order they were drawn. */
+/** On Deck Players move up while the active count is below the slot limit. */
+function moveUp(state: GameState): GameState {
+  const active = [...state.active];
+  const onDeck = [...state.onDeck];
+  while (active.length < state.settings.activeSlots && onDeck.length > 0) {
+    active.push(onDeck.shift()!);
+  }
+  return { ...state, active, onDeck };
+}
+
+/**
+ * Appends Draws after the given events until the active slots are full and the On Deck line
+ * holds as many Players as there are slots (or nobody is left to draw).
+ */
+function withDraws(state: GameState, events: Event[], draw: DrawFn): Event[] {
+  let next = events.reduce(evolve, state);
+  const all = [...events];
+  const slots = next.settings.activeSlots;
+  let pool = notYetCalled(next);
+  while ((next.active.length < slots || next.onDeck.length < slots) && pool.length > 0) {
+    const drawn: Event = { type: "PlayerDrawn", playerId: draw(pool) };
+    all.push(drawn);
+    next = evolve(next, drawn);
+    pool = notYetCalled(next);
+  }
+  return all;
+}
+
 export function activePlayers(state: GameState): PlayerId[] {
-  return [...state.victims, ...state.drawn].slice(0, state.settings.activeSlots);
+  return state.active;
 }
 
 export function onDeck(state: GameState): PlayerId[] {
-  const active = activePlayers(state);
-  return state.drawn.filter((id) => !active.includes(id));
+  return state.onDeck;
 }
 
 export function holderOf(state: GameState, giftId: GiftId): PlayerId | undefined {
