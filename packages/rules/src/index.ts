@@ -18,7 +18,8 @@ export type Command =
   | { type: "Steal"; playerId: PlayerId; giftId: GiftId }
   | { type: "ChangeSettings"; settings: Partial<GameSettings> }
   | { type: "Skip"; playerId: PlayerId }
-  | { type: "RemovePlayer"; playerId: PlayerId };
+  | { type: "RemovePlayer"; playerId: PlayerId }
+  | { type: "Undo" };
 
 /** What actually happened; these are what the Game's log stores. */
 export type Event =
@@ -29,9 +30,10 @@ export type Event =
   | { type: "GiftStolen"; playerId: PlayerId; giftId: GiftId; fromPlayerId: PlayerId }
   | { type: "SettingsChanged"; settings: Partial<GameSettings> }
   | { type: "PlayerSkipped"; playerId: PlayerId }
-  | { type: "PlayerRemoved"; playerId: PlayerId };
+  | { type: "PlayerRemoved"; playerId: PlayerId }
+  | { type: "PickUndone" };
 
-export type RuleErrorCode = "NotActive" | "AlreadyPlayed" | "GiftNotOpened" | "GiftFrozen" | "NoTakeBacks";
+export type RuleErrorCode = "NotActive" | "AlreadyPlayed" | "NothingToUndo" | "GiftNotOpened" | "GiftFrozen" | "NoTakeBacks";
 
 export interface RuleError {
   code: RuleErrorCode;
@@ -67,10 +69,12 @@ export interface GameState {
   takenFrom: Record<PlayerId, GiftId>;
   gifts: Gift[];
   picks: number;
+  /** The state just before the most recent Pick, while that Pick can still be undone. */
+  beforeLastPick: GameState | null;
 }
 
 export function newGame(settings: GameSettings): GameState {
-  return { settings, started: false, players: [], called: [], active: [], onDeck: [], takenFrom: {}, gifts: [], picks: 0 };
+  return { settings, started: false, players: [], called: [], active: [], onDeck: [], takenFrom: {}, gifts: [], picks: 0, beforeLastPick: null };
 }
 
 export function decide(state: GameState, command: Command, draw: DrawFn): Event[] | RuleError {
@@ -114,10 +118,20 @@ export function decide(state: GameState, command: Command, draw: DrawFn): Event[
         return { code: "AlreadyPlayed", message: "A Player who has already played can't be removed" };
       }
       return withDraws(state, [{ type: "PlayerRemoved", playerId: command.playerId }], draw);
+    case "Undo":
+      if (!state.beforeLastPick) return { code: "NothingToUndo", message: "There is no Pick to undo" };
+      return [{ type: "PickUndone" }];
   }
 }
 
 export function evolve(state: GameState, event: Event): GameState {
+  const next = apply(state, event);
+  // Undo covers only a Pick and the Draws it caused; any other change closes the window.
+  const keepsUndo = event.type === "GiftOpened" || event.type === "GiftStolen" || event.type === "PlayerDrawn";
+  return keepsUndo ? next : { ...next, beforeLastPick: null };
+}
+
+function apply(state: GameState, event: Event): GameState {
   switch (event.type) {
     case "PlayerAdded":
       return { ...state, players: [...state.players, { id: event.playerId, name: event.name }] };
@@ -132,6 +146,7 @@ export function evolve(state: GameState, event: Event): GameState {
     case "GiftOpened":
       return moveUp({
         ...state,
+        beforeLastPick: { ...state, beforeLastPick: null },
         active: state.active.filter((id) => id !== event.playerId),
         takenFrom: without(state.takenFrom, event.playerId),
         gifts: [...state.gifts, { id: event.giftId, name: event.name, holderId: event.playerId, steals: 0 }],
@@ -140,6 +155,7 @@ export function evolve(state: GameState, event: Event): GameState {
     case "GiftStolen":
       return {
         ...state,
+        beforeLastPick: { ...state, beforeLastPick: null },
         // The stealer is done; the Victim takes their place, whatever the slot limit.
         active: [...state.active.filter((id) => id !== event.playerId), event.fromPlayerId],
         takenFrom: { ...without(state.takenFrom, event.playerId), [event.fromPlayerId]: event.giftId },
@@ -148,6 +164,9 @@ export function evolve(state: GameState, event: Event): GameState {
       };
     case "SettingsChanged":
       return moveUp({ ...state, settings: { ...state.settings, ...event.settings } });
+    case "PickUndone":
+      // The Draws the Pick caused are undone with it; the redo gets a fresh Draw.
+      return state.beforeLastPick ?? state;
     case "PlayerRemoved":
       return moveUp({
         ...state,

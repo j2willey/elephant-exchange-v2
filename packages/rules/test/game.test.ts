@@ -405,3 +405,75 @@ describe("Remove", () => {
     expect(decide(state, { type: "RemovePlayer", playerId: "bob" }, draw)).toMatchObject({ code: "AlreadyPlayed" });
   });
 });
+
+describe("Undo", () => {
+  it("reverses an opened Gift, returning anyone it caused to be drawn to the pool", () => {
+    const draw = recordingDraw(scriptedDraw(["bob", "cat", "ann", "dan"]));
+    const state = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [
+        ...addPlayers("ann", "bob", "cat", "dan"),
+        { type: "StartGame" },
+        { type: "OpenGift", playerId: "bob", giftId: "g1", name: "Chia Pet" }, // drew Ann On Deck
+        { type: "Undo" }, // wrong Player tapped
+      ],
+      draw,
+    );
+
+    expect(activePlayers(state)).toEqual(["bob"]);
+    expect(onDeck(state)).toEqual(["cat"]);
+    expect(holderOf(state, "g1")).toBeUndefined();
+    expect(turnCount(state)).toBe(0);
+    expect(pickCount(state)).toBe(0);
+
+    evolveAll(state, decide(state, { type: "OpenGift", playerId: "bob", giftId: "g1", name: "Chia Pet" }, draw));
+    expect(draw.offered.at(-1)).toEqual(["ann", "dan"]); // a fresh Draw: Ann is back in the pool
+  });
+
+  const stolen = (draw: DrawFn) =>
+    play(
+      { activeSlots: 1, maxSteals: 1 },
+      [
+        ...addPlayers("ann", "bob", "cat", "dan"),
+        { type: "StartGame" },
+        { type: "OpenGift", playerId: "bob", giftId: "g1", name: "Chia Pet" },
+        { type: "Steal", playerId: "cat", giftId: "g1" }, // Freezes it (limit 1)
+      ],
+      draw,
+    );
+
+  it("reverses a Steal, un-Freezing the Gift and ending the Victim's turn to act", () => {
+    const draw = scriptedDraw(["bob", "cat", "ann"]);
+    const before = stolen(draw);
+    const state = evolveAll(before, decide(before, { type: "Undo" }, draw));
+
+    expect(holderOf(state, "g1")).toBe("bob");
+    expect(isFrozen(state, "g1")).toBe(false);
+    expect(activePlayers(state)).toEqual(["cat"]);
+    expect(pickCount(state)).toBe(1);
+  });
+
+  it("only reverses the last Pick: a second Undo is refused", () => {
+    const draw = scriptedDraw(["bob", "cat", "ann"]);
+    const before = stolen(draw);
+    const once = evolveAll(before, decide(before, { type: "Undo" }, draw));
+
+    expect(decide(once, { type: "Undo" }, draw)).toMatchObject({ code: "NothingToUndo" });
+  });
+
+  it("is refused once anything else has changed since the Pick", () => {
+    const draw = scriptedDraw(["bob", "cat", "ann", "zed"]);
+    const state = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [
+        ...addPlayers("ann", "bob", "cat"),
+        { type: "StartGame" },
+        { type: "OpenGift", playerId: "bob", giftId: "g1", name: "Chia Pet" },
+        { type: "ChangeSettings", settings: { maxSteals: 2 } },
+      ],
+      draw,
+    );
+
+    expect(decide(state, { type: "Undo" }, draw)).toMatchObject({ code: "NothingToUndo" });
+  });
+});
