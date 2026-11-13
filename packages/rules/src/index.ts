@@ -16,7 +16,9 @@ export type Command =
   | { type: "StartGame" }
   | { type: "OpenGift"; playerId: PlayerId; giftId: GiftId; name: string }
   | { type: "Steal"; playerId: PlayerId; giftId: GiftId }
-  | { type: "ChangeSettings"; settings: Partial<GameSettings> };
+  | { type: "ChangeSettings"; settings: Partial<GameSettings> }
+  | { type: "Skip"; playerId: PlayerId }
+  | { type: "RemovePlayer"; playerId: PlayerId };
 
 /** What actually happened; these are what the Game's log stores. */
 export type Event =
@@ -25,9 +27,11 @@ export type Event =
   | { type: "PlayerDrawn"; playerId: PlayerId }
   | { type: "GiftOpened"; playerId: PlayerId; giftId: GiftId; name: string }
   | { type: "GiftStolen"; playerId: PlayerId; giftId: GiftId; fromPlayerId: PlayerId }
-  | { type: "SettingsChanged"; settings: Partial<GameSettings> };
+  | { type: "SettingsChanged"; settings: Partial<GameSettings> }
+  | { type: "PlayerSkipped"; playerId: PlayerId }
+  | { type: "PlayerRemoved"; playerId: PlayerId };
 
-export type RuleErrorCode = "NotActive" | "GiftNotOpened" | "GiftFrozen" | "NoTakeBacks";
+export type RuleErrorCode = "NotActive" | "AlreadyPlayed" | "GiftNotOpened" | "GiftFrozen" | "NoTakeBacks";
 
 export interface RuleError {
   code: RuleErrorCode;
@@ -48,6 +52,7 @@ interface Gift {
 
 export interface GameState {
   settings: GameSettings;
+  started: boolean;
   players: Player[];
   /** Every Player ever drawn, in order; never offered to the Draw again. */
   called: PlayerId[];
@@ -65,7 +70,7 @@ export interface GameState {
 }
 
 export function newGame(settings: GameSettings): GameState {
-  return { settings, players: [], called: [], active: [], onDeck: [], takenFrom: {}, gifts: [], picks: 0 };
+  return { settings, started: false, players: [], called: [], active: [], onDeck: [], takenFrom: {}, gifts: [], picks: 0 };
 }
 
 export function decide(state: GameState, command: Command, draw: DrawFn): Event[] | RuleError {
@@ -74,7 +79,7 @@ export function decide(state: GameState, command: Command, draw: DrawFn): Event[
   }
   switch (command.type) {
     case "AddPlayer":
-      return [{ type: "PlayerAdded", playerId: command.playerId, name: command.name }];
+      return withDraws(state, [{ type: "PlayerAdded", playerId: command.playerId, name: command.name }], draw);
     case "StartGame":
       return withDraws(state, [{ type: "GameStarted" }], draw);
     case "OpenGift":
@@ -98,6 +103,17 @@ export function decide(state: GameState, command: Command, draw: DrawFn): Event[
     }
     case "ChangeSettings":
       return withDraws(state, [{ type: "SettingsChanged", settings: command.settings }], draw);
+    case "Skip":
+      if (command.playerId in state.takenFrom) {
+        return { code: "AlreadyPlayed", message: "A Victim has already played and can't be skipped" };
+      }
+      // The replacement comes from everyone else, or the Skip could draw the same Player straight back.
+      return withDraws(state, [{ type: "PlayerSkipped", playerId: command.playerId }], draw, command.playerId);
+    case "RemovePlayer":
+      if (command.playerId in state.takenFrom || state.gifts.some((g) => g.holderId === command.playerId)) {
+        return { code: "AlreadyPlayed", message: "A Player who has already played can't be removed" };
+      }
+      return withDraws(state, [{ type: "PlayerRemoved", playerId: command.playerId }], draw);
   }
 }
 
@@ -106,7 +122,7 @@ export function evolve(state: GameState, event: Event): GameState {
     case "PlayerAdded":
       return { ...state, players: [...state.players, { id: event.playerId, name: event.name }] };
     case "GameStarted":
-      return state;
+      return { ...state, started: true };
     case "PlayerDrawn":
       return moveUp({
         ...state,
@@ -132,6 +148,21 @@ export function evolve(state: GameState, event: Event): GameState {
       };
     case "SettingsChanged":
       return moveUp({ ...state, settings: { ...state.settings, ...event.settings } });
+    case "PlayerRemoved":
+      return moveUp({
+        ...state,
+        players: state.players.filter((p) => p.id !== event.playerId),
+        called: state.called.filter((id) => id !== event.playerId),
+        active: state.active.filter((id) => id !== event.playerId),
+        onDeck: state.onDeck.filter((id) => id !== event.playerId),
+      });
+    case "PlayerSkipped":
+      return moveUp({
+        ...state,
+        called: state.called.filter((id) => id !== event.playerId),
+        active: state.active.filter((id) => id !== event.playerId),
+        onDeck: state.onDeck.filter((id) => id !== event.playerId),
+      });
   }
 }
 
@@ -159,16 +190,18 @@ function moveUp(state: GameState): GameState {
  * Appends Draws after the given events until the active slots are full and the On Deck line
  * holds as many Players as there are slots (or nobody is left to draw).
  */
-function withDraws(state: GameState, events: Event[], draw: DrawFn): Event[] {
+function withDraws(state: GameState, events: Event[], draw: DrawFn, exclude?: PlayerId): Event[] {
   let next = events.reduce(evolve, state);
   const all = [...events];
+  if (!next.started) return all;
   const slots = next.settings.activeSlots;
-  let pool = notYetCalled(next);
+  const drawable = (s: GameState) => notYetCalled(s).filter((id) => id !== exclude);
+  let pool = drawable(next);
   while ((next.active.length < slots || next.onDeck.length < slots) && pool.length > 0) {
     const drawn: Event = { type: "PlayerDrawn", playerId: draw(pool) };
     all.push(drawn);
     next = evolve(next, drawn);
-    pool = notYetCalled(next);
+    pool = drawable(next);
   }
   return all;
 }

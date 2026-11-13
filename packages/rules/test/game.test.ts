@@ -49,6 +49,11 @@ function play(settings: GameSettings, commands: Command[], draw: DrawFn): GameSt
   return state;
 }
 
+function evolveAll(state: GameState, result: ReturnType<typeof decide>): GameState {
+  if (!Array.isArray(result)) throw new Error(`RuleError: ${result.message}`);
+  return result.reduce(evolve, state);
+}
+
 const addPlayers = (...ids: string[]): Command[] =>
   ids.map((id) => ({ type: "AddPlayer", playerId: id, name: id }));
 
@@ -304,5 +309,99 @@ describe("Only active Players can Pick", () => {
   it("rejects stealing a Gift that hasn't been opened", () => {
     const result = decide(started(), { type: "Steal", playerId: "bob", giftId: "nope" }, draw());
     expect(result).toMatchObject({ code: "GiftNotOpened" });
+  });
+});
+
+describe("Late Arrivals", () => {
+  it("are drawn On Deck straight away when the On Deck line has room", () => {
+    const draw = scriptedDraw(["bob", "ann", "zed"]);
+    const state = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [
+        ...addPlayers("ann", "bob"),
+        { type: "StartGame" },
+        { type: "OpenGift", playerId: "bob", giftId: "g1", name: "Chia Pet" }, // Ann moves up; nobody left to draw
+        ...addPlayers("zed"),
+      ],
+      draw,
+    );
+
+    expect(activePlayers(state)).toEqual(["ann"]);
+    expect(onDeck(state)).toEqual(["zed"]);
+  });
+});
+
+describe("Skip", () => {
+  it("returns an absent called Player to the pool and draws a replacement from everyone else", () => {
+    const draw = recordingDraw(scriptedDraw(["bob", "cat", "ann", "bob"]));
+    const state = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [
+        ...addPlayers("ann", "bob", "cat", "dan"),
+        { type: "StartGame" },
+        { type: "Skip", playerId: "bob" }, // Bob is in the bathroom
+      ],
+      draw,
+    );
+
+    expect(activePlayers(state)).toEqual(["cat"]);
+    expect(onDeck(state)).toEqual(["ann"]);
+    expect(draw.offered.at(-1)).toEqual(["ann", "dan"]); // not Bob, or the Skip could draw him straight back
+
+    const later = evolveAll(state, decide(state, { type: "OpenGift", playerId: "cat", giftId: "g1", name: "Chia Pet" }, draw));
+    expect(draw.offered.at(-1)).toEqual(["bob", "dan"]); // Bob is back in the pool
+    expect(onDeck(later)).toEqual(["bob"]);
+  });
+
+  it("rejects skipping a Victim, who has already played", () => {
+    const draw = scriptedDraw(["bob", "cat", "ann"]);
+    const state = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [
+        ...addPlayers("ann", "bob", "cat", "dan"),
+        { type: "StartGame" },
+        { type: "OpenGift", playerId: "bob", giftId: "g1", name: "Chia Pet" },
+        { type: "Steal", playerId: "cat", giftId: "g1" },
+      ],
+      draw,
+    );
+
+    expect(decide(state, { type: "Skip", playerId: "bob" }, draw)).toMatchObject({ code: "AlreadyPlayed" });
+  });
+});
+
+describe("Remove", () => {
+  it("takes a Player who left early out of the Game, drawing a replacement if they were On Deck", () => {
+    const draw = recordingDraw(scriptedDraw(["bob", "cat", "ann", "dan"]));
+    const state = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [
+        ...addPlayers("ann", "bob", "cat", "dan"),
+        { type: "StartGame" },
+        { type: "RemovePlayer", playerId: "cat" }, // Cat had to leave
+        { type: "OpenGift", playerId: "bob", giftId: "g1", name: "Chia Pet" },
+      ],
+      draw,
+    );
+
+    expect(activePlayers(state)).toEqual(["ann"]);
+    expect(onDeck(state)).toEqual(["dan"]);
+    expect(draw.offered.slice(2).flat()).not.toContain("cat"); // the first two Draws were at the start
+    expect(draw.offered.at(2)).toEqual(["ann", "dan"]);
+  });
+
+  it("rejects removing a Player who holds a Gift", () => {
+    const draw = scriptedDraw(["bob", "cat", "ann"]);
+    const state = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [
+        ...addPlayers("ann", "bob", "cat", "dan"),
+        { type: "StartGame" },
+        { type: "OpenGift", playerId: "bob", giftId: "g1", name: "Chia Pet" },
+      ],
+      draw,
+    );
+
+    expect(decide(state, { type: "RemovePlayer", playerId: "bob" }, draw)).toMatchObject({ code: "AlreadyPlayed" });
   });
 });
