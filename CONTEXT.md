@@ -82,6 +82,9 @@ _Avoid_: Move, exchange, action
 **Steal**:
 A Pick in which a Player takes an opened Gift from its current holder, who becomes a Victim.
 
+**No Take-Backs**:
+A Victim may not steal back the Gift just taken from them on their very next Pick; once they get any Gift, the restriction ends.
+
 **Frozen**:
 A Gift that has been stolen the maximum number of times and can no longer be stolen.
 _Avoid_: Locked, dead

@@ -23,7 +23,10 @@ export type Event =
   | { type: "GiftOpened"; playerId: PlayerId; giftId: GiftId; name: string }
   | { type: "GiftStolen"; playerId: PlayerId; giftId: GiftId; fromPlayerId: PlayerId };
 
+export type RuleErrorCode = "GiftNotOpened" | "NoTakeBacks";
+
 export interface RuleError {
+  code: RuleErrorCode;
   message: string;
 }
 
@@ -47,12 +50,14 @@ export interface GameState {
   drawn: PlayerId[];
   /** Players whose Gift was stolen and who must act next, in order. */
   victims: PlayerId[];
+  /** For each Victim, the Gift just taken from them, which they may not steal straight back. */
+  takenFrom: Record<PlayerId, GiftId>;
   gifts: Gift[];
   picks: number;
 }
 
 export function newGame(settings: GameSettings): GameState {
-  return { settings, players: [], called: [], drawn: [], victims: [], gifts: [], picks: 0 };
+  return { settings, players: [], called: [], drawn: [], victims: [], takenFrom: {}, gifts: [], picks: 0 };
 }
 
 export function decide(state: GameState, command: Command, draw: DrawFn): Event[] | RuleError {
@@ -79,7 +84,10 @@ export function decide(state: GameState, command: Command, draw: DrawFn): Event[
     }
     case "Steal": {
       const gift = state.gifts.find((g) => g.id === command.giftId);
-      if (!gift) return { message: `No opened Gift ${command.giftId}` };
+      if (!gift) return { code: "GiftNotOpened", message: `No opened Gift ${command.giftId}` };
+      if (state.takenFrom[command.playerId] === gift.id) {
+        return { code: "NoTakeBacks", message: "You can't steal back the Gift just taken from you" };
+      }
       return [
         { type: "GiftStolen", playerId: command.playerId, giftId: gift.id, fromPlayerId: gift.holderId },
       ];
@@ -104,6 +112,7 @@ export function evolve(state: GameState, event: Event): GameState {
         ...state,
         drawn: state.drawn.filter((id) => id !== event.playerId),
         victims: state.victims.filter((id) => id !== event.playerId),
+        takenFrom: without(state.takenFrom, event.playerId),
         gifts: [...state.gifts, { id: event.giftId, name: event.name, holderId: event.playerId }],
         picks: state.picks + 1,
       };
@@ -112,10 +121,16 @@ export function evolve(state: GameState, event: Event): GameState {
         ...state,
         drawn: state.drawn.filter((id) => id !== event.playerId),
         victims: [...state.victims.filter((id) => id !== event.playerId), event.fromPlayerId],
+        takenFrom: { ...without(state.takenFrom, event.playerId), [event.fromPlayerId]: event.giftId },
         gifts: state.gifts.map((g) => (g.id === event.giftId ? { ...g, holderId: event.playerId } : g)),
         picks: state.picks + 1,
       };
   }
+}
+
+function without<V>(record: Record<PlayerId, V>, key: PlayerId): Record<PlayerId, V> {
+  const { [key]: _removed, ...rest } = record;
+  return rest;
 }
 
 /** Players never yet drawn: the pool for the next Draw. */

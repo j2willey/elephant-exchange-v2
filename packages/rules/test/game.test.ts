@@ -125,3 +125,23 @@ describe("Stealing a Gift", () => {
     expect(onDeck(state)).toEqual(["dan"]);
   });
 });
+
+describe("No take-backs", () => {
+  it("rejects a Victim stealing back the Gift just taken from them", () => {
+    const draw = scriptedDraw(["bob", "cat", "ann"]);
+    const state = play(
+      { activeSlots: 1 },
+      [
+        ...addPlayers("ann", "bob", "cat", "dan"),
+        { type: "StartGame" },
+        { type: "OpenGift", playerId: "bob", giftId: "g1", name: "Chia Pet" },
+        { type: "Steal", playerId: "cat", giftId: "g1" },
+      ],
+      draw,
+    );
+
+    const result = decide(state, { type: "Steal", playerId: "bob", giftId: "g1" }, draw);
+
+    expect(result).toMatchObject({ code: "NoTakeBacks" });
+  });
+});
