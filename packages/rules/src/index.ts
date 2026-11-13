@@ -27,7 +27,7 @@ export type Event =
   | { type: "GiftStolen"; playerId: PlayerId; giftId: GiftId; fromPlayerId: PlayerId }
   | { type: "SettingsChanged"; settings: Partial<GameSettings> };
 
-export type RuleErrorCode = "GiftNotOpened" | "GiftFrozen" | "NoTakeBacks";
+export type RuleErrorCode = "NotActive" | "GiftNotOpened" | "GiftFrozen" | "NoTakeBacks";
 
 export interface RuleError {
   code: RuleErrorCode;
@@ -69,6 +69,9 @@ export function newGame(settings: GameSettings): GameState {
 }
 
 export function decide(state: GameState, command: Command, draw: DrawFn): Event[] | RuleError {
+  if ((command.type === "OpenGift" || command.type === "Steal") && !state.active.includes(command.playerId)) {
+    return { code: "NotActive", message: "It isn't this Player's Turn" };
+  }
   switch (command.type) {
     case "AddPlayer":
       return [{ type: "PlayerAdded", playerId: command.playerId, name: command.name }];

@@ -266,3 +266,43 @@ describe("Changing the number of active slots mid-Game", () => {
     expect(onDeck(state)).toEqual(["eve", "fay", "gus"]);
   });
 });
+
+describe("Only active Players can Pick", () => {
+  const draw = () => scriptedDraw(["bob", "cat", "ann"]);
+  const started = () =>
+    play(
+      { activeSlots: 1, maxSteals: 3 },
+      [...addPlayers("ann", "bob", "cat", "dan"), { type: "StartGame" }],
+      draw(),
+    );
+
+  it("rejects a Player who has not been called yet", () => {
+    const result = decide(started(), { type: "OpenGift", playerId: "dan", giftId: "g1", name: "Socks" }, draw());
+    expect(result).toMatchObject({ code: "NotActive" });
+  });
+
+  it("rejects a Player who is only On Deck", () => {
+    const result = decide(started(), { type: "OpenGift", playerId: "cat", giftId: "g1", name: "Socks" }, draw());
+    expect(result).toMatchObject({ code: "NotActive" });
+  });
+
+  it("rejects a Player who already finished their Turn", () => {
+    const d = draw();
+    const state = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [
+        ...addPlayers("ann", "bob", "cat", "dan"),
+        { type: "StartGame" },
+        { type: "OpenGift", playerId: "bob", giftId: "g1", name: "Chia Pet" },
+      ],
+      d,
+    );
+    const result = decide(state, { type: "Steal", playerId: "bob", giftId: "g1" }, d);
+    expect(result).toMatchObject({ code: "NotActive" });
+  });
+
+  it("rejects stealing a Gift that hasn't been opened", () => {
+    const result = decide(started(), { type: "Steal", playerId: "bob", giftId: "nope" }, draw());
+    expect(result).toMatchObject({ code: "GiftNotOpened" });
+  });
+});
