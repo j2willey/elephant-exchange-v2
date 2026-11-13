@@ -6,8 +6,12 @@ import {
   newGame,
   holderOf,
   isFrozen,
+  leftoverGiftCount,
   onDeck,
+  phase,
   pickCount,
+  returnedGifts,
+  stealCount,
   turnCount,
   type Command,
   type DrawFn,
@@ -475,5 +479,187 @@ describe("Undo", () => {
     );
 
     expect(decide(state, { type: "Undo" }, draw)).toMatchObject({ code: "NothingToUndo" });
+  });
+});
+
+describe("Final Round", () => {
+  /** Ann, Bob, Cat are called in that order and each opens a Gift: g1, g2, g3. */
+  const allOpened: Command[] = [
+    ...addPlayers("ann", "bob", "cat"),
+    { type: "StartGame" },
+    { type: "OpenGift", playerId: "ann", giftId: "g1", name: "Chia Pet" },
+    { type: "OpenGift", playerId: "bob", giftId: "g2", name: "Lava Lamp" },
+    { type: "OpenGift", playerId: "cat", giftId: "g3", name: "Fondue Set" },
+  ];
+  const callOrder = () => scriptedDraw(["ann", "bob", "cat"]);
+
+  it("gives the first Players called their chance one at a time, the rest waiting On Deck", () => {
+    const state = play(
+      { activeSlots: 2, maxSteals: 3 },
+      [...allOpened, { type: "StartFinalRound", finalists: 2, leftoverGifts: 1 }],
+      callOrder(),
+    );
+
+    expect(activePlayers(state)).toEqual(["ann"]);
+    expect(onDeck(state)).toEqual(["bob"]);
+  });
+
+  it("passes the chance on when a Final Round Player keeps their Gift, until nobody is left", () => {
+    const start: Command[] = [...allOpened, { type: "StartFinalRound", finalists: 2, leftoverGifts: 1 }];
+    const afterAnn = play({ activeSlots: 1, maxSteals: 3 }, [...start, { type: "KeepGift", playerId: "ann" }], callOrder());
+    expect(activePlayers(afterAnn)).toEqual(["bob"]);
+    expect(holderOf(afterAnn, "g1")).toBe("ann");
+
+    const afterBob = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [...start, { type: "KeepGift", playerId: "ann" }, { type: "KeepGift", playerId: "bob" }],
+      callOrder(),
+    );
+    expect(activePlayers(afterBob)).toEqual([]);
+    expect(onDeck(afterBob)).toEqual([]);
+  });
+
+  it("returns a stealing Final Round Player's own Gift to the table; taking it is not a Steal and ends the chain", () => {
+    const start: Command[] = [...allOpened, { type: "StartFinalRound", finalists: 2, leftoverGifts: 1 }];
+    const afterSteal = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [...start, { type: "Steal", playerId: "ann", giftId: "g3" }],
+      callOrder(),
+    );
+    expect(holderOf(afterSteal, "g3")).toBe("ann");
+    expect(returnedGifts(afterSteal)).toEqual(["g1"]);
+    expect(activePlayers(afterSteal)).toEqual(["cat"]);
+
+    const afterTake = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [...start, { type: "Steal", playerId: "ann", giftId: "g3" }, { type: "TakeReturnedGift", playerId: "cat", giftId: "g1" }],
+      callOrder(),
+    );
+    expect(holderOf(afterTake, "g1")).toBe("cat");
+    expect(stealCount(afterTake, "g1")).toBe(0);
+    expect(returnedGifts(afterTake)).toEqual([]);
+    expect(activePlayers(afterTake)).toEqual(["bob"]); // the next Final Round Player
+  });
+
+  it("lets a Victim open a Leftover Gift, and refuses once none are left", () => {
+    const draw = callOrder();
+    const state = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [
+        ...allOpened,
+        { type: "StartFinalRound", finalists: 2, leftoverGifts: 1 },
+        { type: "Steal", playerId: "ann", giftId: "g3" },
+        { type: "OpenGift", playerId: "cat", giftId: "g4", name: "Snow Globe" }, // the one Leftover Gift
+        { type: "Steal", playerId: "bob", giftId: "g4" },
+      ],
+      draw,
+    );
+
+    expect(leftoverGiftCount(state)).toBe(0);
+    expect(activePlayers(state)).toEqual(["cat"]);
+    expect(decide(state, { type: "OpenGift", playerId: "cat", giftId: "g5", name: "?" }, draw)).toMatchObject({
+      code: "NoLeftoverGifts",
+    });
+  });
+
+  it("lets a Final Round Player steal back the Gift taken from them earlier in the Game", () => {
+    const state = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [
+        ...addPlayers("ann", "bob", "cat"),
+        { type: "StartGame" },
+        { type: "OpenGift", playerId: "ann", giftId: "g1", name: "Chia Pet" },
+        { type: "Steal", playerId: "bob", giftId: "g1" }, // Ann loses her Chia Pet
+        { type: "OpenGift", playerId: "ann", giftId: "g2", name: "Lava Lamp" },
+        { type: "OpenGift", playerId: "cat", giftId: "g3", name: "Fondue Set" },
+        { type: "StartFinalRound", finalists: 1, leftoverGifts: 0 },
+        { type: "Steal", playerId: "ann", giftId: "g1" }, // and gets it back
+      ],
+      callOrder(),
+    );
+
+    expect(holderOf(state, "g1")).toBe("ann");
+    expect(returnedGifts(state)).toEqual(["g2"]);
+    expect(activePlayers(state)).toEqual(["bob"]);
+  });
+
+  it("can't start while any Player is still taking a Turn", () => {
+    const draw = callOrder();
+    const state = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [...addPlayers("ann", "bob", "cat"), { type: "StartGame" }, { type: "OpenGift", playerId: "ann", giftId: "g1", name: "Chia Pet" }],
+      draw,
+    );
+
+    expect(decide(state, { type: "StartFinalRound", finalists: 1, leftoverGifts: 0 }, draw)).toMatchObject({
+      code: "TurnsInProgress",
+    });
+  });
+
+  it("refuses KeepGift from an active Player who holds no Gift", () => {
+    const draw = callOrder();
+    const state = play({ activeSlots: 1, maxSteals: 3 }, [...addPlayers("ann", "bob", "cat"), { type: "StartGame" }], draw);
+
+    expect(decide(state, { type: "KeepGift", playerId: "ann" }, draw)).toMatchObject({ code: "NothingToKeep" });
+  });
+
+  it("can start with a skipped Player still in the pool, who is never drawn during it", () => {
+    // The script ends with Dan's two calls: any further Draw would throw.
+    const draw = scriptedDraw(["ann", "bob", "cat", "dan", "dan"]);
+    const state = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [
+        ...addPlayers("ann", "bob", "cat", "dan"),
+        { type: "StartGame" },
+        { type: "OpenGift", playerId: "ann", giftId: "g1", name: "Chia Pet" },
+        { type: "OpenGift", playerId: "bob", giftId: "g2", name: "Lava Lamp" },
+        { type: "Skip", playerId: "dan" }, // Dan isn't here
+        { type: "OpenGift", playerId: "cat", giftId: "g3", name: "Fondue Set" }, // Dan is drawn again...
+        { type: "Skip", playerId: "dan" }, // ...and still isn't here
+        { type: "StartFinalRound", finalists: 1, leftoverGifts: 1 },
+        { type: "Steal", playerId: "ann", giftId: "g3" },
+        { type: "OpenGift", playerId: "cat", giftId: "g4", name: "Dan's Gift" },
+      ],
+      draw,
+    );
+
+    expect(holderOf(state, "g4")).toBe("cat");
+    expect(activePlayers(state)).toEqual([]);
+  });
+});
+
+describe("End Game", () => {
+  const draw = () => scriptedDraw(["ann", "bob", "cat"]);
+  const opened: Command[] = [
+    ...addPlayers("ann", "bob", "cat"),
+    { type: "StartGame" },
+    { type: "OpenGift", playerId: "ann", giftId: "g1", name: "Chia Pet" },
+    { type: "OpenGift", playerId: "bob", giftId: "g2", name: "Lava Lamp" },
+    { type: "OpenGift", playerId: "cat", giftId: "g3", name: "Fondue Set" },
+  ];
+
+  it("ends the Game when the Host says so, after the Final Round or without one", () => {
+    const withFinal = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [...opened, { type: "StartFinalRound", finalists: 1, leftoverGifts: 0 }, { type: "KeepGift", playerId: "ann" }, { type: "EndGame" }],
+      draw(),
+    );
+    expect(phase(withFinal)).toBe("ended");
+
+    const without = play({ activeSlots: 1, maxSteals: 3 }, [...opened, { type: "EndGame" }], draw());
+    expect(phase(without)).toBe("ended");
+  });
+
+  it("can end at any moment, even mid-Turn, and accepts nothing afterwards", () => {
+    const d = draw();
+    const endedEarly = play({ activeSlots: 1, maxSteals: 3 }, [...opened.slice(0, -1), { type: "EndGame" }], d);
+    expect(phase(endedEarly)).toBe("ended");
+    expect(activePlayers(endedEarly)).toEqual([]); // Cat never got her Turn: the room booking ran out
+
+    const d2 = draw();
+    const ended = play({ activeSlots: 1, maxSteals: 3 }, [...opened, { type: "EndGame" }], d2);
+    expect(decide(ended, { type: "StartFinalRound", finalists: 1, leftoverGifts: 0 }, d2)).toMatchObject({
+      code: "GameOver",
+    });
   });
 });

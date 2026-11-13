@@ -48,7 +48,7 @@ A Player already drawn but not yet called up; drawn as a Turn starts, so they ge
 ### Play
 
 **Game**:
-One gift exchange, from setup through the final results.
+One gift exchange, from setup through the final results. The Host may end it at any moment, even mid-Turn.
 
 **Roster**:
 The list of Players in a Game.
@@ -76,7 +76,7 @@ Everything from a Player being called up until a new Gift is opened, including a
 _Avoid_: Round
 
 **Pick**:
-A single action within a Turn: opening a new Gift or making a Steal. "Turn 42 of 50 · 95 Picks."
+A single action within a Turn: opening a new Gift, making a Steal, or taking a Returned Gift. "Turn 42 of 50 · 95 Picks."
 _Avoid_: Move, exchange, action
 
 **Steal**:
