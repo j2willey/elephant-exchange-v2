@@ -15,7 +15,8 @@ export type Command =
   | { type: "AddPlayer"; playerId: PlayerId; name: string }
   | { type: "StartGame" }
   | { type: "OpenGift"; playerId: PlayerId; giftId: GiftId; name: string }
-  | { type: "Steal"; playerId: PlayerId; giftId: GiftId };
+  | { type: "Steal"; playerId: PlayerId; giftId: GiftId }
+  | { type: "ChangeSettings"; settings: Partial<GameSettings> };
 
 /** What actually happened; these are what the Game's log stores. */
 export type Event =
@@ -23,7 +24,8 @@ export type Event =
   | { type: "GameStarted" }
   | { type: "PlayerDrawn"; playerId: PlayerId }
   | { type: "GiftOpened"; playerId: PlayerId; giftId: GiftId; name: string }
-  | { type: "GiftStolen"; playerId: PlayerId; giftId: GiftId; fromPlayerId: PlayerId };
+  | { type: "GiftStolen"; playerId: PlayerId; giftId: GiftId; fromPlayerId: PlayerId }
+  | { type: "SettingsChanged"; settings: Partial<GameSettings> };
 
 export type RuleErrorCode = "GiftNotOpened" | "GiftFrozen" | "NoTakeBacks";
 
@@ -98,6 +100,8 @@ export function decide(state: GameState, command: Command, draw: DrawFn): Event[
         { type: "GiftStolen", playerId: command.playerId, giftId: gift.id, fromPlayerId: gift.holderId },
       ];
     }
+    case "ChangeSettings":
+      return [{ type: "SettingsChanged", settings: command.settings }];
   }
 }
 
@@ -131,6 +135,8 @@ export function evolve(state: GameState, event: Event): GameState {
         gifts: state.gifts.map((g) => (g.id === event.giftId ? { ...g, holderId: event.playerId, steals: g.steals + 1 } : g)),
         picks: state.picks + 1,
       };
+    case "SettingsChanged":
+      return { ...state, settings: { ...state.settings, ...event.settings } };
   }
 }
 

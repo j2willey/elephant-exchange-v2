@@ -171,3 +171,28 @@ describe("Steal limit", () => {
     });
   });
 });
+
+describe("Changing settings mid-Game", () => {
+  it("lowering the steal limit Freezes Gifts already at the new limit", () => {
+    const draw = scriptedDraw(["bob", "cat", "ann", "dan", "eve"]);
+    const state = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [
+        ...addPlayers("ann", "bob", "cat", "dan", "eve"),
+        { type: "StartGame" },
+        { type: "OpenGift", playerId: "bob", giftId: "g1", name: "Chia Pet" },
+        { type: "Steal", playerId: "cat", giftId: "g1" },
+        { type: "OpenGift", playerId: "bob", giftId: "g2", name: "Lava Lamp" },
+        { type: "Steal", playerId: "ann", giftId: "g1" }, // 2 Steals: still stealable under a limit of 3
+        { type: "OpenGift", playerId: "cat", giftId: "g3", name: "Fondue Set" },
+        { type: "ChangeSettings", settings: { maxSteals: 2 } }, // game is running long
+      ],
+      draw,
+    );
+
+    expect(isFrozen(state, "g1")).toBe(true);
+    expect(decide(state, { type: "Steal", playerId: "dan", giftId: "g1" }, draw)).toMatchObject({
+      code: "GiftFrozen",
+    });
+  });
+});
