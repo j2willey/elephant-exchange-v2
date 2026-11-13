@@ -5,6 +5,7 @@ import {
   evolve,
   newGame,
   holderOf,
+  isFrozen,
   onDeck,
   pickCount,
   turnCount,
@@ -54,7 +55,7 @@ const addPlayers = (...ids: string[]): Command[] =>
 describe("Starting a Game", () => {
   it("draws one active Player and one On Deck when there is one active slot", () => {
     const state = play(
-      { activeSlots: 1 },
+      { activeSlots: 1, maxSteals: 3 },
       [...addPlayers("ann", "bob", "cat"), { type: "StartGame" }],
       scriptedDraw(["bob", "cat"]),
     );
@@ -67,7 +68,7 @@ describe("Starting a Game", () => {
 describe("Opening a Gift", () => {
   it("ends the Turn: the On Deck Player becomes active and the next Player is drawn On Deck", () => {
     const state = play(
-      { activeSlots: 1 },
+      { activeSlots: 1, maxSteals: 3 },
       [
         ...addPlayers("ann", "bob", "cat"),
         { type: "StartGame" },
@@ -87,7 +88,7 @@ describe("Stealing a Gift", () => {
   it("makes the previous holder a Victim who acts before anyone On Deck, adding a Pick but not a Turn", () => {
     const draw = scriptedDraw(["bob", "cat", "ann"]);
     const state = play(
-      { activeSlots: 1 },
+      { activeSlots: 1, maxSteals: 3 },
       [
         ...addPlayers("ann", "bob", "cat", "dan"),
         { type: "StartGame" },
@@ -107,7 +108,7 @@ describe("Stealing a Gift", () => {
   it("never offers a Victim to the Draw, and the Turn ends when the Victim opens a Gift", () => {
     const draw = recordingDraw(scriptedDraw(["bob", "cat", "ann", "dan"]));
     const state = play(
-      { activeSlots: 1 },
+      { activeSlots: 1, maxSteals: 3 },
       [
         ...addPlayers("ann", "bob", "cat", "dan"),
         { type: "StartGame" },
@@ -130,7 +131,7 @@ describe("No take-backs", () => {
   it("rejects a Victim stealing back the Gift just taken from them", () => {
     const draw = scriptedDraw(["bob", "cat", "ann"]);
     const state = play(
-      { activeSlots: 1 },
+      { activeSlots: 1, maxSteals: 3 },
       [
         ...addPlayers("ann", "bob", "cat", "dan"),
         { type: "StartGame" },
@@ -143,5 +144,30 @@ describe("No take-backs", () => {
     const result = decide(state, { type: "Steal", playerId: "bob", giftId: "g1" }, draw);
 
     expect(result).toMatchObject({ code: "NoTakeBacks" });
+  });
+});
+
+describe("Steal limit", () => {
+  it("Freezes a Gift on the Steal that reaches the limit, and rejects any further Steal of it", () => {
+    const draw = scriptedDraw(["bob", "cat", "ann", "dan", "eve"]);
+    const state = play(
+      { activeSlots: 1, maxSteals: 2 },
+      [
+        ...addPlayers("ann", "bob", "cat", "dan", "eve"),
+        { type: "StartGame" },
+        { type: "OpenGift", playerId: "bob", giftId: "g1", name: "Chia Pet" },
+        { type: "Steal", playerId: "cat", giftId: "g1" }, // 1st Steal
+        { type: "OpenGift", playerId: "bob", giftId: "g2", name: "Lava Lamp" },
+        { type: "Steal", playerId: "ann", giftId: "g1" }, // 2nd Steal: limit reached
+        { type: "OpenGift", playerId: "cat", giftId: "g3", name: "Fondue Set" },
+      ],
+      draw,
+    );
+
+    expect(isFrozen(state, "g1")).toBe(true);
+    expect(activePlayers(state)).toEqual(["dan"]);
+    expect(decide(state, { type: "Steal", playerId: "dan", giftId: "g1" }, draw)).toMatchObject({
+      code: "GiftFrozen",
+    });
   });
 });

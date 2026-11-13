@@ -4,6 +4,8 @@ export type GiftId = string;
 export interface GameSettings {
   /** How many Players may take Turns at the same time. */
   activeSlots: number;
+  /** A Gift is Frozen by the Steal that brings its count to this number. */
+  maxSteals: number;
 }
 
 /** Picks one Player from the candidates. The server passes real randomness; tests pass a script. */
@@ -23,7 +25,7 @@ export type Event =
   | { type: "GiftOpened"; playerId: PlayerId; giftId: GiftId; name: string }
   | { type: "GiftStolen"; playerId: PlayerId; giftId: GiftId; fromPlayerId: PlayerId };
 
-export type RuleErrorCode = "GiftNotOpened" | "NoTakeBacks";
+export type RuleErrorCode = "GiftNotOpened" | "GiftFrozen" | "NoTakeBacks";
 
 export interface RuleError {
   code: RuleErrorCode;
@@ -39,6 +41,7 @@ interface Gift {
   id: GiftId;
   name: string;
   holderId: PlayerId;
+  steals: number;
 }
 
 export interface GameState {
@@ -85,6 +88,9 @@ export function decide(state: GameState, command: Command, draw: DrawFn): Event[
     case "Steal": {
       const gift = state.gifts.find((g) => g.id === command.giftId);
       if (!gift) return { code: "GiftNotOpened", message: `No opened Gift ${command.giftId}` };
+      if (gift.steals >= state.settings.maxSteals) {
+        return { code: "GiftFrozen", message: `${gift.name} is Frozen and can't be stolen` };
+      }
       if (state.takenFrom[command.playerId] === gift.id) {
         return { code: "NoTakeBacks", message: "You can't steal back the Gift just taken from you" };
       }
@@ -113,7 +119,7 @@ export function evolve(state: GameState, event: Event): GameState {
         drawn: state.drawn.filter((id) => id !== event.playerId),
         victims: state.victims.filter((id) => id !== event.playerId),
         takenFrom: without(state.takenFrom, event.playerId),
-        gifts: [...state.gifts, { id: event.giftId, name: event.name, holderId: event.playerId }],
+        gifts: [...state.gifts, { id: event.giftId, name: event.name, holderId: event.playerId, steals: 0 }],
         picks: state.picks + 1,
       };
     case "GiftStolen":
@@ -122,7 +128,7 @@ export function evolve(state: GameState, event: Event): GameState {
         drawn: state.drawn.filter((id) => id !== event.playerId),
         victims: [...state.victims.filter((id) => id !== event.playerId), event.fromPlayerId],
         takenFrom: { ...without(state.takenFrom, event.playerId), [event.fromPlayerId]: event.giftId },
-        gifts: state.gifts.map((g) => (g.id === event.giftId ? { ...g, holderId: event.playerId } : g)),
+        gifts: state.gifts.map((g) => (g.id === event.giftId ? { ...g, holderId: event.playerId, steals: g.steals + 1 } : g)),
         picks: state.picks + 1,
       };
   }
@@ -160,4 +166,9 @@ export function turnCount(state: GameState): number {
 /** Picks so far: every Gift opened plus every Steal. */
 export function pickCount(state: GameState): number {
   return state.picks;
+}
+
+export function isFrozen(state: GameState, giftId: GiftId): boolean {
+  const gift = state.gifts.find((g) => g.id === giftId);
+  return gift !== undefined && gift.steals >= state.settings.maxSteals;
 }
