@@ -72,7 +72,8 @@ export function decide(state: GameState, command: Command, draw: DrawFn): Event[
     case "StartGame": {
       const events: Event[] = [{ type: "GameStarted" }];
       const pool = notYetCalled(state);
-      for (let i = 0; i < 2 && pool.length > 0; i++) {
+      // Fill the active slots, plus the same number On Deck.
+      for (let i = 0; i < 2 * state.settings.activeSlots && pool.length > 0; i++) {
         const playerId = draw(pool);
         pool.splice(pool.indexOf(playerId), 1);
         events.push({ type: "PlayerDrawn", playerId });
@@ -152,7 +153,7 @@ function notYetCalled(state: GameState): PlayerId[] {
 
 /** Victims act first, then drawn Players in the order they were drawn. */
 export function activePlayers(state: GameState): PlayerId[] {
-  return [...state.victims, ...state.drawn].slice(0, 1);
+  return [...state.victims, ...state.drawn].slice(0, state.settings.activeSlots);
 }
 
 export function onDeck(state: GameState): PlayerId[] {

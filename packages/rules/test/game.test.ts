@@ -196,3 +196,20 @@ describe("Changing settings mid-Game", () => {
     });
   });
 });
+
+describe("Several active Players", () => {
+  it("draws as many On Deck as there are active slots, keeping the On Deck line in order", () => {
+    const state = play(
+      { activeSlots: 2, maxSteals: 3 },
+      [
+        ...addPlayers("ann", "bob", "cat", "dan", "eve", "fay"),
+        { type: "StartGame" },
+        { type: "OpenGift", playerId: "bob", giftId: "g1", name: "Chia Pet" },
+      ],
+      scriptedDraw(["bob", "cat", "dan", "eve", "fay"]),
+    );
+
+    expect(activePlayers(state)).toEqual(["cat", "dan"]);
+    expect(onDeck(state)).toEqual(["eve", "fay"]);
+  });
+});
