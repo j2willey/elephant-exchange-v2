@@ -1,0 +1,8 @@
+{
+  "name": "elephant-exchange",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "test": "npm test --workspaces"
+  }
+}
