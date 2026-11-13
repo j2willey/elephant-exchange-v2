@@ -1,0 +1,3 @@
+# TypeScript end-to-end, not a Go backend
+
+Server, rules module and browser app are all TypeScript (Hono on Node, React + Vite), sharing types and the rules module in one repo. We seriously considered a Go server with a TypeScript frontend, which would show two ecosystems and fits a long-running real-time server well. We chose TypeScript because the app had to be built by one developer in about four weeks (working by end of November 2026, for an event on December 13), and one language with shared types is the fastest path. Socket.IO stays for live updates, used one way (server to browser); all changes arrive as ordinary HTTP requests.
