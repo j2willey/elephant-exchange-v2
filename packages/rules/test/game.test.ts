@@ -5,6 +5,8 @@ import {
   evolve,
   newGame,
   onDeck,
+  pickCount,
+  turnCount,
   type Command,
   type DrawFn,
   type GameSettings,
@@ -48,5 +50,24 @@ describe("Starting a Game", () => {
 
     expect(activePlayers(state)).toEqual(["bob"]);
     expect(onDeck(state)).toEqual(["cat"]);
+  });
+});
+
+describe("Opening a Gift", () => {
+  it("ends the Turn: the On Deck Player becomes active and the next Player is drawn On Deck", () => {
+    const state = play(
+      { activeSlots: 1 },
+      [
+        ...addPlayers("ann", "bob", "cat"),
+        { type: "StartGame" },
+        { type: "OpenGift", playerId: "bob", giftId: "g1", name: "Chia Pet" },
+      ],
+      scriptedDraw(["bob", "cat", "ann"]),
+    );
+
+    expect(turnCount(state)).toBe(1);
+    expect(pickCount(state)).toBe(1);
+    expect(activePlayers(state)).toEqual(["cat"]);
+    expect(onDeck(state)).toEqual(["ann"]);
   });
 });
