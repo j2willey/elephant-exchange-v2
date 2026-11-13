@@ -4,6 +4,7 @@ import {
   decide,
   evolve,
   newGame,
+  holderOf,
   onDeck,
   pickCount,
   turnCount,
@@ -24,6 +25,16 @@ function scriptedDraw(order: string[]): DrawFn {
     }
     return next;
   };
+}
+
+/** Wraps a Draw and records the candidates offered each time, so tests can check who was drawable. */
+function recordingDraw(inner: DrawFn): DrawFn & { offered: string[][] } {
+  const offered: string[][] = [];
+  const fn = (candidates: string[]) => {
+    offered.push([...candidates].sort());
+    return inner(candidates);
+  };
+  return Object.assign(fn, { offered });
 }
 
 /** Runs Commands through decide/evolve, failing the test on any RuleError. */
@@ -69,5 +80,48 @@ describe("Opening a Gift", () => {
     expect(pickCount(state)).toBe(1);
     expect(activePlayers(state)).toEqual(["cat"]);
     expect(onDeck(state)).toEqual(["ann"]);
+  });
+});
+
+describe("Stealing a Gift", () => {
+  it("makes the previous holder a Victim who acts before anyone On Deck, adding a Pick but not a Turn", () => {
+    const draw = scriptedDraw(["bob", "cat", "ann"]);
+    const state = play(
+      { activeSlots: 1 },
+      [
+        ...addPlayers("ann", "bob", "cat", "dan"),
+        { type: "StartGame" },
+        { type: "OpenGift", playerId: "bob", giftId: "g1", name: "Chia Pet" },
+        { type: "Steal", playerId: "cat", giftId: "g1" },
+      ],
+      draw,
+    );
+
+    expect(holderOf(state, "g1")).toBe("cat");
+    expect(activePlayers(state)).toEqual(["bob"]);
+    expect(onDeck(state)).toEqual(["ann"]);
+    expect(turnCount(state)).toBe(1);
+    expect(pickCount(state)).toBe(2);
+  });
+
+  it("never offers a Victim to the Draw, and the Turn ends when the Victim opens a Gift", () => {
+    const draw = recordingDraw(scriptedDraw(["bob", "cat", "ann", "dan"]));
+    const state = play(
+      { activeSlots: 1 },
+      [
+        ...addPlayers("ann", "bob", "cat", "dan"),
+        { type: "StartGame" },
+        { type: "OpenGift", playerId: "bob", giftId: "g1", name: "Chia Pet" },
+        { type: "Steal", playerId: "cat", giftId: "g1" },
+        { type: "OpenGift", playerId: "bob", giftId: "g2", name: "Lava Lamp" },
+      ],
+      draw,
+    );
+
+    expect(draw.offered.at(-1)).toEqual(["dan"]);
+    expect(turnCount(state)).toBe(2);
+    expect(pickCount(state)).toBe(3);
+    expect(activePlayers(state)).toEqual(["ann"]);
+    expect(onDeck(state)).toEqual(["dan"]);
   });
 });

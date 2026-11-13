@@ -12,14 +12,16 @@ export type DrawFn = (candidates: PlayerId[]) => PlayerId;
 export type Command =
   | { type: "AddPlayer"; playerId: PlayerId; name: string }
   | { type: "StartGame" }
-  | { type: "OpenGift"; playerId: PlayerId; giftId: GiftId; name: string };
+  | { type: "OpenGift"; playerId: PlayerId; giftId: GiftId; name: string }
+  | { type: "Steal"; playerId: PlayerId; giftId: GiftId };
 
 /** What actually happened; these are what the Game's log stores. */
 export type Event =
   | { type: "PlayerAdded"; playerId: PlayerId; name: string }
   | { type: "GameStarted" }
   | { type: "PlayerDrawn"; playerId: PlayerId }
-  | { type: "GiftOpened"; playerId: PlayerId; giftId: GiftId; name: string };
+  | { type: "GiftOpened"; playerId: PlayerId; giftId: GiftId; name: string }
+  | { type: "GiftStolen"; playerId: PlayerId; giftId: GiftId; fromPlayerId: PlayerId };
 
 export interface RuleError {
   message: string;
@@ -39,14 +41,18 @@ interface Gift {
 export interface GameState {
   settings: GameSettings;
   players: Player[];
-  /** Drawn Players in order, not yet finished: the first is active, the rest are On Deck. */
+  /** Every Player ever drawn, in order; never offered to the Draw again. */
+  called: PlayerId[];
+  /** Drawn Players who have not yet taken their Turn, in order. */
   drawn: PlayerId[];
+  /** Players whose Gift was stolen and who must act next, in order. */
+  victims: PlayerId[];
   gifts: Gift[];
   picks: number;
 }
 
 export function newGame(settings: GameSettings): GameState {
-  return { settings, players: [], drawn: [], gifts: [], picks: 0 };
+  return { settings, players: [], called: [], drawn: [], victims: [], gifts: [], picks: 0 };
 }
 
 export function decide(state: GameState, command: Command, draw: DrawFn): Event[] | RuleError {
@@ -71,6 +77,13 @@ export function decide(state: GameState, command: Command, draw: DrawFn): Event[
       if (pool.length > 0) events.push({ type: "PlayerDrawn", playerId: draw(pool) });
       return events;
     }
+    case "Steal": {
+      const gift = state.gifts.find((g) => g.id === command.giftId);
+      if (!gift) return { message: `No opened Gift ${command.giftId}` };
+      return [
+        { type: "GiftStolen", playerId: command.playerId, giftId: gift.id, fromPlayerId: gift.holderId },
+      ];
+    }
   }
 }
 
@@ -81,30 +94,47 @@ export function evolve(state: GameState, event: Event): GameState {
     case "GameStarted":
       return state;
     case "PlayerDrawn":
-      return { ...state, drawn: [...state.drawn, event.playerId] };
+      return {
+        ...state,
+        called: [...state.called, event.playerId],
+        drawn: [...state.drawn, event.playerId],
+      };
     case "GiftOpened":
       return {
         ...state,
         drawn: state.drawn.filter((id) => id !== event.playerId),
+        victims: state.victims.filter((id) => id !== event.playerId),
         gifts: [...state.gifts, { id: event.giftId, name: event.name, holderId: event.playerId }],
+        picks: state.picks + 1,
+      };
+    case "GiftStolen":
+      return {
+        ...state,
+        drawn: state.drawn.filter((id) => id !== event.playerId),
+        victims: [...state.victims.filter((id) => id !== event.playerId), event.fromPlayerId],
+        gifts: state.gifts.map((g) => (g.id === event.giftId ? { ...g, holderId: event.playerId } : g)),
         picks: state.picks + 1,
       };
   }
 }
 
-/** Players who have neither been drawn nor received a Gift: the pool for the next Draw. */
+/** Players never yet drawn: the pool for the next Draw. */
 function notYetCalled(state: GameState): PlayerId[] {
-  return state.players
-    .map((p) => p.id)
-    .filter((id) => !state.drawn.includes(id) && !state.gifts.some((g) => g.holderId === id));
+  return state.players.map((p) => p.id).filter((id) => !state.called.includes(id));
 }
 
+/** Victims act first, then drawn Players in the order they were drawn. */
 export function activePlayers(state: GameState): PlayerId[] {
-  return state.drawn.slice(0, 1);
+  return [...state.victims, ...state.drawn].slice(0, 1);
 }
 
 export function onDeck(state: GameState): PlayerId[] {
-  return state.drawn.slice(1);
+  const active = activePlayers(state);
+  return state.drawn.filter((id) => !active.includes(id));
+}
+
+export function holderOf(state: GameState, giftId: GiftId): PlayerId | undefined {
+  return state.gifts.find((g) => g.id === giftId)?.holderId;
 }
 
 /** Turns so far: equals the number of Gifts opened. */
