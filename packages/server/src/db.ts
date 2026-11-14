@@ -15,12 +15,20 @@ export const games = sqliteTable("games", {
   moderation: text("moderation", { enum: ["open", "approval", "paused"] }).notNull().default("open"),
   /** How long each Turn's countdown runs, as a guide for the Host; 0 shows no timer. Nobody is ever skipped by it. */
   turnSeconds: integer("turn_seconds").notNull().default(60),
+  /** The Worst Gift Vote: "none" (not opened yet), "open" or "closed" (results revealed). */
+  voteStatus: text("vote_status", { enum: ["none", "open", "closed"] }).notNull().default("none"),
+  /** What the big screen shows while the vote is open: "live" counts, "hidden" ones, or the "parade" of Gifts. */
+  voteDisplay: text("vote_display", { enum: ["live", "hidden", "parade"] }).notNull().default("live"),
+  /** The Gift that won once the vote closed (null if nobody voted). */
+  voteWinner: text("vote_winner"),
   /** The GameSettings the Game was created with (JSON); later changes are SettingsChanged events. */
   settings: text("settings").notNull(),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
 }, (t) => [
   check("games_roster_mode", sql`${t.rosterMode} IN ('host', 'self')`),
   check("games_moderation", sql`${t.moderation} IN ('open', 'approval', 'paused')`),
+  check("games_vote_status", sql`${t.voteStatus} IN ('none', 'open', 'closed')`),
+  check("games_vote_display", sql`${t.voteDisplay} IN ('live', 'hidden', 'parade')`),
 ]);
 
 /** The log of each Game (ADR-0001): every event, in order. The Game's state is rebuilt from it. */
@@ -136,6 +144,19 @@ export const posts = sqliteTable(
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   },
   (t) => [index("posts_game").on(t.gameId, t.createdAt), check("posts_status", sql`${t.status} IN ('visible', 'pending', 'hidden')`)],
+);
+
+/** Each person's vote in a Game's Worst Gift Vote: one per person, moved by replacing it. */
+export const votes = sqliteTable(
+  "votes",
+  {
+    gameId: text("game_id")
+      .notNull()
+      .references(() => games.id),
+    email: text("email").notNull(),
+    giftId: text("gift_id").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.gameId, t.email] })],
 );
 
 /** Opens the database, bringing its tables up to date with any migrations it hasn't had yet. */

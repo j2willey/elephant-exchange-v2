@@ -43,6 +43,13 @@
       "when": 1794669837304,
       "tag": "0005_post_photos",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1794671322877,
+      "tag": "0006_worst_gift_vote",
+      "breakpoints": true
     }
   ]
 }

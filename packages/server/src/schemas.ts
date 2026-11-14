@@ -63,3 +63,11 @@ export const command = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("TakeReturnedGift"), playerId: id, giftId: id }),
   z.strictObject({ type: z.literal("EndGame") }),
 ]) satisfies z.ZodType<Command>;
+
+export const voteStatusBody = z.object({
+  status: z.enum(["open", "closed"]),
+  /** When closing with Gifts tied for most votes: the one the Host picks. */
+  winner: id.optional(),
+});
+export const voteDisplayBody = z.object({ display: z.enum(["live", "hidden", "parade"]) });
+export const voteBody = z.object({ giftId: id });

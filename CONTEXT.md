@@ -126,5 +126,8 @@ A Post the Host or a Co-host has taken down; only they and its poster can see it
 ### Results
 
 **Worst Gift Vote**:
-After the Host ends the Game, every signed-in Player and Guest may cast one vote for the worst Gift; its holder is announced and chooses from any Leftover and Returned Gifts.
+After the Game ends, the Host or a Co-host opens the vote and later closes it. Everyone signed in (Players, Guests, Hosts) has one vote for the worst Gift, which they can move until it closes, even to the Gift they hold. When it closes, the Gift with the most votes wins (the Host picks among Gifts tied for most) and the results are revealed; its holder chooses a prize from any Leftover and Returned Gifts, in the room.
 _Avoid_: Downvote, poll
+
+**Vote Display**:
+What the big screen shows while the vote is open, switchable by the Host at any moment: **Live** (the counts, growing as votes come in), **Hidden** (no counts until the reveal) or **Parade** (every Gift scrolling past, to remind the room what's out there). Under Hidden and Parade nobody sees the counts until the vote closes.

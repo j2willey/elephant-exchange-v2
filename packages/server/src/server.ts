@@ -31,7 +31,7 @@ import type { z } from "zod";
 import { createAuth, DEFAULT_LIMITS, logMailer, SESSION_LIFETIME_MS, type LinkLimits, type Mailer } from "./auth.js";
 import { PHOTO_KEEP_DAYS, PHOTO_MAX_BYTES, photoStore, preparePhoto } from "./photos.js";
 import { zip } from "./zip.js";
-import { gameEvents, gameHosts, gamePlayers, games, openDb, posts, turnClocks, type Tx } from "./db.js";
+import { gameEvents, gameHosts, gamePlayers, games, openDb, posts, turnClocks, votes, type Tx } from "./db.js";
 import {
   cohostBody,
   command,
@@ -43,6 +43,9 @@ import {
   postBody,
   postStatusBody,
   timerBody,
+  voteBody,
+  voteDisplayBody,
+  voteStatusBody,
 } from "./schemas.js";
 
 export type { Mailer } from "./auth.js";
@@ -88,10 +91,24 @@ interface LoadedGame {
   clocks: ReadonlyMap<string, number>;
   state: GameState;
   seq: number;
+  vote: {
+    status: "none" | "open" | "closed";
+    display: "live" | "hidden" | "parade";
+    winner: string | null;
+    /** Each voter's Gift, by email. Never sent as is: screens get counts, and each person their own vote. */
+    ballots: ReadonlyMap<string, string>;
+  };
+}
+
+/** How many votes each Gift has (only Gifts with any). */
+function tally(ballots: ReadonlyMap<string, string>): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const giftId of ballots.values()) counts[giftId] = (counts[giftId] ?? 0) + 1;
+  return counts;
 }
 
 /** What screens are shown about a Game: answers from the rules module, never its internal state. */
-function view(id: string, { name, rosterMode, moderation, turnSeconds, clocks, state, seq }: LoadedGame, now: Date) {
+function view(id: string, { name, rosterMode, moderation, turnSeconds, clocks, state, seq, vote }: LoadedGame, now: Date) {
   return {
     id,
     name,
@@ -109,10 +126,20 @@ function view(id: string, { name, rosterMode, moderation, turnSeconds, clocks, s
     gifts: gifts(state),
     /** Unopened Gifts still on the table in the Final Round. */
     leftoverGifts: leftoverGiftCount(state),
+    /**
+     * The Worst Gift Vote. How many have voted is always shown; the counts only once it's closed, or while
+     * it's open under the Live display. Under Hidden or Parade they never leave the server until the reveal.
+     */
+    vote: {
+      status: vote.status,
+      display: vote.display,
+      cast: vote.ballots.size,
+      counts: vote.status === "closed" || (vote.status === "open" && vote.display === "live") ? tally(vote.ballots) : null,
+      winner: vote.winner,
+    },
   };
 }
 
-/** Reads and checks a JSON body; on failure, the 400 response to send instead. */
 /** A name made safe for a file name: letters, digits and single dashes. */
 const fileSafe = (name: string) =>
   name
@@ -121,6 +148,7 @@ const fileSafe = (name: string) =>
     .replace(/^-+|-+$/g, "")
     .slice(0, 40);
 
+/** Reads and checks a JSON body; on failure, the 400 response to send instead. */
 async function parseBody<T>(c: Context, schema: z.ZodType<T>): Promise<{ ok: true; data: T } | { ok: false; res: Response }> {
   const raw: unknown = await c.req.json().catch(() => undefined);
   const parsed = schema.safeParse(raw);
@@ -170,7 +198,14 @@ export function createServer({
     // Replaying the log never draws: every Draw was logged as a PlayerDrawn event (ADR-0001).
     const state = log.map((e) => JSON.parse(e.event) as Event).reduce(evolve, newGame(JSON.parse(row.settings) as GameSettings));
     const clocks = db.select().from(turnClocks).where(eq(turnClocks.gameId, id)).all();
+    const ballots = db.select().from(votes).where(eq(votes.gameId, id)).all();
     const game: LoadedGame = {
+      vote: {
+        status: row.voteStatus,
+        display: row.voteDisplay,
+        winner: row.voteWinner,
+        ballots: new Map(ballots.map((b) => [b.email, b.giftId])),
+      },
       name: row.name,
       rosterMode: row.rosterMode,
       moderation: row.moderation,
@@ -346,7 +381,12 @@ export function createServer({
     // Only this answer says who is asking: live updates go to everyone watching, so they never carry a role.
     const email = signedInAs(c);
     const playerId = email ? playerOf(id, email, game) : undefined;
-    return c.json({ ...view(id, game, now()), role: (email && roleIn(id, email)) ?? null, me: playerId ? { playerId } : null });
+    return c.json({
+      ...view(id, game, now()),
+      role: (email && roleIn(id, email)) ?? null,
+      me: playerId ? { playerId } : null,
+      myVote: (email && game.vote.ballots.get(email)) ?? null,
+    });
   });
 
   app.post("/api/games/:id/commands", async (c) => {
@@ -520,6 +560,75 @@ export function createServer({
     if (!data) return c.json({ error: "No such Photo" }, 404);
     // Private: a Photo shown to one person (a Pending one, say) mustn't be kept by a cache shared with others.
     return c.body(new Uint8Array(data), 200, { "content-type": "image/jpeg", "cache-control": "private, max-age=86400" });
+  });
+
+  // The Host or a Co-host opens the Worst Gift Vote once the Game has ended, and closes it to reveal the results.
+  app.post("/api/games/:id/vote/status", async (c) => {
+    const id = c.req.param("id");
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const body = await parseBody(c, voteStatusBody);
+    if (!body.ok) return body.res;
+    const game = load(id);
+    if (!game) return c.json({ error: "Game not found" }, 404);
+    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can run the vote" }, 403);
+
+    if (body.data.status === "open") {
+      if (phase(game.state) !== "ended") return c.json({ code: "GameNotOver", message: "End the Game before the vote" }, 409);
+      db.update(games).set({ voteStatus: "open", voteWinner: null }).where(eq(games.id, id)).run();
+      publish(id, { ...game, vote: { ...game.vote, status: "open", winner: null } });
+      return c.body(null, 204);
+    }
+
+    if (game.vote.status !== "open") return c.json({ code: "VoteNotOpen", message: "The vote isn't open" }, 409);
+    const counts = tally(game.vote.ballots);
+    const most = Math.max(0, ...Object.values(counts));
+    // In the order the Gifts were opened, so the Host sees them as they remember them.
+    const tied = most === 0 ? [] : gifts(game.state).map((g) => g.id).filter((g) => counts[g] === most);
+    const picked = body.data.winner;
+    if (picked !== undefined && !tied.includes(picked)) return c.json({ error: "That Gift isn't one with the most votes" }, 400);
+    if (tied.length > 1 && picked === undefined) {
+      return c.json({ code: "Tie", message: "Gifts are tied for most votes: pick the winner", tied }, 409);
+    }
+    const winner = picked ?? tied[0] ?? null;
+    db.update(games).set({ voteStatus: "closed", voteWinner: winner }).where(eq(games.id, id)).run();
+    publish(id, { ...game, vote: { ...game.vote, status: "closed", winner } });
+    return c.body(null, 204);
+  });
+
+  app.post("/api/games/:id/vote/display", async (c) => {
+    const id = c.req.param("id");
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const body = await parseBody(c, voteDisplayBody);
+    if (!body.ok) return body.res;
+    const game = load(id);
+    if (!game) return c.json({ error: "Game not found" }, 404);
+    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can run the vote" }, 403);
+    db.update(games).set({ voteDisplay: body.data.display }).where(eq(games.id, id)).run();
+    publish(id, { ...game, vote: { ...game.vote, display: body.data.display } });
+    return c.body(null, 204);
+  });
+
+  // Casting or moving this person's one vote.
+  app.post("/api/games/:id/vote", async (c) => {
+    const id = c.req.param("id");
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in to vote" }, 401);
+    const body = await parseBody(c, voteBody);
+    if (!body.ok) return body.res;
+    const game = load(id);
+    if (!game) return c.json({ error: "Game not found" }, 404);
+    if (game.vote.status !== "open") return c.json({ code: "VoteNotOpen", message: "The vote isn't open" }, 409);
+    const { giftId } = body.data;
+    if (!gifts(game.state).some((g) => g.id === giftId)) return c.json({ error: "No such Gift in this Game" }, 400);
+
+    db.insert(votes)
+      .values({ gameId: id, email, giftId })
+      .onConflictDoUpdate({ target: [votes.gameId, votes.email], set: { giftId } })
+      .run();
+    publish(id, { ...game, vote: { ...game.vote, ballots: new Map(game.vote.ballots).set(email, giftId) } });
+    return c.json({ myVote: giftId });
   });
 
   app.post("/api/games/:id/moderation", async (c) => {
