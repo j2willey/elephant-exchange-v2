@@ -31,6 +31,7 @@ export function GamePage() {
   return (
     <div className="stack">
       <section className="card">
+        <h2>{game.name}</h2>
         <Settings game={game} />
         <Link to={`/games/${game.id}`}>Link to this game</Link>
         <Link to={`/games/${game.id}/screen`}>Open the big screen</Link>

@@ -2,7 +2,7 @@ import { randomBytes, randomInt } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import { serve } from "@hono/node-server";
 import { getConnInfo } from "@hono/node-server/conninfo";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { Hono, type Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import {
@@ -53,9 +53,10 @@ export interface ServerOptions {
 const randomDraw: DrawFn = (candidates) => candidates[randomInt(candidates.length)]!;
 
 /** What screens are shown about a Game: answers from the rules module, never its internal state. */
-function view(id: string, { state, seq }: { state: GameState; seq: number }) {
+function view(id: string, { name, state, seq }: { name: string; state: GameState; seq: number }) {
   return {
     id,
+    name,
     /** Rises with every change (it counts the Game's logged events), so a screen keeps the newest copy it has seen. */
     version: seq,
     phase: phase(state),
@@ -105,9 +106,9 @@ export function createServer({
   const roleIn = (gameId: string, email: string) =>
     db.select().from(gameHosts).where(and(eq(gameHosts.gameId, gameId), eq(gameHosts.email, email))).get()?.role;
   /** Rebuilt Games, so a Game's log is replayed only once per server start. `seq` counts its logged events. */
-  const cache = new Map<string, { state: GameState; seq: number }>();
+  const cache = new Map<string, { name: string; state: GameState; seq: number }>();
 
-  function load(id: string): { state: GameState; seq: number } | undefined {
+  function load(id: string): { name: string; state: GameState; seq: number } | undefined {
     const cached = cache.get(id);
     if (cached) return cached;
     const row = db.select().from(games).where(eq(games.id, id)).get();
@@ -115,7 +116,7 @@ export function createServer({
     const log = db.select().from(gameEvents).where(eq(gameEvents.gameId, id)).orderBy(asc(gameEvents.seq)).all();
     // Replaying the log never draws: every Draw was logged as a PlayerDrawn event (ADR-0001).
     const state = log.map((e) => JSON.parse(e.event) as Event).reduce(evolve, newGame(JSON.parse(row.settings) as GameSettings));
-    const game = { state, seq: log.length };
+    const game = { name: row.name, state, seq: log.length };
     cache.set(id, game);
     return game;
   }
@@ -173,10 +174,29 @@ export function createServer({
     // 16 random bytes: unguessable, so a Game can't be found without its link or QR code.
     const id = randomBytes(16).toString("base64url");
     db.transaction((tx) => {
-      tx.insert(games).values({ id, settings: JSON.stringify(body.data.settings), createdAt: now() }).run();
+      tx.insert(games).values({ id, name: body.data.name, settings: JSON.stringify(body.data.settings), createdAt: now() }).run();
       tx.insert(gameHosts).values({ gameId: id, email, role: "host" }).run();
     });
     return c.json({ id }, 201);
+  });
+
+  /** The Games the signed-in person runs, as Host or Co-host, newest first. */
+  app.get("/api/games", (c) => {
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const rows = db
+      .select({ id: games.id, role: gameHosts.role })
+      .from(gameHosts)
+      .innerJoin(games, eq(games.id, gameHosts.gameId))
+      .where(eq(gameHosts.email, email))
+      .orderBy(desc(games.createdAt), desc(sql`${games}.rowid`))
+      .all();
+    return c.json(
+      rows.map(({ id, role }) => {
+        const game = load(id)!;
+        return { id, name: game.name, phase: phase(game.state), players: roster(game.state).length, role };
+      }),
+    );
   });
 
   app.post("/api/games/:id/cohosts", async (c) => {
@@ -220,7 +240,7 @@ export function createServer({
         tx.insert(gameEvents).values({ gameId: id, seq: game.seq + i + 1, event: JSON.stringify(event), createdAt: at }).run();
       });
     });
-    const next = { state: result.reduce(evolve, game.state), seq: game.seq + result.length };
+    const next = { name: game.name, state: result.reduce(evolve, game.state), seq: game.seq + result.length };
     cache.set(id, next);
     const shown = view(id, next);
     io?.to(id).emit("game", shown);

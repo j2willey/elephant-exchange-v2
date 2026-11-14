@@ -7,6 +7,8 @@ import { check, index, integer, primaryKey, sqliteTable, text } from "drizzle-or
 
 export const games = sqliteTable("games", {
   id: text("id").primaryKey(),
+  /** What the Host calls it, such as "OA Holiday Party". */
+  name: text("name").notNull().default("Gift exchange"),
   /** The GameSettings the Game was created with (JSON); later changes are SettingsChanged events. */
   settings: text("settings").notNull(),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),

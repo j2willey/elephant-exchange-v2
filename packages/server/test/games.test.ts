@@ -40,6 +40,11 @@ describe("Games over HTTP", () => {
     for (const id of ids) expect(id).toMatch(/^[A-Za-z0-9_-]{16,}$/); // URL-safe, at least ~96 bits
   });
 
+  it("lists Games only to someone signed in", async () => {
+    const { app } = setup();
+    expect((await app.request("/api/games")).status).toBe(401);
+  });
+
   it("answers 404 for a Game that doesn't exist", async () => {
     const { app } = setup();
     expect((await app.request("/api/games/nope")).status).toBe(404);

@@ -10,7 +10,7 @@ const maxSteals = z.int().min(0).max(20);
 
 export const gameSettings = z.strictObject({ activeSlots, maxSteals }) satisfies z.ZodType<GameSettings>;
 
-export const createGameBody = z.object({ settings: gameSettings });
+export const createGameBody = z.object({ name: name.default("Gift exchange"), settings: gameSettings });
 
 const email = z.string().trim().toLowerCase().pipe(z.email().max(254));
 

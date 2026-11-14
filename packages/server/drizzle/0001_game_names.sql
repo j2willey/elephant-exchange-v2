@@ -1,0 +1,1 @@
+ALTER TABLE `games` ADD `name` text DEFAULT 'Gift exchange' NOT NULL;

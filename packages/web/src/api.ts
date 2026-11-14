@@ -4,6 +4,8 @@ import { io } from "socket.io-client";
 /** A Game as the server shows it (see view() in the server). */
 export interface GameView {
   id: string;
+  /** What the Host calls it. */
+  name: string;
   /** Rises with every change; the newest copy wins. */
   version: number;
   phase: Phase;
@@ -16,6 +18,15 @@ export interface GameView {
   leftoverGifts: number;
   /** Whether the person looking runs this Game. */
   role: "host" | "cohost" | null;
+}
+
+/** One of the Games a person runs, as listed on their home screen. */
+export interface MyGame {
+  id: string;
+  name: string;
+  phase: Phase;
+  players: number;
+  role: "host" | "cohost";
 }
 
 export type CommandResult = { ok: true; game: Omit<GameView, "role"> } | { ok: false; code: RuleErrorCode | "Forbidden" | "Failed"; message: string };
@@ -64,10 +75,17 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
       await postJson("/api/auth/sign-out");
     },
 
-    async createGame(settings: GameSettings): Promise<string> {
-      const res = await postJson("/api/games", { settings });
+    async createGame(settings: GameSettings, name?: string): Promise<string> {
+      const res = await postJson("/api/games", name === undefined ? { settings } : { name, settings });
       if (res.status !== 201) throw new Error(`creating a Game failed: ${res.status}`);
       return ((await res.json()) as { id: string }).id;
+    },
+
+    /** The Games the signed-in person runs, newest first. */
+    async myGames(): Promise<MyGame[]> {
+      const res = await fetchFn("/api/games");
+      if (!res.ok) throw new Error(`listing Games failed: ${res.status}`);
+      return (await res.json()) as MyGame[];
     },
 
     /** The Game, or undefined if there's no such Game. */

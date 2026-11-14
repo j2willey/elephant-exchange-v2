@@ -127,6 +127,23 @@ button.secondary {
   border-bottom: 1px solid var(--line);
 }
 
+.my-games {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.my-games li {
+  display: grid;
+  gap: 2px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.my-games a {
+  font-weight: 600;
+}
+
 /* One line: the box takes the room, the button sits at the end. */
 .inline {
   display: flex;
