@@ -84,6 +84,10 @@ test("a Host runs a Game while a guest follows along on their phone", async ({ b
   await screen.goto(`${gameUrl}/screen`);
   await expect(screen.getByRole("img", { name: /qr code/i })).toBeVisible();
   await expect(screen.getByRole("listitem", { name: "Socks" })).toBeVisible();
+  const latest = screen.getByRole("feed", { name: /latest posts/i });
+  await expect(latest.getByText("Nice socks!")).toBeVisible();
+  await expect(latest.getByRole("img", { name: /photo from cat/i })).toBeVisible();
+  if (process.env["SMOKE_SCREENSHOT"]) await screen.screenshot({ path: process.env["SMOKE_SCREENSHOT"], fullPage: true });
 });
 
 test("a reload anywhere in the app still works, and the build's files are cached", async ({ page, request }) => {

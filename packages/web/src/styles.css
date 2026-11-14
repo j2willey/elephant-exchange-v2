@@ -418,6 +418,28 @@ select {
   font-weight: 600;
 }
 
+.screen-posts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  gap: 16px;
+}
+
+.screen-post {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+}
+
+.screen-photo {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 40vh;
+  object-fit: contain;
+  background: var(--line);
+  border-radius: var(--radius);
+}
+
 .join {
   grid-template-columns: auto 1fr;
   align-items: center;

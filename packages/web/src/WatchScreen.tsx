@@ -1,14 +1,17 @@
 import { useMemo } from "react";
 import { useParams } from "react-router";
 import { renderSVG } from "uqr";
+import type { GameView, Post } from "./api.js";
 import { Countdown } from "./Countdown.js";
+import { PostPhoto, useFeed } from "./Feed.js";
 import { Gifts } from "./GamePage.js";
 import { useLiveGame } from "./useLiveGame.js";
 
 /** For a projector or TV at the party: who's up, the Gifts, and how to join. It only watches. */
 export function WatchScreen() {
   const { id = "" } = useParams();
-  const [game] = useLiveGame(id);
+  const [game, , feedChanges] = useLiveGame(id);
+  const [posts] = useFeed(id, feedChanges);
 
   if (game === "loading") return <p className="muted">Loading…</p>;
   if (!game) return <p className="error">There's no Game at this link. Check it with your Host.</p>;
@@ -46,9 +49,40 @@ export function WatchScreen() {
           </section>
         </div>
       )}
+      <LatestPosts game={game} posts={posts} />
       {game.gifts.length > 0 && <Gifts game={game} />}
       <Join gameId={game.id} />
     </div>
+  );
+}
+
+/** How many Posts the room sees at once: few enough to read from across it. */
+const ON_SCREEN = 6;
+
+/**
+ * The newest visible Posts. The screen is often opened in the Host's own browser, which is sent Pending and
+ * Hidden Posts too; the whole room sees this screen, so it shows only what everyone may see.
+ */
+function LatestPosts({ game, posts }: { game: GameView; posts: Post[] }) {
+  const latest = posts.filter((p) => p.status === "visible").slice(0, ON_SCREEN);
+  const giftName = (giftId: string | null) => game.gifts.find((g) => g.id === giftId)?.name;
+  return (
+    <section className="card" aria-label="Posts">
+      <p className="label">Latest Posts</p>
+      <div role="feed" aria-label="Latest Posts" className="screen-posts">
+        {latest.length === 0 && <p className="muted">Post from your phone and it shows up here.</p>}
+        {latest.map((p) => (
+          <article key={p.id} className="screen-post">
+            <PostPhoto post={p} className="screen-photo" />
+            <p>
+              <strong>{p.author}</strong>
+              {giftName(p.giftId) && <span className="muted"> · about {giftName(p.giftId)}</span>}
+            </p>
+            {p.text && <p className="post-text">{p.text}</p>}
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 

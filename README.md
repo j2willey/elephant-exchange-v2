@@ -12,7 +12,7 @@ This is v2, a full rewrite of [v1](https://github.com/j2willey/Elephant-Exchange
 - **Setting up a Game:** the Host names the Game, picks how many Players take a Turn at once and how many Steals freeze a Gift, then adds Players. Co-hosts can help run it.
 - **The play screen:** the Host or a Co-host opens a Gift, makes a Steal or Skips an absent Player for each active Player, and can Undo. The app enforces No Take-Backs and Frozen Gifts. Players are called at random, and the next one is shown On Deck so they can get ready.
 - **The Final Round and Ending the Game:** the first Players called get one last chance to steal, and Returned Gifts and Leftover Gifts are handled. The Host can end the Game at any moment.
-- **The live watch screen:** made for a projector, it shows who's up, the Gifts, and a QR code for joining. Every screen updates within moments.
+- **The live watch screen:** made for a projector, it shows who's up, the newest six Posts with their Photos, the Gifts, and a QR code for joining. It shows only what everyone may see, even when opened in the Host's browser. Every screen updates within moments.
 - **My Games:** each person's home screen lists the Games they run.
 - **Joining from the QR code:** anyone can follow a Game without signing in. In a Self sign-up Game, people can add themselves as Players from their phones, even after the Game has started. The sign-in link brings them straight back to the Game.
 - **Stars:** anyone following on a phone can Star the Gifts they'd like to steal; Starred Gifts move to the top of their list. Stars stay on that phone and are never sent anywhere.
@@ -20,7 +20,7 @@ This is v2, a full rewrite of [v1](https://github.com/j2willey/Elephant-Exchange
 - **Posts and the Feed:** signed-in Players and Guests post a few words to the Game's Feed, optionally about a Gift, which then shows them under it. The Host or a Co-host can switch Moderation at any moment: **Open**, **Approval** (each Post waits to be approved) or **Paused**, and can hide any single Post. Pending and Hidden Posts never leave the server except to their poster and the Hosts.
 - **Photos:** a Post can carry a Photo, or be just one. The phone shrinks it before sending, and the server re-encodes it (with [sharp](https://sharp.pixelplumbing.com)), which removes EXIF data such as where it was taken. Photos are deleted 60 days after the Game's last move; before then the Host can download them all as a .zip album, with captions.
 
-Coming before launch: Posts on the big screen, the Worst Gift Vote, and Organization Themes. The words used throughout (Turn, Pick, Victim, Frozen and so on) are defined in [CONTEXT.md](CONTEXT.md).
+Coming before launch: the Worst Gift Vote, and Organization Themes. The words used throughout (Turn, Pick, Victim, Frozen and so on) are defined in [CONTEXT.md](CONTEXT.md).
 
 ## How it's built
 
