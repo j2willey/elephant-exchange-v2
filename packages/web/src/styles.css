@@ -185,3 +185,55 @@ button.link {
   background: var(--brand);
   border-radius: 999px;
 }
+
+/* The watch screen: read from across a room, so everything is larger and it uses the width it gets. */
+.page:has(.screen) {
+  max-width: 72rem;
+}
+
+.screen {
+  display: grid;
+  gap: 16px;
+  font-size: clamp(1rem, 0.6rem + 1.2vw, 1.6rem);
+}
+
+.screen-top {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 16px;
+}
+
+.screen .label {
+  color: var(--muted);
+  font-size: 0.8em;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.screen .big {
+  font-size: 2.4em;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--brand);
+}
+
+.screen .medium {
+  font-size: 1.6em;
+  font-weight: 600;
+}
+
+.join {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+
+.join img {
+  width: clamp(140px, 18vw, 240px);
+  height: auto;
+  background: #fff;
+}
+
+.join .url {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}

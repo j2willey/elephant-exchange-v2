@@ -65,7 +65,7 @@ export function browser(origin: string): Api {
     }
     return res;
   };
-  return createApi(fetchWithCookies);
+  return createApi(fetchWithCookies, { socketOrigin: origin, transports: ["websocket"] });
 }
 
 /** Opens the app at this path in this browser. */

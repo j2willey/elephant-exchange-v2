@@ -1,22 +1,15 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router";
 import type { Command } from "@elephant/rules";
 import type { CommandResult, GameView } from "./api.js";
 import { useApi } from "./ApiContext.js";
+import { useLiveGame } from "./useLiveGame.js";
 
 export function GamePage() {
   const api = useApi();
   const { id = "" } = useParams();
-  const [game, setGame] = useState<GameView | null | "loading">("loading");
+  const [game, accept] = useLiveGame(id);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let current = true;
-    api.game(id).then((g) => current && setGame(g ?? null));
-    return () => {
-      current = false;
-    };
-  }, [api, id]);
 
   if (game === "loading") return <p className="muted">Loading…</p>;
   if (!game) return <p className="error">There's no Game at this link. Check it with your Host.</p>;
@@ -28,7 +21,7 @@ export function GamePage() {
     if (game === "loading" || !game) return;
     const result = await api.command(game.id, command);
     if (result.ok) {
-      setGame({ ...result.game, role: game.role });
+      accept(result.game);
       setError(null);
     } else {
       setError(plainWords(result));
@@ -40,6 +33,7 @@ export function GamePage() {
       <section className="card">
         <Settings game={game} />
         <Link to={`/games/${game.id}`}>Link to this game</Link>
+        <Link to={`/games/${game.id}/screen`}>Open the big screen</Link>
       </section>
 
       {game.phase !== "setup" && (
@@ -160,7 +154,7 @@ function Turn({ game, playerId, send }: { game: GameView; playerId: string; send
   );
 }
 
-function Gifts({ game }: { game: GameView }) {
+export function Gifts({ game }: { game: GameView }) {
   const holderName = (id: string | null) => (id === null ? "on the table" : (game.players.find((p) => p.id === id)?.name ?? "?"));
   return (
     <section className="card">

@@ -52,9 +52,11 @@ export interface ServerOptions {
 const randomDraw: DrawFn = (candidates) => candidates[randomInt(candidates.length)]!;
 
 /** What screens are shown about a Game: answers from the rules module, never its internal state. */
-function view(id: string, state: GameState) {
+function view(id: string, { state, seq }: { state: GameState; seq: number }) {
   return {
     id,
+    /** Rises with every change (it counts the Game's logged events), so a screen keeps the newest copy it has seen. */
+    version: seq,
     phase: phase(state),
     settings: state.settings,
     players: roster(state),
@@ -192,7 +194,7 @@ export function createServer({
     if (!game) return c.json({ error: "Game not found" }, 404);
     // Only this answer says who is asking: live updates go to everyone watching, so they never carry a role.
     const email = signedInAs(c);
-    return c.json({ ...view(id, game.state), role: (email && roleIn(id, email)) ?? null });
+    return c.json({ ...view(id, game), role: (email && roleIn(id, email)) ?? null });
   });
 
   app.post("/api/games/:id/commands", async (c) => {
@@ -217,7 +219,7 @@ export function createServer({
     });
     const next = { state: result.reduce(evolve, game.state), seq: game.seq + result.length };
     cache.set(id, next);
-    const shown = view(id, next.state);
+    const shown = view(id, next);
     io?.to(id).emit("game", shown);
     return c.json(shown);
   });
@@ -249,7 +251,7 @@ export function createServer({
       sockets.on("connection", (socket) => {
         const gameId = socket.handshake.auth["gameId"] as string;
         void socket.join(gameId);
-        socket.emit("game", view(gameId, load(gameId)!.state));
+        socket.emit("game", view(gameId, load(gameId)!));
       });
     });
   }

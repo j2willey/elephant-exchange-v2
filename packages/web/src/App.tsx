@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Route, Routes, useNavigate, useSearchParams } from "react-router";
 import { useApi } from "./ApiContext.js";
 import { GamePage } from "./GamePage.js";
+import { WatchScreen } from "./WatchScreen.js";
 
 export function AppRoutes() {
   return (
@@ -11,6 +12,7 @@ export function AppRoutes() {
         <Route path="/" element={<Home />} />
         <Route path="/sign-in" element={<RedeemLink />} />
         <Route path="/games/:id" element={<GamePage />} />
+        <Route path="/games/:id/screen" element={<WatchScreen />} />
       </Routes>
     </main>
   );

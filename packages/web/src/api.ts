@@ -1,8 +1,11 @@
 import type { Command, GameSettings, Phase, RuleErrorCode } from "@elephant/rules";
+import { io } from "socket.io-client";
 
 /** A Game as the server shows it (see view() in the server). */
 export interface GameView {
   id: string;
+  /** Rises with every change; the newest copy wins. */
+  version: number;
   phase: Phase;
   settings: GameSettings;
   players: { id: string; name: string }[];
@@ -15,8 +18,15 @@ export interface GameView {
 
 export type CommandResult = { ok: true; game: Omit<GameView, "role"> } | { ok: false; code: RuleErrorCode | "Forbidden" | "Failed"; message: string };
 
+export interface ApiOptions {
+  /** Where live updates come from; the page's own origin when left out. */
+  socketOrigin?: string;
+  /** Socket.IO transports; left out, it starts with polling and upgrades, which gets through strict networks. */
+  transports?: ("polling" | "websocket")[];
+}
+
 /** Talks to the server. Screens use this, never fetch directly, so tests can hand in a browser with a cookie jar. */
-export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, init)) {
+export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, init), options: ApiOptions = {}) {
   const postJson = (path: string, body?: unknown) =>
     fetchFn(path, {
       method: "POST",
@@ -64,6 +74,28 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
       if (res.status === 404) return undefined;
       if (!res.ok) throw new Error(`loading the Game failed: ${res.status}`);
       return (await res.json()) as GameView;
+    },
+
+    async addCohost(gameId: string, email: string): Promise<void> {
+      const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/cohosts`, { email });
+      if (res.status !== 204) throw new Error(`adding a Co-host failed: ${res.status}`);
+    },
+
+    /**
+     * Calls onGame with the whole Game now, and again after every change, until the returned function is called.
+     * After a phone sleeps, Socket.IO reconnects by itself and the server sends the whole Game again.
+     */
+    watch(gameId: string, onGame: (game: Omit<GameView, "role">) => void, onMissing?: () => void): () => void {
+      const socketOptions = { auth: { gameId }, ...(options.transports ? { transports: options.transports } : {}) };
+      const socket = options.socketOrigin ? io(options.socketOrigin, socketOptions) : io(socketOptions);
+      socket.on("game", onGame);
+      socket.on("connect_error", (err) => {
+        if (err.message === "Game not found") {
+          socket.close();
+          onMissing?.();
+        }
+      });
+      return () => void socket.close();
     },
 
     async command(gameId: string, command: Command): Promise<CommandResult> {

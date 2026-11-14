@@ -61,4 +61,18 @@ describe("Commands over HTTP", () => {
     const { app, cookie } = await setup();
     expect((await app.request("/api/games/nope/commands", post({ type: "StartGame" }, cookie))).status).toBe(404);
   });
+
+  it("numbers every change, so a screen can tell which copy of the Game is newest", async () => {
+    const { app, id, send } = await setup(scriptedDraw(["ann", "bob"]));
+    const versionOf = async (res: Response | Promise<Response>) => ((await (await res).json()) as { version: number }).version;
+    const v0 = await versionOf(app.request(`/api/games/${id}`));
+
+    const v1 = await versionOf(send({ type: "AddPlayer", playerId: "ann", name: "Ann" }));
+    const v2 = await versionOf(send({ type: "AddPlayer", playerId: "bob", name: "Bob" }));
+    await send({ type: "Undo" }); // refused: changes nothing
+
+    expect(v1).toBeGreaterThan(v0);
+    expect(v2).toBeGreaterThan(v1);
+    expect(await versionOf(app.request(`/api/games/${id}`))).toBe(v2);
+  });
 });
