@@ -22,7 +22,8 @@ export const createGameBody = z.object({
 export const timerBody = z.object({ playerId: id });
 
 export const postBody = z.object({
-  text: z.string().trim().min(1).max(500),
+  /** May be empty when there's a Photo; a Post needs one or the other. */
+  text: z.string().trim().max(500).default(""),
   /** A Guest's name to show; a Player's own name is used instead. */
   name: name.optional(),
   giftId: id.optional(),

@@ -127,7 +127,11 @@ export const posts = sqliteTable(
     author: text("author").notNull(),
     /** The Gift it's about, if the poster said; it then shows under that Gift as well as in the Feed. */
     giftId: text("gift_id"),
+    /** Empty when the Post is just a Photo. */
     text: text("text").notNull(),
+    /** A Post's Photo is stored as a file (see photos.ts); these are its size, and null when there's none. */
+    photoWidth: integer("photo_width"),
+    photoHeight: integer("photo_height"),
     status: text("status", { enum: ["visible", "pending", "hidden"] }).notNull(),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   },

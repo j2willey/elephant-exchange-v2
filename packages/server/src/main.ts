@@ -14,6 +14,7 @@ if (apiKey && !from) {
 if (!apiKey) console.warn("RESEND_API_KEY isn't set: sign-in links will be written to this log, not emailed");
 const server = createServer({
   dbPath: env["DB_PATH"] ?? "elephant.db",
+  photosDir: env["PHOTOS_DIR"] ?? "photos",
   // Where people open the app; sign-in links point here. In development that's Vite's dev server.
   baseUrl: env["BASE_URL"] ?? "http://localhost:5173",
   trustProxy: env["TRUST_PROXY"] === "1",

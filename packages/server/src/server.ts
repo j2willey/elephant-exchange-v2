@@ -3,10 +3,12 @@ import type { AddressInfo } from "node:net";
 import { serve } from "@hono/node-server";
 import { getConnInfo } from "@hono/node-server/conninfo";
 import { serveStatic } from "@hono/node-server/serve-static";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { and, asc, desc, eq, or, sql } from "drizzle-orm";
 import { Hono, type Context } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import {
   activePlayers,
@@ -27,6 +29,7 @@ import {
 import { Server as SocketServer } from "socket.io";
 import type { z } from "zod";
 import { createAuth, DEFAULT_LIMITS, logMailer, SESSION_LIFETIME_MS, type LinkLimits, type Mailer } from "./auth.js";
+import { PHOTO_MAX_BYTES, photoStore, preparePhoto } from "./photos.js";
 import { gameEvents, gameHosts, gamePlayers, games, openDb, posts, turnClocks, type Tx } from "./db.js";
 import {
   cohostBody,
@@ -68,6 +71,8 @@ export interface ServerOptions {
    * where Vite serves the app and passes /api through.
    */
   webRoot?: string;
+  /** Where Photos are stored. Left out (as in most tests), they go to a fresh temporary folder. */
+  photosDir?: string;
 }
 
 const randomDraw: DrawFn = (candidates) => candidates[randomInt(candidates.length)]!;
@@ -120,11 +125,13 @@ export function createServer({
   mailer = logMailer,
   now = () => new Date(),
   baseUrl = "http://localhost:3000",
+  photosDir,
   limits = {},
   trustProxy = false,
   webRoot,
 }: ServerOptions) {
   const db = openDb(dbPath);
+  const photos = photoStore(photosDir ?? mkdtempSync(join(tmpdir(), "elephant-photos-")));
   const auth = createAuth(db, now, { ...DEFAULT_LIMITS, ...limits });
 
   function clientIp(c: Context): string {
@@ -388,6 +395,7 @@ export function createServer({
         author: p.author,
         giftId: p.giftId,
         text: p.text,
+        photo: p.photoWidth && p.photoHeight ? { url: `/api/games/${id}/posts/${p.id}/photo`, width: p.photoWidth, height: p.photoHeight } : null,
         status: p.status,
         createdAt: p.createdAt.getTime(),
         mine: p.email === email,
@@ -395,12 +403,29 @@ export function createServer({
     );
   });
 
-  app.post("/api/games/:id/posts", async (c) => {
+  // Words come as JSON; a Post with a Photo comes as a multipart form, its file in `photo`.
+  const photoSizeLimit = bodyLimit({
+    maxSize: PHOTO_MAX_BYTES + 64 * 1024,
+    onError: (c) => c.json({ error: "That Photo is too big to send" }, 413),
+  });
+
+  app.post("/api/games/:id/posts", photoSizeLimit, async (c) => {
     const id = c.req.param("id");
     const email = signedInAs(c);
     if (!email) return c.json({ error: "Sign in to post" }, 401);
-    const body = await parseBody(c, postBody);
+    let upload: File | undefined;
+    let body: Awaited<ReturnType<typeof parseBody<z.infer<typeof postBody>>>>;
+    if (c.req.header("content-type")?.startsWith("multipart/form-data")) {
+      const form = await c.req.parseBody();
+      const field = (k: string) => (typeof form[k] === "string" && form[k] !== "" ? form[k] : undefined);
+      upload = form["photo"] instanceof File ? form["photo"] : undefined;
+      const parsed = postBody.safeParse({ text: field("text"), name: field("name"), giftId: field("giftId") });
+      body = parsed.success ? { ok: true, data: parsed.data } : { ok: false, res: c.json({ error: "Invalid request", issues: parsed.error.issues }, 400) };
+    } else {
+      body = await parseBody(c, postBody);
+    }
     if (!body.ok) return body.res;
+    if (!body.data.text && !upload) return c.json({ error: "Write something or add a Photo" }, 400);
     const game = load(id);
     if (!game) return c.json({ error: "Game not found" }, 404);
     if (game.moderation === "paused") return c.json({ code: "Paused", message: "The Host has paused posting" }, 409);
@@ -411,12 +436,45 @@ export function createServer({
     const author = playerId ? roster(game.state).find((p) => p.id === playerId)!.name : body.data.name;
     if (!author) return c.json({ error: "Say what name to post as" }, 400);
 
+    const photo = upload && (await preparePhoto(new Uint8Array(await upload.arrayBuffer())));
+    if (upload && !photo) return c.json({ error: "That doesn't look like a photo we can use" }, 400);
+
     const status = game.moderation === "approval" ? "pending" : "visible";
-    db.insert(posts)
-      .values({ id: randomBytes(12).toString("base64url"), gameId: id, email, author, giftId: giftId ?? null, text, status, createdAt: now() })
-      .run();
+    const postId = randomBytes(12).toString("base64url");
+    if (photo) photos.save(id, postId, photo.data);
+    try {
+      db.insert(posts)
+        .values({
+          id: postId,
+          gameId: id,
+          email,
+          author,
+          giftId: giftId ?? null,
+          text,
+          photoWidth: photo?.width ?? null,
+          photoHeight: photo?.height ?? null,
+          status,
+          createdAt: now(),
+        })
+        .run();
+    } catch (err) {
+      if (photo) photos.remove(id, postId);
+      throw err;
+    }
     postsChanged(id);
     return c.body(null, 201);
+  });
+
+  // A Post's Photo, to whoever may see the Post: anyone if it's visible, otherwise only its poster and the Hosts.
+  app.get("/api/games/:id/posts/:postId/photo", (c) => {
+    const { id, postId } = c.req.param();
+    const row = db.select().from(posts).where(and(eq(posts.gameId, id), eq(posts.id, postId))).get();
+    const email = signedInAs(c);
+    const mayView = row && (row.status === "visible" || row.email === email || (email !== undefined && roleIn(id, email) !== undefined));
+    const data = mayView && row.photoWidth ? photos.read(row.gameId, row.id) : undefined;
+    if (!data) return c.json({ error: "No such Photo" }, 404);
+    // Private: a Photo shown to one person (a Pending one, say) mustn't be kept by a cache shared with others.
+    return c.body(new Uint8Array(data), 200, { "content-type": "image/jpeg", "cache-control": "private, max-age=86400" });
   });
 
   app.post("/api/games/:id/moderation", async (c) => {

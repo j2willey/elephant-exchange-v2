@@ -19,6 +19,7 @@ FROM node:26.8.2-trixie-slim
 ENV NODE_ENV=production \
     PORT=3000 \
     DB_PATH=/data/elephant.db \
+    PHOTOS_DIR=/data/photos \
     WEB_ROOT=/app/packages/web/dist
 WORKDIR /app
 COPY --from=build /app/package.json ./
