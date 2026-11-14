@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { and, count, eq, gt, isNull, type SQL } from "drizzle-orm";
+import { and, count, eq, gt, isNull, lte, type SQL } from "drizzle-orm";
 import { users, sessions, signInLinks, type Db } from "./db.js";
 
 /** Sends sign-in links. Resend in production; tests capture the links instead. */
@@ -96,6 +96,20 @@ export function createAuth(db: Db, now: () => Date, limits: LinkLimits) {
 
     endSession(sessionToken: string): void {
       db.delete(sessions).where(eq(sessions.tokenHash, hash(sessionToken))).run();
+    },
+
+    /**
+     * Deletes sign-in links once the day-long limit no longer counts them (with the IP addresses they hold),
+     * and sessions that have expired. Returns how many of each went.
+     */
+    sweep(): { links: number; sessions: number } {
+      const at = now();
+      const links = db
+        .delete(signInLinks)
+        .where(lte(signInLinks.requestedAt, new Date(at.getTime() - 24 * 60 * MINUTE)))
+        .run().changes;
+      const expired = db.delete(sessions).where(lte(sessions.expiresAt, at)).run().changes;
+      return { links, sessions: expired };
     },
   };
 }

@@ -222,9 +222,18 @@ export function createServer({
 
   /** Serves HTTP and live updates on one port (0 picks a free one). Screens only listen; moves go over HTTP. */
   function listen(port: number): Promise<{ port: number; close: () => Promise<void> }> {
+    auth.sweep();
+    const sweeping = setInterval(() => auth.sweep(), 60 * 60_000);
+    sweeping.unref(); // never what keeps the process alive
     return new Promise((resolve) => {
       const http = serve({ fetch: app.fetch, port }, (info: AddressInfo) => {
-        resolve({ port: info.port, close: () => new Promise((done) => sockets.close(() => done())) });
+        resolve({
+          port: info.port,
+          close: () => {
+            clearInterval(sweeping);
+            return new Promise((done) => sockets.close(() => done()));
+          },
+        });
       });
       const sockets = new SocketServer(http);
       io = sockets;
@@ -243,5 +252,5 @@ export function createServer({
     });
   }
 
-  return { app, listen };
+  return { app, listen, sweep: auth.sweep };
 }
