@@ -1,5 +1,22 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useApi } from "./ApiContext.js";
+
+/** Whether someone is signed in on this browser; "loading" until the server has said. */
+export function useSignedIn(): boolean | "loading" {
+  const api = useApi();
+  const [signedIn, setSignedIn] = useState<boolean | "loading">("loading");
+  useEffect(() => {
+    let current = true;
+    api.session().then(
+      (s) => current && setSignedIn(Boolean(s)),
+      () => current && setSignedIn(false),
+    );
+    return () => {
+      current = false;
+    };
+  }, [api]);
+  return signedIn;
+}
 
 const linkMessages = {
   tooMany: "Too many sign-in links have been asked for. Please wait a few minutes and try again.",

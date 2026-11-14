@@ -2,7 +2,7 @@ import { randomBytes, randomInt } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import { serve } from "@hono/node-server";
 import { getConnInfo } from "@hono/node-server/conninfo";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, or, sql } from "drizzle-orm";
 import { Hono, type Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import {
@@ -24,8 +24,19 @@ import {
 import { Server as SocketServer } from "socket.io";
 import type { z } from "zod";
 import { createAuth, DEFAULT_LIMITS, logMailer, SESSION_LIFETIME_MS, type LinkLimits, type Mailer } from "./auth.js";
-import { gameEvents, gameHosts, gamePlayers, games, openDb, turnClocks, type Tx } from "./db.js";
-import { cohostBody, command, createGameBody, joinBody, linkRedemption, linkRequest, timerBody } from "./schemas.js";
+import { gameEvents, gameHosts, gamePlayers, games, openDb, posts, turnClocks, type Tx } from "./db.js";
+import {
+  cohostBody,
+  command,
+  createGameBody,
+  joinBody,
+  linkRedemption,
+  linkRequest,
+  moderationBody,
+  postBody,
+  postStatusBody,
+  timerBody,
+} from "./schemas.js";
 
 export type { Mailer } from "./auth.js";
 
@@ -57,6 +68,7 @@ const randomDraw: DrawFn = (candidates) => candidates[randomInt(candidates.lengt
 interface LoadedGame {
   name: string;
   rosterMode: "host" | "self";
+  moderation: "open" | "approval" | "paused";
   turnSeconds: number;
   /** When each Player who's up was called up, or had their timer reset (ms since 1970). */
   clocks: ReadonlyMap<string, number>;
@@ -65,11 +77,12 @@ interface LoadedGame {
 }
 
 /** What screens are shown about a Game: answers from the rules module, never its internal state. */
-function view(id: string, { name, rosterMode, turnSeconds, clocks, state, seq }: LoadedGame, now: Date) {
+function view(id: string, { name, rosterMode, moderation, turnSeconds, clocks, state, seq }: LoadedGame, now: Date) {
   return {
     id,
     name,
     rosterMode,
+    moderation,
     /** The turn timer. `now` is the server's time, so a screen can count down correctly even if its own clock is off. */
     clock: { now: now.getTime(), turnSeconds, startedAt: Object.fromEntries(clocks) },
     /** Rises with every change (it counts the Game's logged events), so a screen keeps the newest copy it has seen. */
@@ -135,6 +148,7 @@ export function createServer({
     const game: LoadedGame = {
       name: row.name,
       rosterMode: row.rosterMode,
+      moderation: row.moderation,
       turnSeconds: row.turnSeconds,
       clocks: new Map(clocks.map((c) => [c.playerId, c.startedAt.getTime()])),
       state,
@@ -176,6 +190,11 @@ export function createServer({
       alsoWrite?.(tx);
     });
     return publish(id, { ...game, clocks, state, seq: game.seq + result.length });
+  }
+
+  /** Tells every screen watching that the Feed changed. Each asks for it again, since each may see different Posts. */
+  function postsChanged(id: string) {
+    io?.to(id).emit("posts");
   }
 
   /** Keeps the Game's new copy and sends it to every screen watching. */
@@ -324,6 +343,89 @@ export function createServer({
     return c.json(publish(id, { ...game, clocks: new Map(game.clocks).set(playerId, at.getTime()) }));
   });
 
+  // The Feed, as this viewer may see it: every visible Post, plus their own and, for a Host, all the others.
+  app.get("/api/games/:id/posts", (c) => {
+    const id = c.req.param("id");
+    if (!load(id)) return c.json({ error: "Game not found" }, 404);
+    const email = signedInAs(c);
+    const hosting = email !== undefined && roleIn(id, email) !== undefined;
+    const seen = hosting ? undefined : email ? or(eq(posts.status, "visible"), eq(posts.email, email)) : eq(posts.status, "visible");
+    const rows = db
+      .select()
+      .from(posts)
+      .where(seen ? and(eq(posts.gameId, id), seen) : eq(posts.gameId, id))
+      .orderBy(desc(posts.createdAt), desc(sql`${posts}.rowid`))
+      .all();
+    return c.json(
+      rows.map((p) => ({
+        id: p.id,
+        author: p.author,
+        giftId: p.giftId,
+        text: p.text,
+        status: p.status,
+        createdAt: p.createdAt.getTime(),
+        mine: p.email === email,
+      })),
+    );
+  });
+
+  app.post("/api/games/:id/posts", async (c) => {
+    const id = c.req.param("id");
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in to post" }, 401);
+    const body = await parseBody(c, postBody);
+    if (!body.ok) return body.res;
+    const game = load(id);
+    if (!game) return c.json({ error: "Game not found" }, 404);
+    if (game.moderation === "paused") return c.json({ code: "Paused", message: "The Host has paused posting" }, 409);
+    const { text, giftId } = body.data;
+    if (giftId !== undefined && !gifts(game.state).some((g) => g.id === giftId)) return c.json({ error: "No such Gift in this Game" }, 400);
+    // A Player posts as their Player; anyone else (a Guest) as the name they give.
+    const playerId = playerOf(id, email, game);
+    const author = playerId ? roster(game.state).find((p) => p.id === playerId)!.name : body.data.name;
+    if (!author) return c.json({ error: "Say what name to post as" }, 400);
+
+    const status = game.moderation === "approval" ? "pending" : "visible";
+    db.insert(posts)
+      .values({ id: randomBytes(12).toString("base64url"), gameId: id, email, author, giftId: giftId ?? null, text, status, createdAt: now() })
+      .run();
+    postsChanged(id);
+    return c.body(null, 201);
+  });
+
+  app.post("/api/games/:id/moderation", async (c) => {
+    const id = c.req.param("id");
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const body = await parseBody(c, moderationBody);
+    if (!body.ok) return body.res;
+    const game = load(id);
+    if (!game) return c.json({ error: "Game not found" }, 404);
+    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can moderate this Game" }, 403);
+    db.update(games).set({ moderation: body.data.mode }).where(eq(games.id, id)).run();
+    publish(id, { ...game, moderation: body.data.mode });
+    return c.body(null, 204);
+  });
+
+  // Approving a Pending Post and showing a Hidden one again are the same: it becomes visible.
+  app.post("/api/games/:id/posts/:postId/status", async (c) => {
+    const { id, postId } = c.req.param();
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const body = await parseBody(c, postStatusBody);
+    if (!body.ok) return body.res;
+    if (!load(id)) return c.json({ error: "Game not found" }, 404);
+    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can moderate this Game" }, 403);
+    const changed = db
+      .update(posts)
+      .set({ status: body.data.status })
+      .where(and(eq(posts.gameId, id), eq(posts.id, postId)))
+      .run();
+    if (changed.changes === 0) return c.json({ error: "Post not found" }, 404);
+    postsChanged(id);
+    return c.body(null, 204);
+  });
+
   // A person adds themselves as a Player, in a Self sign-up Game. The server picks the Player's id and
   // sends the same AddPlayer command the Host's button does, so the rules are untouched.
   app.post("/api/games/:id/join", async (c) => {
@@ -374,6 +476,7 @@ export function createServer({
         const gameId = socket.handshake.auth["gameId"] as string;
         void socket.join(gameId);
         socket.emit("game", view(gameId, load(gameId)!, now()));
+        socket.emit("posts"); // the Feed may have changed while this screen was asleep
       });
     });
   }

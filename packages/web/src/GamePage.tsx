@@ -1,23 +1,26 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { Link, useLocation, useParams } from "react-router";
 import type { Command } from "@elephant/rules";
-import type { CommandResult, GameView, SharedGame, Viewer } from "./api.js";
+import type { CommandResult, GameView, Post, SharedGame, Viewer } from "./api.js";
 import { useApi } from "./ApiContext.js";
 import { Countdown } from "./Countdown.js";
-import { SignInForm } from "./SignIn.js";
+import { Feed, useFeed } from "./Feed.js";
+import { SignInForm, useSignedIn } from "./SignIn.js";
 import { useLiveGame } from "./useLiveGame.js";
 
 export function GamePage() {
   const api = useApi();
   const { id = "" } = useParams();
-  const [game, accept] = useLiveGame(id);
+  const [game, accept, feedChanges] = useLiveGame(id);
   const [error, setError] = useState<string | null>(null);
   const stars = useStars(id);
+  const [posts, reloadFeed] = useFeed(id, feedChanges);
 
   if (game === "loading") return <p className="muted">Loading…</p>;
   if (!game) return <p className="error">There's no Game at this link. Check it with your Host.</p>;
 
   const runs = game.role !== null;
+  const joinOffered = !game.me && game.rosterMode === "self" && game.phase !== "ended";
   const nameOf = (playerId: string) => game.players.find((p) => p.id === playerId)?.name ?? "?";
 
   async function send(command: Command) {
@@ -43,7 +46,7 @@ export function GamePage() {
       {game.me ? (
         <p className="card you">You're playing as {nameOf(game.me.playerId)}</p>
       ) : (
-        game.rosterMode === "self" && game.phase !== "ended" && <JoinPanel gameId={game.id} onJoined={accept} />
+        joinOffered && <JoinPanel gameId={game.id} onJoined={accept} />
       )}
 
       {game.phase === "ended" ? (
@@ -94,7 +97,9 @@ export function GamePage() {
         <FinalRoundPanel game={game} send={send} />
       )}
 
-      {game.gifts.length > 0 && <Gifts game={game} stars={stars} />}
+      {game.gifts.length > 0 && <Gifts game={game} stars={stars} posts={posts} />}
+
+      <Feed game={game} posts={posts} reload={reloadFeed} offerSignIn={!joinOffered} />
 
       {error && (
         <p className="error" role="alert">
@@ -140,20 +145,9 @@ export function GamePage() {
 function JoinPanel({ gameId, onJoined }: { gameId: string; onJoined: (game: SharedGame, viewer: Partial<Viewer>) => void }) {
   const api = useApi();
   const { pathname } = useLocation();
-  const [signedIn, setSignedIn] = useState<boolean | "loading">("loading");
+  const signedIn = useSignedIn();
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let current = true;
-    api.session().then(
-      (s) => current && setSignedIn(Boolean(s)),
-      () => current && setSignedIn(false),
-    );
-    return () => {
-      current = false;
-    };
-  }, [api]);
 
   async function join(e: FormEvent) {
     e.preventDefault();
@@ -364,8 +358,11 @@ interface Stars {
   toggle: (giftId: string) => void;
 }
 
-/** The Gifts in the order they were opened; with `stars`, Starred ones come first and each has a Star button. */
-export function Gifts({ game, stars }: { game: Pick<GameView, "gifts" | "players">; stars?: Stars }) {
+/**
+ * The Gifts in the order they were opened; with `stars`, Starred ones come first and each has a Star button.
+ * With `posts`, each Gift shows the Posts about it.
+ */
+export function Gifts({ game, stars, posts = [] }: { game: Pick<GameView, "gifts" | "players">; stars?: Stars; posts?: Post[] }) {
   const holderName = (id: string | null) => (id === null ? "on the table" : (game.players.find((p) => p.id === id)?.name ?? "?"));
   const isStarred = (giftId: string) => stars?.starred.has(giftId) ?? false;
   const shown = [...game.gifts.filter((g) => isStarred(g.id)), ...game.gifts.filter((g) => !isStarred(g.id))];
@@ -382,6 +379,13 @@ export function Gifts({ game, stars }: { game: Pick<GameView, "gifts" | "players
             )}
             <span className="gift-name">
               <strong>{g.name}</strong> — {holderName(g.holderId)}
+              {posts
+                .filter((p) => p.giftId === g.id && p.status === "visible")
+                .map((p) => (
+                  <span key={p.id} className="gift-post">
+                    {p.author}: {p.text}
+                  </span>
+                ))}
             </span>
             <span className="muted">
               {g.steals > 0 && `${g.steals} ${g.steals === 1 ? "steal" : "steals"}`}

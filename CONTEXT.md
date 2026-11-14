@@ -104,10 +104,24 @@ Reversing the most recent Pick, done only by the Host or a Co-host to correct a 
 ### Sharing
 
 **Post**:
-A Comment or Photo shared by a Player or Guest during a Game.
+Something a signed-in Player or Guest shares during a Game: a few words, a Photo, or both. Every Post appears in the Game's Feed; the poster may also say which Gift it's about, and it then shows under that Gift too.
+_Avoid_: Comment (as a separate thing), message
+
+**Photo**:
+A picture attached to a Post, at most one per Post. It is deleted 60 days after the Game; the Host can download them all first.
+
+**Feed**:
+All of a Game's visible Posts, newest first, on phones and the big screen.
+_Avoid_: Chat, blog, wall
 
 **Moderation**:
-The Game's rule for when Posts become visible: immediately, after a delay, or after Host approval.
+The Game's rule for Posts, which the Host or a Co-host can switch at any moment: **Open** (Posts appear at once), **Approval** (each waits for the Host or a Co-host to approve it) or **Paused** (nobody can post). In any mode the Host or a Co-host can hide a single Post.
+
+**Pending Post**:
+A Post made under Approval that the Host or a Co-host hasn't approved yet; only they and its poster can see it.
+
+**Hidden Post**:
+A Post the Host or a Co-host has taken down; only they and its poster can see it, and they can show it again.
 
 ### Results
 

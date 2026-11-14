@@ -21,6 +21,16 @@ export const createGameBody = z.object({
 
 export const timerBody = z.object({ playerId: id });
 
+export const postBody = z.object({
+  text: z.string().trim().min(1).max(500),
+  /** A Guest's name to show; a Player's own name is used instead. */
+  name: name.optional(),
+  giftId: id.optional(),
+});
+
+export const moderationBody = z.object({ mode: z.enum(["open", "approval", "paused"]) });
+export const postStatusBody = z.object({ status: z.enum(["visible", "hidden"]) });
+
 export const joinBody = z.object({ name });
 
 /**

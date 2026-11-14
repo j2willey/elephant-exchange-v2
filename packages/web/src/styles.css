@@ -288,6 +288,44 @@ button.link {
   font-size: 0.9rem;
 }
 
+.gifts .gift-post {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+textarea,
+select {
+  width: 100%;
+  padding: 12px;
+  font: inherit;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: inherit;
+}
+
+.feed {
+  display: grid;
+}
+
+.post {
+  display: grid;
+  gap: 4px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.post.pending,
+.post.hidden {
+  opacity: 0.7;
+}
+
+.post-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .badge {
   margin-left: 8px;
   padding: 2px 8px;

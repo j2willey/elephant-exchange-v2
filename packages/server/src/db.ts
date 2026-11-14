@@ -11,12 +11,17 @@ export const games = sqliteTable("games", {
   name: text("name").notNull().default("Gift exchange"),
   /** Who adds Players: only the Host and Co-hosts ("host"), or people themselves from their phones too ("self"). */
   rosterMode: text("roster_mode", { enum: ["host", "self"] }).notNull().default("host"),
+  /** The Game's rule for Posts: "open" (they appear at once), "approval" (each waits for a Host) or "paused" (no posting). */
+  moderation: text("moderation", { enum: ["open", "approval", "paused"] }).notNull().default("open"),
   /** How long each Turn's countdown runs, as a guide for the Host; 0 shows no timer. Nobody is ever skipped by it. */
   turnSeconds: integer("turn_seconds").notNull().default(60),
   /** The GameSettings the Game was created with (JSON); later changes are SettingsChanged events. */
   settings: text("settings").notNull(),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-}, (t) => [check("games_roster_mode", sql`${t.rosterMode} IN ('host', 'self')`)]);
+}, (t) => [
+  check("games_roster_mode", sql`${t.rosterMode} IN ('host', 'self')`),
+  check("games_moderation", sql`${t.moderation} IN ('open', 'approval', 'paused')`),
+]);
 
 /** The log of each Game (ADR-0001): every event, in order. The Game's state is rebuilt from it. */
 export const gameEvents = sqliteTable(
@@ -105,6 +110,28 @@ export const turnClocks = sqliteTable(
     startedAt: integer("started_at", { mode: "timestamp_ms" }).notNull(),
   },
   (t) => [primaryKey({ columns: [t.gameId, t.playerId] })],
+);
+
+/**
+ * What people share during a Game. `email` says whose it is (they can always see their own) and is never shown;
+ * `author` is the name everyone sees. A Pending or Hidden Post is seen only by its poster and the Hosts.
+ */
+export const posts = sqliteTable(
+  "posts",
+  {
+    id: text("id").primaryKey(),
+    gameId: text("game_id")
+      .notNull()
+      .references(() => games.id),
+    email: text("email").notNull(),
+    author: text("author").notNull(),
+    /** The Gift it's about, if the poster said; it then shows under that Gift as well as in the Feed. */
+    giftId: text("gift_id"),
+    text: text("text").notNull(),
+    status: text("status", { enum: ["visible", "pending", "hidden"] }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [index("posts_game").on(t.gameId, t.createdAt), check("posts_status", sql`${t.status} IN ('visible', 'pending', 'hidden')`)],
 );
 
 /** Opens the database, bringing its tables up to date with any migrations it hasn't had yet. */

@@ -8,6 +8,8 @@ export interface GameView {
   name: string;
   /** Who adds Players: only the Host and Co-hosts, or people themselves from their phones too. */
   rosterMode: RosterMode;
+  /** The Game's rule for Posts; the Host or a Co-host can switch it at any moment. */
+  moderation: Moderation;
   /** The turn timer: the server's time when sent, the countdown's length (0: no timer), and when each Player up was called. */
   clock: { now: number; turnSeconds: number; startedAt: Record<string, number> };
   /** Rises with every change; the newest copy wins. */
@@ -27,6 +29,22 @@ export interface GameView {
 }
 
 export type RosterMode = "host" | "self";
+export type Moderation = "open" | "approval" | "paused";
+
+/** A Post in the Feed, as this viewer may see it. */
+export interface Post {
+  id: string;
+  /** The name it was posted as. */
+  author: string;
+  /** The Gift it's about, if the poster said. */
+  giftId: string | null;
+  text: string;
+  /** Pending and Hidden Posts reach only their poster and the Hosts. */
+  status: "visible" | "pending" | "hidden";
+  createdAt: number;
+  /** Whether the viewer posted it. */
+  mine: boolean;
+}
 
 /** What only the person looking is told about a Game; live updates go to everyone, so they never carry it. */
 export type Viewer = Pick<GameView, "role" | "me">;
@@ -166,10 +184,11 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
      * Calls onGame with the whole Game now, and again after every change, until the returned function is called.
      * After a phone sleeps, Socket.IO reconnects by itself and the server sends the whole Game again.
      */
-    watch(gameId: string, onGame: (game: SharedGame) => void, onMissing?: () => void): () => void {
+    watch(gameId: string, onGame: (game: SharedGame) => void, onMissing?: () => void, onPostsChanged?: () => void): () => void {
       const socketOptions = { auth: { gameId }, ...(options.transports ? { transports: options.transports } : {}) };
       const socket = options.socketOrigin ? io(options.socketOrigin, socketOptions) : io(socketOptions);
       socket.on("game", onGame);
+      if (onPostsChanged) socket.on("posts", onPostsChanged);
       socket.on("connect_error", (err) => {
         if (err.message === "Game not found") {
           socket.close();
@@ -204,6 +223,31 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
 
     setStars(gameId: string, giftIds: string[]): void {
       storage.setItem(starsKey(gameId), JSON.stringify(giftIds));
+    },
+
+    /** The Feed as this viewer may see it, newest first. */
+    async posts(gameId: string): Promise<Post[]> {
+      const res = await fetchFn(`/api/games/${encodeURIComponent(gameId)}/posts`);
+      if (!res.ok) throw new Error(`loading the Feed failed: ${res.status}`);
+      return (await res.json()) as Post[];
+    },
+
+    /** `name` is what a Guest posts as; a Player always posts as their Player. */
+    async post(gameId: string, post: { text: string; name?: string; giftId?: string }): Promise<"posted" | "paused" | "failed"> {
+      const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/posts`, post);
+      if (res.status === 201) return "posted";
+      if (res.status === 409) return "paused";
+      return "failed";
+    },
+
+    async setModeration(gameId: string, mode: Moderation): Promise<boolean> {
+      return (await postJson(`/api/games/${encodeURIComponent(gameId)}/moderation`, { mode })).ok;
+    },
+
+    /** Approves a Pending Post or shows a Hidden one again ("visible"), or hides it. */
+    async setPostStatus(gameId: string, postId: string, status: "visible" | "hidden"): Promise<boolean> {
+      const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/posts/${encodeURIComponent(postId)}/status`, { status });
+      return res.ok;
     },
 
     /** Restarts a Player's countdown; the Game as it now stands, or undefined if that didn't work. */
