@@ -7,6 +7,7 @@ import { Countdown } from "./Countdown.js";
 import { Feed, PostPhoto, useFeed } from "./Feed.js";
 import { SignInForm, useSignedIn } from "./SignIn.js";
 import { useLiveGame } from "./useLiveGame.js";
+import { VotePanel } from "./Vote.js";
 
 export function GamePage() {
   const api = useApi();
@@ -96,6 +97,8 @@ export function GamePage() {
       {runs && game.phase === "playing" && game.active.length === 0 && game.gifts.length > 0 && (
         <FinalRoundPanel game={game} send={send} />
       )}
+
+      {game.phase === "ended" && <VotePanel game={game} accept={accept} />}
 
       {game.gifts.length > 0 && <Gifts game={game} stars={stars} posts={posts} />}
 

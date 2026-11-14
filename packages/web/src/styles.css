@@ -463,3 +463,44 @@ button.danger {
 button.danger-solid {
   background: var(--danger);
 }
+
+/* The Worst Gift Vote: one big button per Gift; the one voted for is filled in. */
+.ballot {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.ballot-choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: baseline;
+  width: 100%;
+  text-align: left;
+  color: var(--ink);
+  background: var(--surface);
+  border: 2px solid var(--line);
+}
+
+.ballot-choice[aria-pressed="true"] {
+  color: var(--brand-ink);
+  background: var(--brand);
+  border-color: var(--brand);
+}
+
+.ballot-choice[aria-pressed="true"] .muted {
+  color: inherit;
+}
+
+.ballot-count {
+  margin-left: auto;
+  font-weight: 600;
+}
+
+.winner {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--brand);
+}

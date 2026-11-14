@@ -22,11 +22,18 @@ export interface GameView {
   gifts: { id: string; name: string; holderId: string | null; steals: number; frozen: boolean }[];
   /** Unopened Gifts still on the table in the Final Round. */
   leftoverGifts: number;
+  /** The Worst Gift Vote. `counts` is null while they're kept from everyone (Hidden or Parade, before the reveal). */
+  vote: { status: VoteStatus; display: VoteDisplay; cast: number; counts: Record<string, number> | null; winner: string | null };
   /** Whether the person looking runs this Game. */
   role: "host" | "cohost" | null;
   /** The Player the person looking signed up as, if they did. */
   me: { playerId: string } | null;
+  /** The Gift the person looking voted the worst, if they have. */
+  myVote: string | null;
 }
+
+export type VoteStatus = "none" | "open" | "closed";
+export type VoteDisplay = "live" | "hidden" | "parade";
 
 export type RosterMode = "host" | "self";
 export type Moderation = "open" | "approval" | "paused";
@@ -50,7 +57,7 @@ export interface Post {
 }
 
 /** What only the person looking is told about a Game; live updates go to everyone, so they never carry it. */
-export type Viewer = Pick<GameView, "role" | "me">;
+export type Viewer = Pick<GameView, "role" | "me" | "myVote">;
 export type SharedGame = Omit<GameView, keyof Viewer>;
 
 /**
@@ -278,6 +285,27 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
     },
 
     /** Restarts a Player's countdown; the Game as it now stands, or undefined if that didn't work. */
+    /** Opens or closes the vote. Closing with Gifts tied for most needs `winner`; without it, the tied Gifts come back. */
+    async setVoteStatus(gameId: string, status: "open" | "closed", winner?: string): Promise<"ok" | { tied: string[] } | "failed"> {
+      const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/vote/status`, winner ? { status, winner } : { status });
+      if (res.ok) return "ok";
+      if (res.status === 409) {
+        const body = (await res.json()) as { code: string; tied?: string[] };
+        if (body.code === "Tie" && body.tied) return { tied: body.tied };
+      }
+      return "failed";
+    },
+
+    async setVoteDisplay(gameId: string, display: VoteDisplay): Promise<boolean> {
+      return (await postJson(`/api/games/${encodeURIComponent(gameId)}/vote/display`, { display })).ok;
+    },
+
+    /** Casts or moves this person's vote; the Gift they now vote for, or undefined if it didn't count. */
+    async vote(gameId: string, giftId: string): Promise<string | undefined> {
+      const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/vote`, { giftId });
+      return res.ok ? ((await res.json()) as { myVote: string }).myVote : undefined;
+    },
+
     async resetTimer(gameId: string, playerId: string): Promise<SharedGame | undefined> {
       const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/timer`, { playerId });
       return res.ok ? ((await res.json()) as SharedGame) : undefined;

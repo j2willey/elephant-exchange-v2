@@ -7,19 +7,24 @@ import { useApi } from "./ApiContext.js";
  * Copies arrive both from live updates and from this screen's own requests, in no guaranteed order,
  * so an older copy never replaces a newer one.
  * Returns "loading" at first, null if there's no such Game, and a function to accept a copy from a request
- * (with anything new about the viewer, such as the Player they just joined as), and a count that rises whenever
+ * (with anything new about the viewer, such as the Player they just joined as; null for the Game when only the
+ * viewer changed, since a copy at the same version could be older than one already shown), and a count that rises whenever
  * the Feed changes, for whoever shows it to reload it.
  */
-export function useLiveGame(id: string): [GameView | null | "loading", (game: SharedGame, viewer?: Partial<Viewer>) => void, number] {
+export function useLiveGame(
+  id: string,
+): [GameView | null | "loading", (game: SharedGame | null, viewer?: Partial<Viewer>) => void, number] {
   const api = useApi();
   const [game, setGame] = useState<GameView | null | "loading">("loading");
   const [feedChanges, setFeedChanges] = useState(0);
 
   const accept = useCallback(
-    (next: SharedGame, viewer: Partial<Viewer> = {}) =>
+    (next: SharedGame | null, viewer: Partial<Viewer> = {}) =>
       setGame((prev) => {
         const known = prev !== "loading" && prev !== null ? prev : undefined;
-        const who: Viewer = { role: known?.role ?? null, me: known?.me ?? null, ...viewer };
+        // Something new about the viewer only (such as their vote): the Game itself comes from live updates.
+        if (next === null) return known ? { ...known, ...viewer } : prev;
+        const who: Viewer = { role: known?.role ?? null, me: known?.me ?? null, myVote: known?.myVote ?? null, ...viewer };
         if (known && known.version > next.version) return { ...known, ...who };
         return { ...next, ...who };
       }),
@@ -34,7 +39,7 @@ export function useLiveGame(id: string): [GameView | null | "loading", (game: Sh
       setGame((prev) => {
         const known = prev !== "loading" && prev !== null ? prev : undefined;
         // A live update may already have brought something newer: keep that, but take the viewer from here.
-        return known && known.version > loaded.version ? { ...known, role: loaded.role, me: loaded.me } : loaded;
+        return known && known.version > loaded.version ? { ...known, role: loaded.role, me: loaded.me, myVote: loaded.myVote } : loaded;
       });
     });
     const stop = api.watch(
