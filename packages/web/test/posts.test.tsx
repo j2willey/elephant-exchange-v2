@@ -79,8 +79,9 @@ describe("Posts", () => {
     openApp(browser(origin), `/games/${id}`);
 
     await feedShows(/first!/i);
+    // The sign-in offer comes once the page has checked who's there, which may be after the Feed loads.
+    expect(await screen.findByRole("button", { name: /send.*link/i })).toBeInTheDocument();
     expect(screen.queryByRole("form", { name: /post to the feed/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /send.*link/i })).toBeInTheDocument();
   });
 });
 
