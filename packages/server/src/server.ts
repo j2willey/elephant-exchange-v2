@@ -29,7 +29,16 @@ import {
 import { Server as SocketServer } from "socket.io";
 import type { z } from "zod";
 import { createAuth, DEFAULT_LIMITS, logMailer, SESSION_LIFETIME_MS, type LinkLimits, type Mailer } from "./auth.js";
-import { PHOTO_KEEP_DAYS, PHOTO_MAX_BYTES, photoStore, preparePhoto } from "./photos.js";
+import {
+  isThemeImage,
+  PHOTO_KEEP_DAYS,
+  PHOTO_MAX_BYTES,
+  photoStore,
+  preparePhoto,
+  prepareThemeImage,
+  themeStore,
+  type ThemeImage,
+} from "./photos.js";
 import { zip } from "./zip.js";
 import { gameEvents, gameHosts, gamePlayers, games, openDb, organizations, posts, turnClocks, votes, type Tx } from "./db.js";
 import {
@@ -81,6 +90,8 @@ export interface ServerOptions {
   webRoot?: string;
   /** Where Photos are stored. Left out (as in most tests), they go to a fresh temporary folder. */
   photosDir?: string;
+  /** Where Theme logos and backgrounds are stored; likewise a temporary folder if left out. */
+  themesDir?: string;
 }
 
 const randomDraw: DrawFn = (candidates) => candidates[randomInt(candidates.length)]!;
@@ -204,12 +215,14 @@ export function createServer({
   now = () => new Date(),
   baseUrl = "http://localhost:3000",
   photosDir,
+  themesDir,
   limits = {},
   trustProxy = false,
   webRoot,
 }: ServerOptions) {
   const db = openDb(dbPath);
   const photos = photoStore(photosDir ?? mkdtempSync(join(tmpdir(), "elephant-photos-")));
+  const themeImages = themeStore(themesDir ?? mkdtempSync(join(tmpdir(), "elephant-themes-")));
   const auth = createAuth(db, now, { ...DEFAULT_LIMITS, ...limits });
 
   function clientIp(c: Context): string {
@@ -678,6 +691,83 @@ export function createServer({
     orgChanged(orgId);
     return c.json(orgView(orgTheme(orgId)!));
   });
+
+  /** The file in a multipart upload's `image` field (checked by type, not `instanceof File`: see the Photo upload). */
+  async function uploadedImage(c: Context): Promise<Uint8Array | undefined> {
+    if (!c.req.header("content-type")?.startsWith("multipart/form-data")) return undefined;
+    const file = (await c.req.parseBody())["image"];
+    return file !== undefined && typeof file !== "string" ? new Uint8Array(await (file as File).arrayBuffer()) : undefined;
+  }
+
+  /** Serves a Theme image at its versioned address: cached for good, since a new upload gets a new address. */
+  function themeImage(c: Context, owner: string, kind: ThemeImage, version: string | null | undefined) {
+    const data = version ? themeImages.read(owner, kind) : undefined;
+    if (!data) return c.json({ error: "No such image" }, 404);
+    return c.body(new Uint8Array(data), 200, { "content-type": "image/webp", "cache-control": "public, max-age=31536000, immutable" });
+  }
+
+  /**
+   * Stores (PUT) or removes (DELETE) a Theme image, returning its new version (null once removed), or the
+   * response to send instead if the upload isn't an image.
+   */
+  async function changeThemeImage(c: Context, method: "put" | "delete", owner: string, kind: ThemeImage): Promise<{ version: string | null } | Response> {
+    if (method === "delete") {
+      themeImages.remove(owner, kind);
+      return { version: null };
+    }
+    const input = await uploadedImage(c);
+    const image = input && (await prepareThemeImage(input, kind));
+    if (!image) return c.json({ error: "That doesn't look like an image we can use" }, 400);
+    themeImages.save(owner, kind, image);
+    return { version: randomBytes(6).toString("base64url") };
+  }
+
+  app.get("/api/orgs/:orgId/:kind", (c) => {
+    const { orgId, kind } = c.req.param();
+    if (!isThemeImage(kind)) return c.json({ error: "Not found" }, 404);
+    return themeImage(c, `org-${orgId}`, kind, orgTheme(orgId)?.[kind]);
+  });
+
+  // The Organizer sets (PUT) or removes (DELETE) the Organization's logo or background.
+  for (const method of ["put", "delete"] as const) {
+    app.on(method.toUpperCase(), "/api/orgs/:orgId/:kind", photoSizeLimit, async (c) => {
+      const { orgId, kind } = c.req.param();
+      const email = signedInAs(c);
+      if (!email) return c.json({ error: "Sign in first" }, 401);
+      if (!isThemeImage(kind) || !orgTheme(orgId)) return c.json({ error: "Not found" }, 404);
+      if (!organizes(orgId, email)) return c.json({ error: "Only its Organizer can change an Organization" }, 403);
+      const changed = await changeThemeImage(c, method, `org-${orgId}`, kind);
+      if (changed instanceof Response) return changed;
+      db.update(organizations).set({ [kind]: changed.version }).where(eq(organizations.id, orgId)).run();
+      orgChanged(orgId);
+      return c.json(orgView(orgTheme(orgId)!));
+    });
+  }
+
+  app.get("/api/games/:id/theme/:kind", (c) => {
+    const { id, kind } = c.req.param();
+    if (!isThemeImage(kind)) return c.json({ error: "Not found" }, 404);
+    return themeImage(c, `game-${id}`, kind, load(id)?.theme.own[kind]);
+  });
+
+  // The Host or a Co-host sets or removes the Game's own logo or background, overriding the Organization's.
+  for (const method of ["put", "delete"] as const) {
+    app.on(method.toUpperCase(), "/api/games/:id/theme/:kind", photoSizeLimit, async (c) => {
+      const { id, kind } = c.req.param();
+      const email = signedInAs(c);
+      if (!email) return c.json({ error: "Sign in first" }, 401);
+      const game = load(id);
+      if (!isThemeImage(kind) || !game) return c.json({ error: "Not found" }, 404);
+      if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can change the Game's look" }, 403);
+      const changed = await changeThemeImage(c, method, `game-${id}`, kind);
+      if (changed instanceof Response) return changed;
+      db.update(games)
+        .set(kind === "logo" ? { themeLogo: changed.version } : { themeBackground: changed.version })
+        .where(eq(games.id, id))
+        .run();
+      return c.json(publish(id, { ...game, theme: { ...game.theme, own: { ...game.theme.own, [kind]: changed.version } } }).theme);
+    });
+  }
 
   // Which Organization's Theme a Game shows: the Host or a Co-host picks one they're the Organizer of, or none.
   app.post("/api/games/:id/org", async (c) => {

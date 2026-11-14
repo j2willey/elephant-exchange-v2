@@ -20,6 +20,7 @@ ENV NODE_ENV=production \
     PORT=3000 \
     DB_PATH=/data/elephant.db \
     PHOTOS_DIR=/data/photos \
+    THEMES_DIR=/data/themes \
     WEB_ROOT=/app/packages/web/dist
 WORKDIR /app
 COPY --from=build /app/package.json ./

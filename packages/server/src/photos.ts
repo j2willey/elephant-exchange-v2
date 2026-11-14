@@ -57,3 +57,44 @@ export function photoStore(dir: string) {
     removeGame: (gameId: string) => rmSync(join(dir, gameId), { recursive: true, force: true }),
   };
 }
+
+export type ThemeImage = "logo" | "background";
+export const isThemeImage = (kind: string): kind is ThemeImage => kind === "logo" || kind === "background";
+
+/**
+ * A Theme's logo or background as kept: turned upright, shrunk (a logo to fit 600px, a background 2400px) and
+ * re-encoded as WebP, which keeps a logo's transparency and drops all metadata. Undefined if it isn't an image.
+ */
+export async function prepareThemeImage(input: Uint8Array, kind: ThemeImage): Promise<Buffer | undefined> {
+  const side = kind === "logo" ? 600 : 2400;
+  try {
+    return await sharp(input, { limitInputPixels: 100_000_000, failOn: "error" })
+      .rotate()
+      .resize({ width: side, height: side, fit: "inside", withoutEnlargement: true })
+      .webp(kind === "logo" ? { quality: 90, alphaQuality: 100 } : { quality: 80 })
+      .toBuffer();
+  } catch {
+    return undefined;
+  }
+}
+
+/** Where Theme images live: one folder per Organization ("org-<id>") or Game ("game-<id>"), one file per kind. */
+export function themeStore(dir: string) {
+  const file = (owner: string, kind: ThemeImage) => join(dir, owner, `${kind}.webp`);
+  return {
+    save(owner: string, kind: ThemeImage, data: Buffer) {
+      mkdirSync(join(dir, owner), { recursive: true });
+      const path = file(owner, kind);
+      writeFileSync(`${path}.partial`, data);
+      renameSync(`${path}.partial`, path);
+    },
+    read: (owner: string, kind: ThemeImage): Buffer | undefined => {
+      try {
+        return readFileSync(file(owner, kind));
+      } catch {
+        return undefined;
+      }
+    },
+    remove: (owner: string, kind: ThemeImage) => rmSync(file(owner, kind), { force: true }),
+  };
+}
