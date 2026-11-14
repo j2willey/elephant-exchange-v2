@@ -10,5 +10,19 @@ const server = createServer({
   // The built web app, in production. In development it's left unset and Vite serves the app.
   ...(env["WEB_ROOT"] ? { webRoot: env["WEB_ROOT"] } : {}),
 });
-const { port } = await server.listen(Number(env["PORT"] ?? 3001));
+const { port, close } = await server.listen(Number(env["PORT"] ?? 3001));
 console.log(`Elephant Exchange server listening on port ${port}`);
+
+// `docker stop` sends SIGTERM (Ctrl-C sends SIGINT): finish cleanly, so the database file is left whole.
+for (const signal of ["SIGTERM", "SIGINT"] as const) {
+  process.once(signal, () => {
+    console.log(`${signal}: shutting down`);
+    close().then(
+      () => process.exit(0),
+      (err: unknown) => {
+        console.error("Shutdown failed", err);
+        process.exit(1);
+      },
+    );
+  });
+}

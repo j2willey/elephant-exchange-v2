@@ -488,9 +488,11 @@ export function createServer({
       const http = serve({ fetch: app.fetch, port }, (info: AddressInfo) => {
         resolve({
           port: info.port,
-          close: () => {
+          // Stops taking requests, then closes the database, which folds SQLite's side file (-wal) back into it.
+          close: async () => {
             clearInterval(sweeping);
-            return new Promise((done) => sockets.close(() => done()));
+            await new Promise<void>((done) => sockets.close(() => done()));
+            db.$client.close();
           },
         });
       });
