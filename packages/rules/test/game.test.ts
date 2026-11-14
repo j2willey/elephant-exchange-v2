@@ -3,6 +3,7 @@ import {
   activePlayers,
   decide,
   evolve,
+  gifts,
   newGame,
   holderOf,
   isFrozen,
@@ -681,6 +682,28 @@ describe("Roster", () => {
     expect(roster(state)).toEqual([
       { id: "ann", name: "Ann Smith" },
       { id: "cat", name: "Cat Lee" },
+    ]);
+  });
+});
+
+describe("Gifts on view", () => {
+  it("lists opened Gifts in the order opened, with holder, Steals and whether each is Frozen", () => {
+    const state = play(
+      { activeSlots: 1, maxSteals: 1 },
+      [
+        { type: "AddPlayer", playerId: "ann", name: "Ann" },
+        { type: "AddPlayer", playerId: "bob", name: "Bob" },
+        { type: "StartGame" },
+        { type: "OpenGift", playerId: "ann", giftId: "g1", name: "Socks" },
+        { type: "Steal", playerId: "bob", giftId: "g1" },
+        { type: "OpenGift", playerId: "ann", giftId: "g2", name: "Mug" },
+      ],
+      scriptedDraw(["ann", "bob"]),
+    );
+
+    expect(gifts(state)).toEqual([
+      { id: "g1", name: "Socks", holderId: "bob", steals: 1, frozen: true },
+      { id: "g2", name: "Mug", holderId: "ann", steals: 0, frozen: false },
     ]);
   });
 });

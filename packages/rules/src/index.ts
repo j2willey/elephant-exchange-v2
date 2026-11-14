@@ -354,3 +354,8 @@ export function phase(state: GameState): Phase {
 export function roster(state: GameState): { id: PlayerId; name: string }[] {
   return state.players.map((p) => ({ id: p.id, name: p.name }));
 }
+
+/** Opened Gifts in the order opened. A null holder is a Returned Gift. */
+export function gifts(state: GameState): { id: GiftId; name: string; holderId: PlayerId | null; steals: number; frozen: boolean }[] {
+  return state.gifts.map((g) => ({ id: g.id, name: g.name, holderId: g.holderId, steals: g.steals, frozen: isFrozen(state, g.id) }));
+}
