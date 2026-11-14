@@ -240,7 +240,13 @@ export function createServer({
     const next = body.data.next ? `&next=${encodeURIComponent(body.data.next)}` : "";
     // The link opens the web app's sign-in page, which redeems it with a POST. A GET that signed people in
     // would be used up by email scanners (such as Outlook Safe Links) that open every link to check it.
-    await mailer.sendSignInLink(body.data.email, `${baseUrl}/sign-in?token=${token}${next}`);
+    try {
+      await mailer.sendSignInLink(body.data.email, `${baseUrl}/sign-in?token=${token}${next}`);
+    } catch (err) {
+      // Such as Resend's daily limit. Say so, rather than leave someone waiting for an email that isn't coming.
+      console.error("Couldn't send a sign-in link", err);
+      return c.json({ error: "We couldn't send the email just now; please try again in a minute" }, 503);
+    }
     return c.body(null, 202);
   });
 
