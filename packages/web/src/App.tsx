@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Route, Routes, useNavigate, useSearchParams } from "react-router";
 import { useApi } from "./ApiContext.js";
+import { GamePage } from "./GamePage.js";
 
 export function AppRoutes() {
   return (
@@ -9,6 +10,7 @@ export function AppRoutes() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/sign-in" element={<RedeemLink />} />
+        <Route path="/games/:id" element={<GamePage />} />
       </Routes>
     </main>
   );
@@ -35,12 +37,53 @@ function Home() {
   }
 
   return (
-    <section className="card">
-      <p>Signed in as {session.email}</p>
-      <button className="secondary" onClick={signOut}>
-        Sign out
-      </button>
-    </section>
+    <div className="stack">
+      <NewGame />
+      <section className="card">
+        <p>Signed in as {session.email}</p>
+        <button className="secondary" onClick={signOut}>
+          Sign out
+        </button>
+      </section>
+    </div>
+  );
+}
+
+/** Creating a Game: a button first, then its two settings (the usual values filled in). */
+function NewGame() {
+  const api = useApi();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [slots, setSlots] = useState("1");
+  const [steals, setSteals] = useState("3");
+  const [failed, setFailed] = useState(false);
+
+  if (!open) return <button onClick={() => setOpen(true)}>New Game</button>;
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    try {
+      const id = await api.createGame({ activeSlots: Number(slots), maxSteals: Number(steals) });
+      navigate(`/games/${id}`);
+    } catch {
+      setFailed(true);
+    }
+  }
+
+  return (
+    <form className="card" onSubmit={submit}>
+      <h2>New Game</h2>
+      <label htmlFor="slots">Players taking a turn at once</label>
+      <input id="slots" type="number" inputMode="numeric" min={1} max={10} required value={slots} onChange={(e) => setSlots(e.target.value)} />
+      <label htmlFor="steals">Steals before a Gift is Frozen</label>
+      <input id="steals" type="number" inputMode="numeric" min={0} max={20} required value={steals} onChange={(e) => setSteals(e.target.value)} />
+      {failed && (
+        <p className="error" role="alert">
+          The Game couldn't be created. Please try again.
+        </p>
+      )}
+      <button type="submit">Create game</button>
+    </form>
   );
 }
 

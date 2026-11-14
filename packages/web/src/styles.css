@@ -108,3 +108,45 @@ button.secondary {
   margin: 0 0 12px;
   color: var(--danger);
 }
+
+.stack {
+  display: grid;
+  gap: 16px;
+}
+
+.roster {
+  margin: 0;
+  padding-left: 1.5rem;
+}
+
+.roster li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  border-bottom: 1px solid var(--line);
+}
+
+/* One line: the box takes the room, the button sits at the end. */
+.inline {
+  display: flex;
+  gap: 8px;
+}
+
+button.link {
+  min-height: 44px;
+  padding: 0 8px;
+  color: var(--muted);
+  background: transparent;
+  font-weight: 400;
+}
+
+/* For a label that screen readers need but the placeholder already shows sighted people. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

@@ -51,4 +51,20 @@ describe("Games over HTTP", () => {
     expect((await app.request("/api/games", post({ settings: { activeSlots: -1, maxSteals: 3 } }, cookie))).status).toBe(400);
     expect((await app.request("/api/games", post({}, cookie))).status).toBe(400);
   });
+
+  it("tells each viewer whether they run the Game", async () => {
+    const { app, sent } = setup();
+    const host = await signIn(app, sent, "host@example.com");
+    const { id } = (await (await app.request("/api/games", post({ settings: { activeSlots: 1, maxSteals: 3 } }, host))).json()) as { id: string };
+    await app.request(`/api/games/${id}/cohosts`, post({ email: "bob@example.com" }, host));
+    const bob = await signIn(app, sent, "bob@example.com");
+    const stranger = await signIn(app, sent, "cat@example.com");
+    const roleOf = async (cookie?: string) =>
+      ((await (await app.request(`/api/games/${id}`, cookie ? { headers: { cookie } } : {})).json()) as { role: unknown }).role;
+
+    expect(await roleOf(host)).toBe("host");
+    expect(await roleOf(bob)).toBe("cohost");
+    expect(await roleOf(stranger)).toBeNull();
+    expect(await roleOf()).toBeNull();
+  });
 });

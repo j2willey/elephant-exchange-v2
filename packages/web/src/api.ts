@@ -1,3 +1,20 @@
+import type { Command, GameSettings, Phase, RuleErrorCode } from "@elephant/rules";
+
+/** A Game as the server shows it (see view() in the server). */
+export interface GameView {
+  id: string;
+  phase: Phase;
+  settings: GameSettings;
+  players: { id: string; name: string }[];
+  active: string[];
+  onDeck: string[];
+  gifts: { id: string; name: string; holderId: string | null; steals: number; frozen: boolean }[];
+  /** Whether the person looking runs this Game. */
+  role: "host" | "cohost" | null;
+}
+
+export type CommandResult = { ok: true; game: Omit<GameView, "role"> } | { ok: false; code: RuleErrorCode | "Forbidden" | "Failed"; message: string };
+
 /** Talks to the server. Screens use this, never fetch directly, so tests can hand in a browser with a cookie jar. */
 export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, init)) {
   const postJson = (path: string, body?: unknown) =>
@@ -33,6 +50,28 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
 
     async signOut(): Promise<void> {
       await postJson("/api/auth/sign-out");
+    },
+
+    async createGame(settings: GameSettings): Promise<string> {
+      const res = await postJson("/api/games", { settings });
+      if (res.status !== 201) throw new Error(`creating a Game failed: ${res.status}`);
+      return ((await res.json()) as { id: string }).id;
+    },
+
+    /** The Game, or undefined if there's no such Game. */
+    async game(id: string): Promise<GameView | undefined> {
+      const res = await fetchFn(`/api/games/${encodeURIComponent(id)}`);
+      if (res.status === 404) return undefined;
+      if (!res.ok) throw new Error(`loading the Game failed: ${res.status}`);
+      return (await res.json()) as GameView;
+    },
+
+    async command(gameId: string, command: Command): Promise<CommandResult> {
+      const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/commands`, command);
+      if (res.ok) return { ok: true, game: (await res.json()) as GameView };
+      if (res.status === 409) return { ok: false, ...((await res.json()) as { code: RuleErrorCode; message: string }) };
+      if (res.status === 401 || res.status === 403) return { ok: false, code: "Forbidden", message: "Only the Host and Co-hosts can do that." };
+      return { ok: false, code: "Failed", message: "Something went wrong. Please try again." };
     },
   };
 }

@@ -190,7 +190,9 @@ export function createServer({
     const id = c.req.param("id");
     const game = load(id);
     if (!game) return c.json({ error: "Game not found" }, 404);
-    return c.json(view(id, game.state));
+    // Only this answer says who is asking: live updates go to everyone watching, so they never carry a role.
+    const email = signedInAs(c);
+    return c.json({ ...view(id, game.state), role: (email && roleIn(id, email)) ?? null });
   });
 
   app.post("/api/games/:id/commands", async (c) => {
