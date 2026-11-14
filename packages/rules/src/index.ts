@@ -350,3 +350,7 @@ export function leftoverGiftCount(state: GameState): number {
 export function phase(state: GameState): Phase {
   return state.phase;
 }
+
+export function roster(state: GameState): { id: PlayerId; name: string }[] {
+  return state.players.map((p) => ({ id: p.id, name: p.name }));
+}

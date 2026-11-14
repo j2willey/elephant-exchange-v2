@@ -1,8 +1,13 @@
 {
   "name": "elephant-exchange",
   "private": true,
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "test": "npm test --workspaces"
+  },
+  "allowScripts": {
+    "better-sqlite3@13.0.3": true
   }
 }

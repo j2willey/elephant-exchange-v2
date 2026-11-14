@@ -11,6 +11,7 @@ import {
   phase,
   pickCount,
   returnedGifts,
+  roster,
   stealCount,
   turnCount,
   type Command,
@@ -661,5 +662,25 @@ describe("End Game", () => {
     expect(decide(ended, { type: "StartFinalRound", finalists: 1, leftoverGifts: 0 }, d2)).toMatchObject({
       code: "GameOver",
     });
+  });
+});
+
+describe("Roster", () => {
+  it("lists the Players in the order they were added, without anyone Removed", () => {
+    const state = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [
+        { type: "AddPlayer", playerId: "ann", name: "Ann Smith" },
+        { type: "AddPlayer", playerId: "bob", name: "Bob Jones" },
+        { type: "AddPlayer", playerId: "cat", name: "Cat Lee" },
+        { type: "RemovePlayer", playerId: "bob" },
+      ],
+      scriptedDraw([]),
+    );
+
+    expect(roster(state)).toEqual([
+      { id: "ann", name: "Ann Smith" },
+      { id: "cat", name: "Cat Lee" },
+    ]);
   });
 });
