@@ -22,10 +22,7 @@ export function WatchScreen() {
   return (
     <div className="screen">
       {game.phase === "ended" ? (
-        <section className="card now">
-          <h2 className="big">Game over</h2>
-          <p className="muted">Here's who went home with what.</p>
-        </section>
+        <EndOfGame game={game} posts={posts} />
       ) : game.phase === "setup" ? (
         <section className="card now">
           <p className="big">Waiting for the Host to start</p>
@@ -50,9 +47,126 @@ export function WatchScreen() {
         </div>
       )}
       <LatestPosts game={game} posts={posts} />
-      {game.gifts.length > 0 && <Gifts game={game} />}
+      {game.gifts.length > 0 && !(game.phase === "ended" && showsVote(game)) && <Gifts game={game} />}
       <Join gameId={game.id} />
     </div>
+  );
+}
+
+const votesText = (n: number) => `${n} ${n === 1 ? "vote" : "votes"}`;
+
+/** Whether the vote takes the place of the plain list of Gifts: it lists them itself, with counts or as a parade. */
+const showsVote = (game: GameView) => game.vote.status === "closed" || (game.vote.status === "open" && game.vote.display !== "hidden");
+
+/** After the last Pick: "Game over", then the Worst Gift Vote as the Host runs it. */
+function EndOfGame({ game, posts }: { game: GameView; posts: Post[] }) {
+  const { vote } = game;
+  const holderOf = (giftId: string | null) => {
+    const holderId = game.gifts.find((g) => g.id === giftId)?.holderId;
+    return game.players.find((p) => p.id === holderId)?.name ?? "nobody";
+  };
+
+  if (vote.status === "none") {
+    return (
+      <section className="card now">
+        <h2 className="big">Game over</h2>
+        <p className="muted">Here's who went home with what.</p>
+      </section>
+    );
+  }
+
+  if (vote.status === "closed") {
+    const counts = vote.counts ?? {};
+    const winner = game.gifts.find((g) => g.id === vote.winner);
+    // Most votes first; the winner leads any Gifts it tied with, since the Host picked it.
+    const podium = game.gifts
+      .filter((g) => (counts[g.id] ?? 0) > 0)
+      .sort((a, b) => (counts[b.id] ?? 0) - (counts[a.id] ?? 0) || Number(b.id === vote.winner) - Number(a.id === vote.winner))
+      .slice(0, 3);
+    return (
+      <section className="card now reveal">
+        {winner ? (
+          <>
+            <p className="label">The votes are in</p>
+            <p className="big">Worst Gift: {winner.name}</p>
+            <p className="medium">{holderOf(winner.id)} picks a prize!</p>
+          </>
+        ) : (
+          <p className="big">Nobody voted</p>
+        )}
+        {podium.length > 0 && (
+          <ol className="podium" aria-label="Results">
+            {podium.map((g) => (
+              <li key={g.id}>
+                {g.name} <span className="muted">· {votesText(counts[g.id] ?? 0)}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
+    );
+  }
+
+  return (
+    <>
+      <section className="card now" aria-live="polite">
+        <p className="big">Vote for the worst Gift!</p>
+        <p className="medium">{votesText(vote.cast)} cast</p>
+        <p className="muted">Scan the code below, sign in, and vote on your phone.</p>
+      </section>
+      {vote.display === "live" && vote.counts && <Tally game={game} counts={vote.counts} holderOf={holderOf} />}
+      {vote.display === "parade" && <Parade game={game} posts={posts} holderOf={holderOf} />}
+    </>
+  );
+}
+
+/** The counts so far, as bars against the leader. */
+function Tally({ game, counts, holderOf }: { game: GameView; counts: Record<string, number>; holderOf: (id: string) => string }) {
+  const most = Math.max(1, ...Object.values(counts));
+  return (
+    <section className="card">
+      <ol className="tally" aria-label="Votes so far">
+        {game.gifts.map((g) => (
+          <li key={g.id} aria-label={g.name}>
+            <span className="tally-bar" style={{ width: `${((counts[g.id] ?? 0) / most) * 100}%` }} />
+            <span className="tally-text">
+              <strong>{g.name}</strong> <span className="muted">· {holderOf(g.id)}</span>
+            </span>
+            <span className="tally-count">{votesText(counts[g.id] ?? 0)}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+/** Every Gift scrolling slowly past (with a Photo of it, if someone posted one), to remind the room what's out there. */
+function Parade({ game, posts, holderOf }: { game: GameView; posts: Post[]; holderOf: (id: string) => string }) {
+  const photoOf = (giftId: string) => posts.find((p) => p.giftId === giftId && p.status === "visible" && p.photo);
+  const items = (copy: boolean) =>
+    game.gifts.map((g) => {
+      const photo = photoOf(g.id);
+      return (
+        <li key={`${copy}-${g.id}`} className="parade-item">
+          {photo && <PostPhoto post={photo} className="parade-photo" />}
+          <span>
+            <strong>{g.name}</strong> <span className="muted">· {holderOf(g.id)}</span>
+          </span>
+        </li>
+      );
+    });
+  return (
+    <section className="card parade-window">
+      {/* Two copies one after the other, so the loop never shows a gap; only the first is read out. */}
+      <div className="parade-track" style={{ animationDuration: `${Math.max(12, game.gifts.length * 4)}s` }}>
+        <ul className="parade" aria-label="Gift parade">
+          {items(false)}
+        </ul>
+        <ul className="parade" aria-hidden="true">
+          {items(true)}
+        </ul>
+      </div>
+    </section>
   );
 }
 

@@ -88,6 +88,20 @@ test("a Host runs a Game while a guest follows along on their phone", async ({ b
   await expect(latest.getByText("Nice socks!")).toBeVisible();
   await expect(latest.getByRole("img", { name: /photo from cat/i })).toBeVisible();
   if (process.env["SMOKE_SCREENSHOT"]) await screen.screenshot({ path: process.env["SMOKE_SCREENSHOT"], fullPage: true });
+
+  // The end, and the Worst Gift Vote: the guest votes on their phone, the big screen counts it live.
+  await host.getByRole("button", { name: /end the game/i }).click();
+  await host.getByRole("button", { name: /yes, end it now/i }).click();
+  const vote = host.getByRole("region", { name: /worst gift vote/i });
+  await vote.getByRole("button", { name: /start the vote/i }).click();
+  await guest.getByRole("list", { name: /vote for the worst gift/i }).getByRole("button", { name: /^socks/i }).click();
+  await expect(screen.getByRole("list", { name: /votes so far/i }).getByRole("listitem", { name: "Socks" })).toContainText("1 vote");
+  if (process.env["SMOKE_SCREENSHOT"]) await screen.screenshot({ path: process.env["SMOKE_SCREENSHOT"].replace(/\.png$/, "-vote.png"), fullPage: true });
+  await vote.getByRole("radio", { name: /parade/i }).click();
+  await expect(screen.getByRole("list", { name: /gift parade/i })).toBeVisible();
+  await vote.getByRole("button", { name: /close the vote/i }).click();
+  await expect(screen.getByText(/worst gift: socks/i)).toBeVisible();
+  if (process.env["SMOKE_SCREENSHOT"]) await screen.screenshot({ path: process.env["SMOKE_SCREENSHOT"].replace(/\.png$/, "-reveal.png"), fullPage: true });
 });
 
 test("a reload anywhere in the app still works, and the build's files are cached", async ({ page, request }) => {
