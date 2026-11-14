@@ -7,6 +7,8 @@ const server = createServer({
   // Where people open the app; sign-in links point here. In development that's Vite's dev server.
   baseUrl: env["BASE_URL"] ?? "http://localhost:5173",
   trustProxy: env["TRUST_PROXY"] === "1",
+  // The built web app, in production. In development it's left unset and Vite serves the app.
+  ...(env["WEB_ROOT"] ? { webRoot: env["WEB_ROOT"] } : {}),
 });
 const { port } = await server.listen(Number(env["PORT"] ?? 3001));
 console.log(`Elephant Exchange server listening on port ${port}`);

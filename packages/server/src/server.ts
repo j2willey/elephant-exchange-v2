@@ -2,6 +2,9 @@ import { randomBytes, randomInt } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import { serve } from "@hono/node-server";
 import { getConnInfo } from "@hono/node-server/conninfo";
+import { serveStatic } from "@hono/node-server/serve-static";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { and, asc, desc, eq, or, sql } from "drizzle-orm";
 import { Hono, type Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
@@ -60,6 +63,11 @@ export interface ServerOptions {
    * that header believed: otherwise a client could forge it to dodge the per-IP limit.
    */
   trustProxy?: boolean;
+  /**
+   * The built web app (packages/web/dist), served by this server in production. Left out in development,
+   * where Vite serves the app and passes /api through.
+   */
+  webRoot?: string;
 }
 
 const randomDraw: DrawFn = (candidates) => candidates[randomInt(candidates.length)]!;
@@ -114,6 +122,7 @@ export function createServer({
   baseUrl = "http://localhost:3000",
   limits = {},
   trustProxy = false,
+  webRoot,
 }: ServerOptions) {
   const db = openDb(dbPath);
   const auth = createAuth(db, now, { ...DEFAULT_LIMITS, ...limits });
@@ -447,6 +456,28 @@ export function createServer({
     });
     return "code" in result ? c.json(result, 409) : c.json({ ...result, me: { playerId } });
   });
+
+  // Anything else under /api is a mistake, never a page of the app.
+  app.all("/api/*", (c) => c.json({ error: "Not found" }, 404));
+
+  if (webRoot) {
+    // Build files have the content's hash in their names, so a browser may keep them for good.
+    app.use("/assets/*", async (c, next) => {
+      await next();
+      if (c.res.status === 200) c.res.headers.set("Cache-Control", "public, max-age=31536000, immutable");
+    });
+    app.use("/assets/*", serveStatic({ root: webRoot }));
+    app.get("/assets/*", (c) => c.notFound());
+    // Other files in the build (the icon, say), but not the page itself, which is served below.
+    app.use("*", serveStatic({ root: webRoot, rewriteRequestPath: (path) => (path === "/" || path === "/index.html" ? "/-" : path) }));
+    // Every other address is one of the app's own (a Game's link, the sign-in page): the app works out which.
+    // Never cached, since it names the current build's files.
+    const page = readFileSync(join(webRoot, "index.html"), "utf8");
+    app.get("*", (c) => {
+      c.header("Cache-Control", "no-cache");
+      return c.html(page);
+    });
+  }
 
   /** Serves HTTP and live updates on one port (0 picks a free one). Screens only listen; moves go over HTTP. */
   function listen(port: number): Promise<{ port: number; close: () => Promise<void> }> {
