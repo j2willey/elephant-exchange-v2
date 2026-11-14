@@ -8,7 +8,7 @@ This is v2, a full rewrite of [v1](https://github.com/j2willey/Elephant-Exchange
 
 ## What works today
 
-- **Sign-in by emailed link:** there are no passwords. Links last 15 minutes and work once. The server stores only a hash of each token, and requests for links are rate-limited by address, by IP and per day.
+- **Sign-in by emailed link:** there are no passwords. Links are sent through [Resend](https://resend.com), last 15 minutes and work once. The server stores only a hash of each token, and requests for links are rate-limited by address, by IP and per day.
 - **Setting up a Game:** the Host names the Game, picks how many Players take a Turn at once and how many Steals freeze a Gift, then adds Players. Co-hosts can help run it.
 - **The play screen:** the Host or a Co-host opens a Gift, makes a Steal or Skips an absent Player for each active Player, and can Undo. The app enforces No Take-Backs and Frozen Gifts. Players are called at random, and the next one is shown On Deck so they can get ready.
 - **The Final Round and Ending the Game:** the first Players called get one last chance to steal, and Returned Gifts and Leftover Gifts are handled. The Host can end the Game at any moment.
@@ -36,7 +36,7 @@ Key decisions, each recorded as an ADR in [`docs/adr`](docs/adr):
 
 1. **[A Game is a log of Picks](docs/adr/0001-game-as-log-of-picks.md).** The server appends events and rebuilds the Game by replaying them through the rules. Undo, replaying after a restart and summaries after the Game all follow from this. Random Draws are logged, so a replay always comes out the same.
 2. **[TypeScript end to end](docs/adr/0002-typescript-end-to-end.md).** One language and shared types across the rules, server and browser. Changes go over HTTP, and Socket.IO only pushes updates out to screens.
-3. **[SQLite on one droplet](docs/adr/0003-sqlite-on-one-droplet.md).** One process and one file. Backups are a file copy.
+3. **[SQLite on one droplet](docs/adr/0003-sqlite-on-one-droplet.md).** One process and one database file; Photos and Theme images are plain files beside it. Backups are copies of those.
 
 Every screen keeps the newest copy of the Game it has seen, judged by a version number that rises with each change. So a slow reply can never overwrite a newer live update.
 
@@ -62,7 +62,20 @@ npm run dev --workspace @elephant/server   # API and live updates on :3001
 npm run dev --workspace @elephant/web      # app on http://localhost:5173
 ```
 
-When developing, sign-in links are printed to the server log instead of being emailed. Settings are environment variables: `PORT`, `DB_PATH`, `BASE_URL` (where the app is served) and `TRUST_PROXY=1` (set it behind a reverse proxy such as Caddy).
+When developing, sign-in links are printed to the server log instead of being emailed. Settings are environment variables:
+
+| Variable | What it sets | Default |
+| --- | --- | --- |
+| `PORT` | The server's port | `3001` (`3000` in Docker) |
+| `BASE_URL` | Where people open the app; sign-in links point here | `http://localhost:5173` |
+| `DB_PATH` | The SQLite database file | `elephant.db` |
+| `PHOTOS_DIR` | Where Post Photos are stored | `photos` |
+| `THEMES_DIR` | Where Theme logos and backgrounds are stored | `themes` |
+| `WEB_ROOT` | The built web app to serve (production only; in development Vite serves it) | unset |
+| `TRUST_PROXY` | `1` behind a reverse proxy such as Caddy, so its `X-Forwarded-For` is believed | unset |
+| `RESEND_API_KEY`, `MAIL_FROM` | Email sign-in links through Resend, from an address on a verified domain | unset: links go to the log |
+
+In Docker, the data settings point into the `/data` volume.
 
 ## Running it in Docker
 
@@ -88,7 +101,7 @@ To try it on a laptop, use `DOMAIN=localhost` (Caddy makes its own local certifi
 
 ### Backups
 
-`scripts/backup.sh` copies the database while the app runs (SQLite's online backup, so nothing is caught half-written), keeps the newest 14 in the data volume, and copies each out to `./backups` on the host. On the droplet, run it nightly from cron (the script's header has the line), and pull `./backups` to another machine now and then with `rsync`, since a backup on the same droplet won't survive losing it.
+`scripts/backup.sh` copies the database while the app runs (SQLite's online backup, so nothing is caught half-written), keeps the newest 14 in the data volume, and copies each out to `./backups` on the host, along with the Photos and Theme images. On the droplet, run it nightly from cron (the script's header has the line), and pull `./backups` to another machine now and then with `rsync`, since a backup on the same droplet won't survive losing it.
 
 To restore one:
 
@@ -98,9 +111,21 @@ docker compose cp backups/elephant-2026-12-13T0315Z.db app:/data/elephant.db
 docker compose start app
 ```
 
+### Deploying to the droplet
+
+1. Point the domain's DNS A record at the droplet (Caddy needs it to get a certificate).
+2. In Resend, verify the domain and create an API key.
+3. On the droplet: install Docker, clone this repo, `cp .env.example .env` and fill it in, then `docker compose -f compose.yaml -f compose.prod.yaml up -d --build`.
+4. Add the cron line from the top of `scripts/backup.sh`, and copy `./backups` off the droplet now and then.
+5. Run the smoke test against it: `SMOKE_URL=https://<domain> SMOKE_LOGS="ssh <droplet> 'cd <repo> && docker compose logs app --no-log-prefix'" npm run smoke` (it reads sign-in links from the log, so run it before setting the Resend key, or check the inbox by hand).
+
 ## Smoke test
 
-The smoke test uses Playwright to drive real phone-sized browsers against the running, packaged app. A Host signs in and sets up a Game; a guest follows from the Game's link, signs in, joins and posts; and the big screen shows the result, with live updates throughout.
+The smoke test uses Playwright to drive real browsers against the running, packaged app. Its three tests:
+
+- **A whole party:** a Host signs in and sets up a Game; a guest follows from the Game's link, signs in, joins, posts words and a sideways camera Photo (checked upright and stripped of its location); the Host downloads the album; the big screen shows the Posts; then the Game ends and the guest's vote is counted live on the big screen, through the Parade to the reveal. Live updates throughout.
+- **Reloads and caching:** any of the app's addresses loads, and the build's files are cached for good.
+- **Themes:** an Organizer colors their Organization and gives it a logo, runs a Game in it, and the big screen is drawn in that Theme.
 
 ```sh
 docker compose up -d --build
