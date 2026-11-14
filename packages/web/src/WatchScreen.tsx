@@ -5,6 +5,7 @@ import type { GameView, Post } from "./api.js";
 import { Countdown } from "./Countdown.js";
 import { PostPhoto, useFeed } from "./Feed.js";
 import { Gifts } from "./GamePage.js";
+import { ThemeLogo, useTheme } from "./theme.js";
 import { useLiveGame } from "./useLiveGame.js";
 
 /** For a projector or TV at the party: who's up, the Gifts, and how to join. It only watches. */
@@ -12,6 +13,7 @@ export function WatchScreen() {
   const { id = "" } = useParams();
   const [game, , feedChanges] = useLiveGame(id);
   const [posts] = useFeed(id, feedChanges);
+  useTheme(game && game !== "loading" ? game.theme : undefined);
 
   if (game === "loading") return <p className="muted">Loading…</p>;
   if (!game) return <p className="error">There's no Game at this link. Check it with your Host.</p>;
@@ -21,6 +23,12 @@ export function WatchScreen() {
 
   return (
     <div className="screen">
+      {game.theme.logoUrl && (
+        <div className="screen-head">
+          <ThemeLogo theme={game.theme} className="screen-logo" />
+          <p className="medium">{game.name}</p>
+        </div>
+      )}
       {game.phase === "ended" ? (
         <EndOfGame game={game} posts={posts} />
       ) : game.phase === "setup" ? (

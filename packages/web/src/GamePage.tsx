@@ -6,6 +6,7 @@ import { useApi } from "./ApiContext.js";
 import { Countdown } from "./Countdown.js";
 import { Feed, PostPhoto, useFeed } from "./Feed.js";
 import { SignInForm, useSignedIn } from "./SignIn.js";
+import { ThemeLogo, useTheme } from "./theme.js";
 import { useLiveGame } from "./useLiveGame.js";
 import { VotePanel } from "./Vote.js";
 
@@ -16,6 +17,7 @@ export function GamePage() {
   const [error, setError] = useState<string | null>(null);
   const stars = useStars(id);
   const [posts, reloadFeed] = useFeed(id, feedChanges);
+  useTheme(game && game !== "loading" ? game.theme : undefined);
 
   if (game === "loading") return <p className="muted">Loading…</p>;
   if (!game) return <p className="error">There's no Game at this link. Check it with your Host.</p>;
@@ -38,6 +40,7 @@ export function GamePage() {
   return (
     <div className="stack">
       <section className="card">
+        <ThemeLogo theme={game.theme} />
         <h2>{game.name}</h2>
         <Settings game={game} />
         <Link to={`/games/${game.id}`}>Link to this game</Link>

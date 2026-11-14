@@ -22,6 +22,8 @@ export interface GameView {
   gifts: { id: string; name: string; holderId: string | null; steals: number; frozen: boolean }[];
   /** Unopened Gifts still on the table in the Final Round. */
   leftoverGifts: number;
+  /** How the Game looks: its Organization's Theme with the Game's own overrides; null parts use the app's look. */
+  theme: Theme;
   /** The Worst Gift Vote. `counts` is null while they're kept from everyone (Hidden or Parade, before the reveal). */
   vote: { status: VoteStatus; display: VoteDisplay; cast: number; counts: Record<string, number> | null; winner: string | null };
   /** Whether the person looking runs this Game. */
@@ -31,6 +33,29 @@ export interface GameView {
   /** The Gift the person looking voted the worst, if they have. */
   myVote: string | null;
 }
+
+export interface Theme {
+  organization: { id: string; name: string } | null;
+  /** Colors as "#rrggbb". */
+  color: string | null;
+  page: string | null;
+  logoUrl: string | null;
+  backgroundUrl: string | null;
+}
+
+/** An Organization the signed-in person is the Organizer of, with its Theme. */
+export interface MyOrg {
+  id: string;
+  name: string;
+  color: string | null;
+  page: string | null;
+  logoUrl: string | null;
+  backgroundUrl: string | null;
+}
+
+export type ThemeImage = "logo" | "background";
+/** A change to Theme colors: a color sets that part, null hands it back (to the Organization, or the app). */
+export type ColorChange = { color?: string | null; page?: string | null };
 
 export type VoteStatus = "none" | "open" | "closed";
 export type VoteDisplay = "live" | "hidden" | "parade";
@@ -126,6 +151,17 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
       ...(body === undefined ? {} : { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
     });
 
+  const sendJson = (method: string, path: string, body: unknown) =>
+    fetchFn(path, { method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+
+  /** PUTs an image as a multipart form, or DELETEs it when there's none. */
+  const sendImage = (path: string, image: Blob | null) => {
+    if (!image) return fetchFn(path, { method: "DELETE" });
+    const form = new FormData();
+    form.append("image", image, "image");
+    return fetchFn(path, { method: "PUT", body: form });
+  };
+
   return {
     /** This device's clock. */
     now,
@@ -159,12 +195,13 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
       await postJson("/api/auth/sign-out");
     },
 
-    async createGame(settings: GameSettings, name?: string, rosterMode?: RosterMode, turnSeconds?: number): Promise<string> {
+    async createGame(settings: GameSettings, name?: string, rosterMode?: RosterMode, turnSeconds?: number, orgId?: string): Promise<string> {
       const res = await postJson("/api/games", {
         settings,
         ...(name === undefined ? {} : { name }),
         ...(rosterMode ? { rosterMode } : {}),
         ...(turnSeconds === undefined ? {} : { turnSeconds }),
+        ...(orgId ? { orgId } : {}),
       });
       if (res.status !== 201) throw new Error(`creating a Game failed: ${res.status}`);
       return ((await res.json()) as { id: string }).id;
@@ -285,6 +322,43 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
     },
 
     /** Restarts a Player's countdown; the Game as it now stands, or undefined if that didn't work. */
+    async createOrg(name: string): Promise<string> {
+      const res = await postJson("/api/orgs", { name });
+      if (res.status !== 201) throw new Error(`creating an Organization failed: ${res.status}`);
+      return ((await res.json()) as { id: string }).id;
+    },
+
+    /** The Organizations the signed-in person is the Organizer of. */
+    async myOrgs(): Promise<MyOrg[]> {
+      const res = await fetchFn("/api/orgs");
+      return res.ok ? ((await res.json()) as MyOrg[]) : [];
+    },
+
+    async editOrg(orgId: string, change: { name?: string } & ColorChange): Promise<MyOrg | undefined> {
+      const res = await sendJson("PATCH", `/api/orgs/${encodeURIComponent(orgId)}`, change);
+      return res.ok ? ((await res.json()) as MyOrg) : undefined;
+    },
+
+    /** Sets (with a file) or removes (null) an Organization's logo or background. */
+    async setOrgImage(orgId: string, kind: ThemeImage, image: Blob | null): Promise<MyOrg | undefined> {
+      const res = await sendImage(`/api/orgs/${encodeURIComponent(orgId)}/${kind}`, image);
+      return res.ok ? ((await res.json()) as MyOrg) : undefined;
+    },
+
+    /** Picks the Organization whose Theme the Game shows (null for none). */
+    async setGameOrg(gameId: string, orgId: string | null): Promise<boolean> {
+      return (await postJson(`/api/games/${encodeURIComponent(gameId)}/org`, { orgId })).ok;
+    },
+
+    async editGameTheme(gameId: string, change: ColorChange): Promise<boolean> {
+      return (await sendJson("PATCH", `/api/games/${encodeURIComponent(gameId)}/theme`, change)).ok;
+    },
+
+    /** Sets (with a file) or removes (null) the Game's own logo or background. */
+    async setGameImage(gameId: string, kind: ThemeImage, image: Blob | null): Promise<boolean> {
+      return (await sendImage(`/api/games/${encodeURIComponent(gameId)}/theme/${kind}`, image)).ok;
+    },
+
     /** Opens or closes the vote. Closing with Gifts tied for most needs `winner`; without it, the tied Gifts come back. */
     async setVoteStatus(gameId: string, status: "open" | "closed", winner?: string): Promise<"ok" | { tied: string[] } | "failed"> {
       const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/vote/status`, winner ? { status, winner } : { status });

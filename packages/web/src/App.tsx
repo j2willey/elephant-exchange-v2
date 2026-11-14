@@ -9,7 +9,9 @@ import { WatchScreen } from "./WatchScreen.js";
 export function AppRoutes() {
   return (
     <main className="page">
-      <h1 className="brand">Elephant Exchange</h1>
+      <h1 className="brand">
+        <Link to="/">Elephant Exchange</Link>
+      </h1>
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/sign-in" element={<RedeemLink />} />
