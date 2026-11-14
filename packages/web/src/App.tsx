@@ -3,6 +3,7 @@ import { Link, Route, Routes, useNavigate, useSearchParams } from "react-router"
 import { isReturnPath, type MyGame, type RosterMode } from "./api.js";
 import { useApi } from "./ApiContext.js";
 import { GamePage } from "./GamePage.js";
+import { MyOrgs, OrgPage } from "./Orgs.js";
 import { SignInForm } from "./SignIn.js";
 import { WatchScreen } from "./WatchScreen.js";
 
@@ -17,6 +18,7 @@ export function AppRoutes() {
         <Route path="/sign-in" element={<RedeemLink />} />
         <Route path="/games/:id" element={<GamePage />} />
         <Route path="/games/:id/screen" element={<WatchScreen />} />
+        <Route path="/orgs/:orgId" element={<OrgPage />} />
       </Routes>
     </main>
   );
@@ -46,6 +48,7 @@ function Home() {
     <div className="stack">
       <NewGame />
       <MyGames />
+      <MyOrgs />
       <section className="card">
         <p>Signed in as {session.email}</p>
         <button className="secondary" onClick={signOut}>
