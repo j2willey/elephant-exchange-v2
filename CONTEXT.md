@@ -7,15 +7,19 @@ A live companion for White Elephant (Yankee Swap) gift exchanges. It exists to k
 ### Tenancy
 
 **Organization**:
-A group (a company, a club, a family) whose look and feel its exchanges use.
+A group (a company, a club, a family) whose look and feel its exchanges use. Anyone signed in can create one.
 _Avoid_: Tenant, account, company
+
+**Organizer**:
+The one person who created an Organization; only they can rename it or change its Theme. Being an Organizer says nothing about who may host its Games.
+_Avoid_: Owner, admin
 
 **Event**:
 One gathering held by an Organization, such as "Holiday Party 2026"; for now each Event has exactly one Game.
 _Avoid_: Party (as a domain term)
 
 **Theme**:
-The colors, logo and background an exchange is shown with; set on the Organization and optionally overridden by an Event.
+How an exchange looks: a main color, a page color, a logo and a background image, each optional. Set by an Organizer on their Organization. A Game shows its Organization's Theme, and its Host or a Co-host may override any part of it for that Game alone. A Game's Host picks its Organization (from the ones they're the Organizer of) and can change it at any time; a Game with none, and any part left unset, shows the app's own look.
 _Avoid_: Branding, skin
 
 ### People

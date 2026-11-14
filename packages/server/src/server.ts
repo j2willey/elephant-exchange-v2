@@ -31,15 +31,19 @@ import type { z } from "zod";
 import { createAuth, DEFAULT_LIMITS, logMailer, SESSION_LIFETIME_MS, type LinkLimits, type Mailer } from "./auth.js";
 import { PHOTO_KEEP_DAYS, PHOTO_MAX_BYTES, photoStore, preparePhoto } from "./photos.js";
 import { zip } from "./zip.js";
-import { gameEvents, gameHosts, gamePlayers, games, openDb, posts, turnClocks, votes, type Tx } from "./db.js";
+import { gameEvents, gameHosts, gamePlayers, games, openDb, organizations, posts, turnClocks, votes, type Tx } from "./db.js";
 import {
   cohostBody,
   command,
   createGameBody,
+  gameOrgBody,
+  gameThemeEdit,
   joinBody,
   linkRedemption,
   linkRequest,
   moderationBody,
+  orgBody,
+  orgEdit,
   postBody,
   postStatusBody,
   timerBody,
@@ -91,12 +95,47 @@ interface LoadedGame {
   clocks: ReadonlyMap<string, number>;
   state: GameState;
   seq: number;
+  theme: {
+    /** The Organization the Game shows the Theme of, with that Theme as it stands. */
+    org: OrgTheme | null;
+    /** The Game's own parts, which win over the Organization's. */
+    own: ThemeParts;
+  };
   vote: {
     status: "none" | "open" | "closed";
     display: "live" | "hidden" | "parade";
     winner: string | null;
     /** Each voter's Gift, by email. Never sent as is: screens get counts, and each person their own vote. */
     ballots: ReadonlyMap<string, string>;
+  };
+}
+
+/** A Theme's parts, each null when unset: colors as "#rrggbb", images as the version of the stored file. */
+interface ThemeParts {
+  color: string | null;
+  page: string | null;
+  logo: string | null;
+  background: string | null;
+}
+type OrgTheme = ThemeParts & { id: string; name: string };
+
+/**
+ * The Theme a Game is shown with: each part from the Game's own override, else its Organization's, else unset
+ * (the app's own look). Images are given as addresses that change with each upload, so they can be cached for good.
+ */
+function resolveTheme(gameId: string, { org, own }: LoadedGame["theme"]) {
+  const image = (kind: "logo" | "background") =>
+    own[kind]
+      ? `/api/games/${gameId}/theme/${kind}?v=${own[kind]}`
+      : org?.[kind]
+        ? `/api/orgs/${org.id}/${kind}?v=${org[kind]}`
+        : null;
+  return {
+    organization: org ? { id: org.id, name: org.name } : null,
+    color: own.color ?? org?.color ?? null,
+    page: own.page ?? org?.page ?? null,
+    logoUrl: image("logo"),
+    backgroundUrl: image("background"),
   };
 }
 
@@ -108,10 +147,12 @@ function tally(ballots: ReadonlyMap<string, string>): Record<string, number> {
 }
 
 /** What screens are shown about a Game: answers from the rules module, never its internal state. */
-function view(id: string, { name, rosterMode, moderation, turnSeconds, clocks, state, seq, vote }: LoadedGame, now: Date) {
+function view(id: string, game: LoadedGame, now: Date) {
+  const { name, rosterMode, moderation, turnSeconds, clocks, state, seq, vote } = game;
   return {
     id,
     name,
+    theme: resolveTheme(id, game.theme),
     rosterMode,
     moderation,
     /** The turn timer. `now` is the server's time, so a screen can count down correctly even if its own clock is off. */
@@ -200,6 +241,10 @@ export function createServer({
     const clocks = db.select().from(turnClocks).where(eq(turnClocks.gameId, id)).all();
     const ballots = db.select().from(votes).where(eq(votes.gameId, id)).all();
     const game: LoadedGame = {
+      theme: {
+        org: row.orgId ? orgTheme(row.orgId) : null,
+        own: { color: row.themeColor, page: row.themePage, logo: row.themeLogo, background: row.themeBackground },
+      },
       vote: {
         status: row.voteStatus,
         display: row.voteDisplay,
@@ -216,6 +261,25 @@ export function createServer({
     };
     cache.set(id, game);
     return game;
+  }
+
+  /** An Organization's Theme as it stands, with its id and name; null if there's no such Organization. */
+  function orgTheme(orgId: string): OrgTheme | null {
+    const org = db.select().from(organizations).where(eq(organizations.id, orgId)).get();
+    return org ? { id: org.id, name: org.name, color: org.color, page: org.page, logo: org.logo, background: org.background } : null;
+  }
+
+  /** Whether this person may give a Game this Organization's Theme: only its Organizer may. */
+  const organizes = (orgId: string, email: string) =>
+    db.select({ id: organizations.id }).from(organizations).where(and(eq(organizations.id, orgId), eq(organizations.organizerEmail, email))).get() !== undefined;
+
+  /** After an Organizer changes their Organization, brings every Game showing it up to date on every screen. */
+  function orgChanged(orgId: string) {
+    const org = orgTheme(orgId);
+    for (const { id } of db.select({ id: games.id }).from(games).where(eq(games.orgId, orgId)).all()) {
+      const game = cache.get(id);
+      if (game) publish(id, { ...game, theme: { ...game.theme, org } });
+    }
   }
 
   /** The Player this person signed up as, if they did and are still on the Roster. */
@@ -334,10 +398,22 @@ export function createServer({
     if (!email) return c.json({ error: "Sign in to create a Game" }, 401);
     const body = await parseBody(c, createGameBody);
     if (!body.ok) return body.res;
+    const { orgId } = body.data;
+    if (orgId !== undefined && !organizes(orgId, email)) return c.json({ error: "Only an Organization's Organizer can use its Theme" }, 403);
     // 16 random bytes: unguessable, so a Game can't be found without its link or QR code.
     const id = randomBytes(16).toString("base64url");
     db.transaction((tx) => {
-      tx.insert(games).values({ id, name: body.data.name, rosterMode: body.data.rosterMode, turnSeconds: body.data.turnSeconds, settings: JSON.stringify(body.data.settings), createdAt: now() }).run();
+      tx.insert(games)
+        .values({
+          id,
+          name: body.data.name,
+          rosterMode: body.data.rosterMode,
+          turnSeconds: body.data.turnSeconds,
+          orgId: orgId ?? null,
+          settings: JSON.stringify(body.data.settings),
+          createdAt: now(),
+        })
+        .run();
       tx.insert(gameHosts).values({ gameId: id, email, role: "host" }).run();
     });
     return c.json({ id }, 201);
@@ -560,6 +636,81 @@ export function createServer({
     if (!data) return c.json({ error: "No such Photo" }, 404);
     // Private: a Photo shown to one person (a Pending one, say) mustn't be kept by a cache shared with others.
     return c.body(new Uint8Array(data), 200, { "content-type": "image/jpeg", "cache-control": "private, max-age=86400" });
+  });
+
+  // Organizations: anyone signed in may create one, and is then its Organizer, the only one who can change it.
+  const orgView = (o: OrgTheme) => ({
+    id: o.id,
+    name: o.name,
+    color: o.color,
+    page: o.page,
+    logoUrl: o.logo ? `/api/orgs/${o.id}/logo?v=${o.logo}` : null,
+    backgroundUrl: o.background ? `/api/orgs/${o.id}/background?v=${o.background}` : null,
+  });
+
+  app.post("/api/orgs", async (c) => {
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const body = await parseBody(c, orgBody);
+    if (!body.ok) return body.res;
+    const id = randomBytes(12).toString("base64url");
+    db.insert(organizations).values({ id, name: body.data.name, organizerEmail: email, createdAt: now() }).run();
+    return c.json({ id }, 201);
+  });
+
+  /** The Organizations the signed-in person is the Organizer of, oldest first. */
+  app.get("/api/orgs", (c) => {
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const rows = db.select().from(organizations).where(eq(organizations.organizerEmail, email)).orderBy(asc(organizations.createdAt), asc(sql`${organizations}.rowid`)).all();
+    return c.json(rows.map((o) => orgView(o)));
+  });
+
+  app.patch("/api/orgs/:orgId", async (c) => {
+    const orgId = c.req.param("orgId");
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const body = await parseBody(c, orgEdit);
+    if (!body.ok) return body.res;
+    if (!orgTheme(orgId)) return c.json({ error: "No such Organization" }, 404);
+    if (!organizes(orgId, email)) return c.json({ error: "Only its Organizer can change an Organization" }, 403);
+    if (Object.keys(body.data).length > 0) db.update(organizations).set(body.data).where(eq(organizations.id, orgId)).run();
+    orgChanged(orgId);
+    return c.json(orgView(orgTheme(orgId)!));
+  });
+
+  // Which Organization's Theme a Game shows: the Host or a Co-host picks one they're the Organizer of, or none.
+  app.post("/api/games/:id/org", async (c) => {
+    const id = c.req.param("id");
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const body = await parseBody(c, gameOrgBody);
+    if (!body.ok) return body.res;
+    const game = load(id);
+    if (!game) return c.json({ error: "Game not found" }, 404);
+    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can change the Game's look" }, 403);
+    const { orgId } = body.data;
+    if (orgId !== null && !organizes(orgId, email)) return c.json({ error: "Only an Organization's Organizer can use its Theme" }, 403);
+    db.update(games).set({ orgId }).where(eq(games.id, id)).run();
+    publish(id, { ...game, theme: { ...game.theme, org: orgId ? orgTheme(orgId) : null } });
+    return c.body(null, 204);
+  });
+
+  // The Game's own Theme, overriding its Organization's part by part (null hands a part back to it).
+  app.patch("/api/games/:id/theme", async (c) => {
+    const id = c.req.param("id");
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const body = await parseBody(c, gameThemeEdit);
+    if (!body.ok) return body.res;
+    const game = load(id);
+    if (!game) return c.json({ error: "Game not found" }, 404);
+    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can change the Game's look" }, 403);
+    const { color, page } = body.data;
+    const set = { ...(color !== undefined ? { themeColor: color } : {}), ...(page !== undefined ? { themePage: page } : {}) };
+    if (Object.keys(set).length > 0) db.update(games).set(set).where(eq(games.id, id)).run();
+    const own = { ...game.theme.own, ...(color !== undefined ? { color } : {}), ...(page !== undefined ? { page } : {}) };
+    return c.json(publish(id, { ...game, theme: { ...game.theme, own } }).theme);
   });
 
   // The Host or a Co-host opens the Worst Gift Vote once the Game has ended, and closes it to reveal the results.

@@ -21,6 +21,16 @@ export const games = sqliteTable("games", {
   voteDisplay: text("vote_display", { enum: ["live", "hidden", "parade"] }).notNull().default("live"),
   /** The Gift that won once the vote closed (null if nobody voted). */
   voteWinner: text("vote_winner"),
+  /** The Organization whose Theme the Game shows, if the Host picked one. */
+  orgId: text("org_id").references(() => organizations.id),
+  /**
+   * The Game's own Theme, overriding its Organization's part by part; null parts fall back to it. Colors are
+   * "#rrggbb"; logo and background are a version for the stored image (it changes with each upload).
+   */
+  themeColor: text("theme_color"),
+  themePage: text("theme_page"),
+  themeLogo: text("theme_logo"),
+  themeBackground: text("theme_background"),
   /** The GameSettings the Game was created with (JSON); later changes are SettingsChanged events. */
   settings: text("settings").notNull(),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
@@ -30,6 +40,19 @@ export const games = sqliteTable("games", {
   check("games_vote_status", sql`${t.voteStatus} IN ('none', 'open', 'closed')`),
   check("games_vote_display", sql`${t.voteDisplay} IN ('live', 'hidden', 'parade')`),
 ]);
+
+/** A group whose exchanges share a Theme. Only its Organizer (who created it) can change it. */
+export const organizations = sqliteTable("organizations", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  organizerEmail: text("organizer_email").notNull(),
+  /** The Theme, each part optional: colors as "#rrggbb", images as a version for the stored file. */
+  color: text("color"),
+  page: text("page"),
+  logo: text("logo"),
+  background: text("background"),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+});
 
 /** The log of each Game (ADR-0001): every event, in order. The Game's state is rebuilt from it. */
 export const gameEvents = sqliteTable(

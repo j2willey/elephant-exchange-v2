@@ -17,7 +17,22 @@ export const createGameBody = z.object({
   rosterMode: rosterMode.default("host"),
   turnSeconds: z.int().min(0).max(600).default(60),
   settings: gameSettings,
+  /** The Organization whose Theme it shows: one the Host is the Organizer of. */
+  orgId: id.optional(),
 });
+
+/** A Theme color: "#rrggbb" only (it goes into the page's styles), kept lowercase. Null clears it. */
+const themeColor = z
+  .string()
+  .regex(/^#[0-9a-fA-F]{6}$/)
+  .transform((c) => c.toLowerCase())
+  .nullable()
+  .optional();
+
+export const orgBody = z.object({ name });
+export const orgEdit = z.object({ name: name.optional(), color: themeColor, page: themeColor });
+export const gameOrgBody = z.object({ orgId: id.nullable() });
+export const gameThemeEdit = z.object({ color: themeColor, page: themeColor });
 
 export const timerBody = z.object({ playerId: id });
 
