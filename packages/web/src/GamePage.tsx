@@ -1,8 +1,9 @@
-import { useRef, useState, type FormEvent } from "react";
-import { Link, useParams } from "react-router";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Link, useLocation, useParams } from "react-router";
 import type { Command } from "@elephant/rules";
-import type { CommandResult, GameView } from "./api.js";
+import type { CommandResult, GameView, SharedGame, Viewer } from "./api.js";
 import { useApi } from "./ApiContext.js";
+import { SignInForm } from "./SignIn.js";
 import { useLiveGame } from "./useLiveGame.js";
 
 export function GamePage() {
@@ -36,6 +37,12 @@ export function GamePage() {
         <Link to={`/games/${game.id}`}>Link to this game</Link>
         <Link to={`/games/${game.id}/screen`}>Open the big screen</Link>
       </section>
+
+      {game.me ? (
+        <p className="card you">You're playing as {nameOf(game.me.playerId)}</p>
+      ) : (
+        game.rosterMode === "self" && game.phase !== "ended" && <JoinPanel gameId={game.id} onJoined={accept} />
+      )}
 
       {game.phase === "ended" ? (
         <section className="card">
@@ -110,6 +117,62 @@ export function GamePage() {
 
       {runs && game.phase !== "ended" && <EndGame send={send} />}
     </div>
+  );
+}
+
+/**
+ * In a Self sign-up Game: sign in if need be (the emailed link comes back here), then join as a Player by name.
+ * Joining after the start is fine: they're a Late Arrival, waiting to be called like anyone not yet called.
+ */
+function JoinPanel({ gameId, onJoined }: { gameId: string; onJoined: (game: SharedGame, viewer: Partial<Viewer>) => void }) {
+  const api = useApi();
+  const { pathname } = useLocation();
+  const [signedIn, setSignedIn] = useState<boolean | "loading">("loading");
+  const [name, setName] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let current = true;
+    api.session().then(
+      (s) => current && setSignedIn(Boolean(s)),
+      () => current && setSignedIn(false),
+    );
+    return () => {
+      current = false;
+    };
+  }, [api]);
+
+  async function join(e: FormEvent) {
+    e.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const result = await api.join(gameId, trimmed);
+    if (result.ok) onJoined(result.game, { me: result.me });
+    else setError(result.message.endsWith(".") ? result.message : `${result.message}.`);
+  }
+
+  return (
+    <section className="card" aria-label="Play in this Game">
+      {signedIn === "loading" ? (
+        <p className="muted">Loading…</p>
+      ) : !signedIn ? (
+        <SignInForm next={pathname} heading="Playing? Sign in first" />
+      ) : (
+        <form className="stack" onSubmit={join}>
+          <h2>Playing in this Game?</h2>
+          <label htmlFor="my-name">Your name, as everyone will see it</label>
+          <input id="my-name" autoComplete="given-name" autoCapitalize="words" maxLength={100} value={name} onChange={(e) => setName(e.target.value)} />
+          {error && (
+            <p className="error" role="alert">
+              {error}
+            </p>
+          )}
+          <button type="submit" disabled={!name.trim()}>
+            Join as a Player
+          </button>
+        </form>
+      )}
+    </section>
   );
 }
 
@@ -275,7 +338,8 @@ function Settings({ game }: { game: GameView }) {
   return (
     <p className="muted">
       {activeSlots === 1 ? "1 player takes a turn at once" : `${activeSlots} players take a turn at once`} ·{" "}
-      {maxSteals === 0 ? "no steals" : `Gifts are frozen after ${maxSteals} ${maxSteals === 1 ? "steal" : "steals"}`}
+      {maxSteals === 0 ? "no steals" : `Gifts are frozen after ${maxSteals} ${maxSteals === 1 ? "steal" : "steals"}`} ·{" "}
+      {game.rosterMode === "self" ? "Players can sign up on their phones" : "the Host enters the Players"}
     </p>
   );
 }

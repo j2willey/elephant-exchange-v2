@@ -10,11 +10,21 @@ const maxSteals = z.int().min(0).max(20);
 
 export const gameSettings = z.strictObject({ activeSlots, maxSteals }) satisfies z.ZodType<GameSettings>;
 
-export const createGameBody = z.object({ name: name.default("Gift exchange"), settings: gameSettings });
+export const rosterMode = z.enum(["host", "self"]);
+
+export const createGameBody = z.object({ name: name.default("Gift exchange"), rosterMode: rosterMode.default("host"), settings: gameSettings });
+
+export const joinBody = z.object({ name });
+
+/**
+ * A page of this app to return to after signing in: a path on this site only. "//host" and "/\\host" are
+ * refused because browsers read them as another site, which would let a link send people anywhere.
+ */
+const returnPath = z.string().max(200).regex(/^\/(?![/\\])[\x21-\x7e]*$/);
 
 const email = z.string().trim().toLowerCase().pipe(z.email().max(254));
 
-export const linkRequest = z.object({ email });
+export const linkRequest = z.object({ email, next: returnPath.optional() });
 export const linkRedemption = z.object({ token: z.string().min(1).max(100) });
 export const cohostBody = z.object({ email });
 

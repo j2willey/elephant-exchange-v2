@@ -3,16 +3,18 @@ import Database from "better-sqlite3";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import { check, index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { check, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const games = sqliteTable("games", {
   id: text("id").primaryKey(),
   /** What the Host calls it, such as "OA Holiday Party". */
   name: text("name").notNull().default("Gift exchange"),
+  /** Who adds Players: only the Host and Co-hosts ("host"), or people themselves from their phones too ("self"). */
+  rosterMode: text("roster_mode", { enum: ["host", "self"] }).notNull().default("host"),
   /** The GameSettings the Game was created with (JSON); later changes are SettingsChanged events. */
   settings: text("settings").notNull(),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-});
+}, (t) => [check("games_roster_mode", sql`${t.rosterMode} IN ('host', 'self')`)]);
 
 /** The log of each Game (ADR-0001): every event, in order. The Game's state is rebuilt from it. */
 export const gameEvents = sqliteTable(
@@ -71,6 +73,22 @@ export const gameHosts = sqliteTable(
   (t) => [primaryKey({ columns: [t.gameId, t.email] }), check("game_hosts_role", sql`${t.role} IN ('host', 'cohost')`)],
 );
 
+/**
+ * Players who signed up themselves, and which person each one is: only that person may post or vote as them.
+ * One Player per person per Game. Players the Host entered have no row here.
+ */
+export const gamePlayers = sqliteTable(
+  "game_players",
+  {
+    gameId: text("game_id")
+      .notNull()
+      .references(() => games.id),
+    playerId: text("player_id").notNull(),
+    email: text("email").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.gameId, t.playerId] }), uniqueIndex("game_players_person").on(t.gameId, t.email)],
+);
+
 /** Opens the database, bringing its tables up to date with any migrations it hasn't had yet. */
 export function openDb(path: string) {
   const sqlite = new Database(path);
@@ -85,3 +103,5 @@ export function openDb(path: string) {
 }
 
 export type Db = ReturnType<typeof openDb>;
+/** What a transaction's callback is handed. */
+export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];

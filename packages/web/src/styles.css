@@ -49,6 +49,12 @@ body {
   border-radius: var(--radius);
 }
 
+/* A card shown inside another (the sign-in form in the join panel) shouldn't draw a second box. */
+.card .card {
+  padding: 0;
+  border: 0;
+}
+
 .card h2 {
   margin: 0;
   font-size: 1.25rem;
@@ -68,6 +74,40 @@ input {
   font: inherit; /* 16px or more stops iPhones zooming in on focus */
   border: 1px solid var(--line);
   border-radius: 8px;
+}
+
+/* Radio choices: one per line, each a full-width tap target. */
+.choices {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.choices legend {
+  padding: 0;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.choices label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-weight: 400;
+}
+
+.choices input {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--brand);
+}
+
+.you {
+  font-weight: 600;
 }
 
 input:focus-visible,

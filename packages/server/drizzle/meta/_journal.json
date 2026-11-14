@@ -15,6 +15,13 @@
       "when": 1794632570491,
       "tag": "0001_game_names",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1794632978773,
+      "tag": "0002_roster_mode",
+      "breakpoints": true
     }
   ]
 }

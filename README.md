@@ -14,8 +14,9 @@ This is v2, a full rewrite of [v1](https://github.com/j2willey/Elephant-Exchange
 - **The Final Round and Ending the Game:** the first Players called get one last chance to steal, and Returned Gifts and Leftover Gifts are handled. The Host can end the Game at any moment.
 - **The live watch screen:** made for a projector, it shows who's up, the Gifts, and a QR code for joining. Every screen updates within moments.
 - **My Games:** each person's home screen lists the Games they run.
+- **Joining from the QR code:** anyone can follow a Game without signing in. In a Self sign-up Game, people can add themselves as Players from their phones, even after the Game has started. The sign-in link brings them straight back to the Game.
 
-Coming before launch: joining from the QR code, Stars, the turn timer, Comments and Photos with Moderation, the Worst Gift Vote, and Organization Themes. The words used throughout (Turn, Pick, Victim, Frozen and so on) are defined in [CONTEXT.md](CONTEXT.md).
+Coming before launch: Stars, the turn timer, Comments and Photos with Moderation, the Worst Gift Vote, and Organization Themes. The words used throughout (Turn, Pick, Victim, Frozen and so on) are defined in [CONTEXT.md](CONTEXT.md).
 
 ## How it's built
 

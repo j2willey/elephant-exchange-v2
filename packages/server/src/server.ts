@@ -15,6 +15,7 @@ import {
   onDeck,
   phase,
   roster,
+  type Command,
   type DrawFn,
   type Event,
   type GameSettings,
@@ -23,8 +24,8 @@ import {
 import { Server as SocketServer } from "socket.io";
 import type { z } from "zod";
 import { createAuth, DEFAULT_LIMITS, logMailer, SESSION_LIFETIME_MS, type LinkLimits, type Mailer } from "./auth.js";
-import { gameEvents, gameHosts, games, openDb } from "./db.js";
-import { cohostBody, command, createGameBody, linkRedemption, linkRequest } from "./schemas.js";
+import { gameEvents, gameHosts, gamePlayers, games, openDb, type Tx } from "./db.js";
+import { cohostBody, command, createGameBody, joinBody, linkRedemption, linkRequest } from "./schemas.js";
 
 export type { Mailer } from "./auth.js";
 
@@ -52,11 +53,20 @@ export interface ServerOptions {
 
 const randomDraw: DrawFn = (candidates) => candidates[randomInt(candidates.length)]!;
 
+/** A Game as the server holds it: what's stored alongside the log, its state rebuilt from the log, and the log's length. */
+interface LoadedGame {
+  name: string;
+  rosterMode: "host" | "self";
+  state: GameState;
+  seq: number;
+}
+
 /** What screens are shown about a Game: answers from the rules module, never its internal state. */
-function view(id: string, { name, state, seq }: { name: string; state: GameState; seq: number }) {
+function view(id: string, { name, rosterMode, state, seq }: LoadedGame) {
   return {
     id,
     name,
+    rosterMode,
     /** Rises with every change (it counts the Game's logged events), so a screen keeps the newest copy it has seen. */
     version: seq,
     phase: phase(state),
@@ -106,9 +116,9 @@ export function createServer({
   const roleIn = (gameId: string, email: string) =>
     db.select().from(gameHosts).where(and(eq(gameHosts.gameId, gameId), eq(gameHosts.email, email))).get()?.role;
   /** Rebuilt Games, so a Game's log is replayed only once per server start. `seq` counts its logged events. */
-  const cache = new Map<string, { name: string; state: GameState; seq: number }>();
+  const cache = new Map<string, LoadedGame>();
 
-  function load(id: string): { name: string; state: GameState; seq: number } | undefined {
+  function load(id: string): LoadedGame | undefined {
     const cached = cache.get(id);
     if (cached) return cached;
     const row = db.select().from(games).where(eq(games.id, id)).get();
@@ -116,9 +126,41 @@ export function createServer({
     const log = db.select().from(gameEvents).where(eq(gameEvents.gameId, id)).orderBy(asc(gameEvents.seq)).all();
     // Replaying the log never draws: every Draw was logged as a PlayerDrawn event (ADR-0001).
     const state = log.map((e) => JSON.parse(e.event) as Event).reduce(evolve, newGame(JSON.parse(row.settings) as GameSettings));
-    const game = { name: row.name, state, seq: log.length };
+    const game: LoadedGame = { name: row.name, rosterMode: row.rosterMode, state, seq: log.length };
     cache.set(id, game);
     return game;
+  }
+
+  /** The Player this person signed up as, if they did and are still on the Roster. */
+  function playerOf(gameId: string, email: string, game: LoadedGame): string | undefined {
+    const row = db
+      .select({ playerId: gamePlayers.playerId })
+      .from(gamePlayers)
+      .where(and(eq(gamePlayers.gameId, gameId), eq(gamePlayers.email, email)))
+      .get();
+    return row && roster(game.state).some((p) => p.id === row.playerId) ? row.playerId : undefined;
+  }
+
+  /**
+   * Decides a command, logs its events and tells every screen. `alsoWrite` goes in the same transaction,
+   * so what's stored beside the log never disagrees with it. Synchronous from start to finish, so two
+   * commands never interleave. Returns the Game as now shown, or the rule that refused the command.
+   */
+  function run(id: string, game: LoadedGame, cmd: Command, alsoWrite?: (tx: Tx) => void) {
+    const result = decide(game.state, cmd, draw);
+    if (!Array.isArray(result)) return result;
+    const at = now();
+    db.transaction((tx) => {
+      result.forEach((event, i) => {
+        tx.insert(gameEvents).values({ gameId: id, seq: game.seq + i + 1, event: JSON.stringify(event), createdAt: at }).run();
+      });
+      alsoWrite?.(tx);
+    });
+    const next = { ...game, state: result.reduce(evolve, game.state), seq: game.seq + result.length };
+    cache.set(id, next);
+    const shown = view(id, next);
+    io?.to(id).emit("game", shown);
+    return shown;
   }
 
   /** Set once listening: every screen watching a Game sits in a room named by the Game's id. */
@@ -132,9 +174,11 @@ export function createServer({
     if (!body.ok) return body.res;
     const token = auth.issueLink(body.data.email, clientIp(c));
     if (!token) return c.json({ error: "Too many sign-in links asked for; try again in a few minutes" }, 429);
+    // Someone who scanned a Game's QR code goes back to that Game once signed in.
+    const next = body.data.next ? `&next=${encodeURIComponent(body.data.next)}` : "";
     // The link opens the web app's sign-in page, which redeems it with a POST. A GET that signed people in
     // would be used up by email scanners (such as Outlook Safe Links) that open every link to check it.
-    await mailer.sendSignInLink(body.data.email, `${baseUrl}/sign-in?token=${token}`);
+    await mailer.sendSignInLink(body.data.email, `${baseUrl}/sign-in?token=${token}${next}`);
     return c.body(null, 202);
   });
 
@@ -174,7 +218,7 @@ export function createServer({
     // 16 random bytes: unguessable, so a Game can't be found without its link or QR code.
     const id = randomBytes(16).toString("base64url");
     db.transaction((tx) => {
-      tx.insert(games).values({ id, name: body.data.name, settings: JSON.stringify(body.data.settings), createdAt: now() }).run();
+      tx.insert(games).values({ id, name: body.data.name, rosterMode: body.data.rosterMode, settings: JSON.stringify(body.data.settings), createdAt: now() }).run();
       tx.insert(gameHosts).values({ gameId: id, email, role: "host" }).run();
     });
     return c.json({ id }, 201);
@@ -217,7 +261,8 @@ export function createServer({
     if (!game) return c.json({ error: "Game not found" }, 404);
     // Only this answer says who is asking: live updates go to everyone watching, so they never carry a role.
     const email = signedInAs(c);
-    return c.json({ ...view(id, game), role: (email && roleIn(id, email)) ?? null });
+    const playerId = email ? playerOf(id, email, game) : undefined;
+    return c.json({ ...view(id, game), role: (email && roleIn(id, email)) ?? null, me: playerId ? { playerId } : null });
   });
 
   app.post("/api/games/:id/commands", async (c) => {
@@ -230,21 +275,30 @@ export function createServer({
     if (!game) return c.json({ error: "Game not found" }, 404);
     if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can run this Game" }, 403);
 
-    // Everything from here to the cache update is synchronous, so two commands never interleave.
-    const result = decide(game.state, body.data, draw);
-    if (!Array.isArray(result)) return c.json(result, 409);
-    const at = now();
-    // One transaction: a command's events are all logged, or none are.
-    db.transaction((tx) => {
-      result.forEach((event, i) => {
-        tx.insert(gameEvents).values({ gameId: id, seq: game.seq + i + 1, event: JSON.stringify(event), createdAt: at }).run();
-      });
+    const result = run(id, game, body.data);
+    return "code" in result ? c.json(result, 409) : c.json(result);
+  });
+
+  // A person adds themselves as a Player, in a Self sign-up Game. The server picks the Player's id and
+  // sends the same AddPlayer command the Host's button does, so the rules are untouched.
+  app.post("/api/games/:id/join", async (c) => {
+    const id = c.req.param("id");
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const body = await parseBody(c, joinBody);
+    if (!body.ok) return body.res;
+    const game = load(id);
+    if (!game) return c.json({ error: "Game not found" }, 404);
+    if (game.rosterMode !== "self") return c.json({ error: "The Host adds the Players in this Game" }, 403);
+    if (playerOf(id, email, game)) return c.json({ code: "AlreadyJoined", message: "You're already playing in this Game" }, 409);
+
+    const playerId = randomBytes(12).toString("base64url");
+    const result = run(id, game, { type: "AddPlayer", playerId, name: body.data.name }, (tx) => {
+      // A link left over from a Player the Host has since removed gives way to the new one.
+      tx.delete(gamePlayers).where(and(eq(gamePlayers.gameId, id), eq(gamePlayers.email, email))).run();
+      tx.insert(gamePlayers).values({ gameId: id, playerId, email }).run();
     });
-    const next = { name: game.name, state: result.reduce(evolve, game.state), seq: game.seq + result.length };
-    cache.set(id, next);
-    const shown = view(id, next);
-    io?.to(id).emit("game", shown);
-    return c.json(shown);
+    return "code" in result ? c.json(result, 409) : c.json({ ...result, me: { playerId } });
   });
 
   /** Serves HTTP and live updates on one port (0 picks a free one). Screens only listen; moves go over HTTP. */

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, Route, Routes, useNavigate, useSearchParams } from "react-router";
-import type { MyGame } from "./api.js";
+import { isReturnPath, type MyGame, type RosterMode } from "./api.js";
 import { useApi } from "./ApiContext.js";
 import { GamePage } from "./GamePage.js";
+import { SignInForm } from "./SignIn.js";
 import { WatchScreen } from "./WatchScreen.js";
 
 export function AppRoutes() {
@@ -103,6 +104,7 @@ function NewGame() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("Gift exchange");
+  const [rosterMode, setRosterMode] = useState<RosterMode>("host");
   const [slots, setSlots] = useState("1");
   const [steals, setSteals] = useState("3");
   const [failed, setFailed] = useState(false);
@@ -112,7 +114,7 @@ function NewGame() {
   async function submit(e: FormEvent) {
     e.preventDefault();
     try {
-      const id = await api.createGame({ activeSlots: Number(slots), maxSteals: Number(steals) }, name.trim());
+      const id = await api.createGame({ activeSlots: Number(slots), maxSteals: Number(steals) }, name.trim(), rosterMode);
       navigate(`/games/${id}`);
     } catch {
       setFailed(true);
@@ -128,6 +130,17 @@ function NewGame() {
       <input id="slots" type="number" inputMode="numeric" min={1} max={10} required value={slots} onChange={(e) => setSlots(e.target.value)} />
       <label htmlFor="steals">Steals before a Gift is Frozen</label>
       <input id="steals" type="number" inputMode="numeric" min={0} max={20} required value={steals} onChange={(e) => setSteals(e.target.value)} />
+      <fieldset className="choices">
+        <legend>Who adds the Players?</legend>
+        <label>
+          <input type="radio" name="roster-mode" checked={rosterMode === "host"} onChange={() => setRosterMode("host")} />
+          I'll enter them
+        </label>
+        <label>
+          <input type="radio" name="roster-mode" checked={rosterMode === "self"} onChange={() => setRosterMode("self")} />
+          Players sign up on their phones
+        </label>
+      </fieldset>
       {failed && (
         <p className="error" role="alert">
           The Game couldn't be created. Please try again.
@@ -138,60 +151,7 @@ function NewGame() {
   );
 }
 
-const linkMessages = {
-  tooMany: "Too many sign-in links have been asked for. Please wait a few minutes and try again.",
-  invalidEmail: "That doesn't look like an email address.",
-  failed: "Something went wrong sending the link. Please try again.",
-};
-
-function SignInForm() {
-  const api = useApi();
-  const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "sending" | "sent" | keyof typeof linkMessages>("idle");
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    setStatus("sending");
-    setStatus(await api.requestLink(email).catch(() => "failed" as const));
-  }
-
-  if (status === "sent") {
-    return (
-      <section className="card" aria-live="polite">
-        <h2>Check your email</h2>
-        <p>
-          We sent a sign-in link to <strong>{email.trim()}</strong>. It works once, for 15 minutes.
-        </p>
-      </section>
-    );
-  }
-
-  return (
-    <form className="card" onSubmit={submit}>
-      <h2>Sign in</h2>
-      <label htmlFor="email">Email address</label>
-      <input
-        id="email"
-        type="email"
-        autoComplete="email"
-        inputMode="email"
-        required
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
-      {status in linkMessages && (
-        <p className="error" role="alert">
-          {linkMessages[status as keyof typeof linkMessages]}
-        </p>
-      )}
-      <button type="submit" disabled={status === "sending"}>
-        Send me a sign-in link
-      </button>
-    </form>
-  );
-}
-
-/** Where emailed links land: uses the link up once, then goes home signed in. */
+/** Where emailed links land: uses the link up once, then goes back where the person started (home if nowhere). */
 function RedeemLink() {
   const api = useApi();
   const navigate = useNavigate();
@@ -209,7 +169,11 @@ function RedeemLink() {
       return;
     }
     api.redeemLink(token).then(
-      (session) => (session ? navigate("/", { replace: true }) : setFailed(true)),
+      (session) => {
+        if (!session) return setFailed(true);
+        const next = params.get("next");
+        navigate(next && isReturnPath(next) ? next : "/", { replace: true });
+      },
       () => setFailed(true),
     );
   }, [api, navigate, params]);

@@ -6,6 +6,8 @@ export interface GameView {
   id: string;
   /** What the Host calls it. */
   name: string;
+  /** Who adds Players: only the Host and Co-hosts, or people themselves from their phones too. */
+  rosterMode: RosterMode;
   /** Rises with every change; the newest copy wins. */
   version: number;
   phase: Phase;
@@ -18,7 +20,21 @@ export interface GameView {
   leftoverGifts: number;
   /** Whether the person looking runs this Game. */
   role: "host" | "cohost" | null;
+  /** The Player the person looking signed up as, if they did. */
+  me: { playerId: string } | null;
 }
+
+export type RosterMode = "host" | "self";
+
+/** What only the person looking is told about a Game; live updates go to everyone, so they never carry it. */
+export type Viewer = Pick<GameView, "role" | "me">;
+export type SharedGame = Omit<GameView, keyof Viewer>;
+
+/**
+ * A page of this app to come back to after signing in. Paths only: "//host" and "/\\host" would take a
+ * browser to another site. The server checks the same.
+ */
+export const isReturnPath = (path: string) => /^\/(?![/\\])[\x21-\x7e]*$/.test(path) && path.length <= 200;
 
 /** One of the Games a person runs, as listed on their home screen. */
 export interface MyGame {
@@ -29,7 +45,7 @@ export interface MyGame {
   role: "host" | "cohost";
 }
 
-export type CommandResult = { ok: true; game: Omit<GameView, "role"> } | { ok: false; code: RuleErrorCode | "Forbidden" | "Failed"; message: string };
+export type CommandResult = { ok: true; game: SharedGame } | { ok: false; code: RuleErrorCode | "Forbidden" | "Failed"; message: string };
 
 export interface ApiOptions {
   /** Where live updates come from; the page's own origin when left out. */
@@ -55,8 +71,9 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
       return (await res.json()) as { email: string };
     },
 
-    async requestLink(email: string): Promise<"sent" | "tooMany" | "invalidEmail"> {
-      const res = await postJson("/api/auth/link", { email });
+    /** `next`: the page of this app the emailed link should bring them back to. */
+    async requestLink(email: string, next?: string): Promise<"sent" | "tooMany" | "invalidEmail"> {
+      const res = await postJson("/api/auth/link", next === undefined ? { email } : { email, next });
       if (res.status === 202) return "sent";
       if (res.status === 429) return "tooMany";
       if (res.status === 400) return "invalidEmail";
@@ -75,8 +92,8 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
       await postJson("/api/auth/sign-out");
     },
 
-    async createGame(settings: GameSettings, name?: string): Promise<string> {
-      const res = await postJson("/api/games", name === undefined ? { settings } : { name, settings });
+    async createGame(settings: GameSettings, name?: string, rosterMode?: RosterMode): Promise<string> {
+      const res = await postJson("/api/games", { settings, ...(name === undefined ? {} : { name }), ...(rosterMode ? { rosterMode } : {}) });
       if (res.status !== 201) throw new Error(`creating a Game failed: ${res.status}`);
       return ((await res.json()) as { id: string }).id;
     },
@@ -105,7 +122,7 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
      * Calls onGame with the whole Game now, and again after every change, until the returned function is called.
      * After a phone sleeps, Socket.IO reconnects by itself and the server sends the whole Game again.
      */
-    watch(gameId: string, onGame: (game: Omit<GameView, "role">) => void, onMissing?: () => void): () => void {
+    watch(gameId: string, onGame: (game: SharedGame) => void, onMissing?: () => void): () => void {
       const socketOptions = { auth: { gameId }, ...(options.transports ? { transports: options.transports } : {}) };
       const socket = options.socketOrigin ? io(options.socketOrigin, socketOptions) : io(socketOptions);
       socket.on("game", onGame);
@@ -116,6 +133,19 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
         }
       });
       return () => void socket.close();
+    },
+
+    /** Adds the signed-in person to a Self sign-up Game as a Player with this name. */
+    async join(gameId: string, name: string): Promise<{ ok: true; game: SharedGame; me: { playerId: string } } | { ok: false; message: string }> {
+      const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/join`, { name });
+      if (res.ok) {
+        const { me, ...game } = (await res.json()) as SharedGame & { me: { playerId: string } };
+        return { ok: true, game, me };
+      }
+      if (res.status === 409) return { ok: false, message: ((await res.json()) as { message: string }).message };
+      if (res.status === 403) return { ok: false, message: "The Host adds the Players in this Game." };
+      if (res.status === 401) return { ok: false, message: "Please sign in again." };
+      return { ok: false, message: "Something went wrong. Please try again." };
     },
 
     async command(gameId: string, command: Command): Promise<CommandResult> {
