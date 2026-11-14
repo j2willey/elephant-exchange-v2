@@ -75,4 +75,19 @@ describe("Commands over HTTP", () => {
     expect(v2).toBeGreaterThan(v1);
     expect(await versionOf(app.request(`/api/games/${id}`))).toBe(v2);
   });
+
+  it("shows how many leftover Gifts are still unopened during the Final Round", async () => {
+    const { send } = await setup(scriptedDraw(["ann", "bob"]));
+    await send({ type: "AddPlayer", playerId: "ann", name: "Ann" });
+    await send({ type: "AddPlayer", playerId: "bob", name: "Bob" });
+    await send({ type: "StartGame" });
+    await send({ type: "OpenGift", playerId: "ann", giftId: "g1", name: "Socks" });
+    await send({ type: "OpenGift", playerId: "bob", giftId: "g2", name: "Mug" });
+
+    const started = await send({ type: "StartFinalRound", finalists: 2, leftoverGifts: 2 });
+    expect(await started.json()).toMatchObject({ phase: "finalRound", leftoverGifts: 2, active: ["ann"], onDeck: ["bob"] });
+
+    const opened = await send({ type: "OpenGift", playerId: "ann", giftId: "g3", name: "Candle" });
+    expect(await opened.json()).toMatchObject({ leftoverGifts: 1 });
+  });
 });

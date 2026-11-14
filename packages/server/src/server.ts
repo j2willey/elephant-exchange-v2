@@ -10,6 +10,7 @@ import {
   decide,
   evolve,
   gifts,
+  leftoverGiftCount,
   newGame,
   onDeck,
   phase,
@@ -63,6 +64,8 @@ function view(id: string, { state, seq }: { state: GameState; seq: number }) {
     active: activePlayers(state),
     onDeck: onDeck(state),
     gifts: gifts(state),
+    /** Unopened Gifts still on the table in the Final Round. */
+    leftoverGifts: leftoverGiftCount(state),
   };
 }
 

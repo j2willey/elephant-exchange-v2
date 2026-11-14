@@ -17,7 +17,12 @@ export function WatchScreen() {
 
   return (
     <div className="screen">
-      {game.phase === "setup" ? (
+      {game.phase === "ended" ? (
+        <section className="card now">
+          <h2 className="big">Game over</h2>
+          <p className="muted">Here's who went home with what.</p>
+        </section>
+      ) : game.phase === "setup" ? (
         <section className="card now">
           <p className="big">Waiting for the Host to start</p>
           <p className="muted">
@@ -27,6 +32,7 @@ export function WatchScreen() {
       ) : (
         <div className="screen-top">
           <section className="card now" aria-live="polite">
+            {game.phase === "finalRound" && <h2 className="label">Final Round</h2>}
             <p className="label">Up now</p>
             <p className="big">{game.active.map(nameOf).join(", ") || "—"}</p>
           </section>

@@ -237,3 +237,11 @@ button.link {
   font-weight: 600;
   overflow-wrap: anywhere;
 }
+
+button.danger {
+  color: var(--danger);
+}
+
+button.danger-solid {
+  background: var(--danger);
+}

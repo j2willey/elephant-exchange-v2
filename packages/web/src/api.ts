@@ -12,6 +12,8 @@ export interface GameView {
   active: string[];
   onDeck: string[];
   gifts: { id: string; name: string; holderId: string | null; steals: number; frozen: boolean }[];
+  /** Unopened Gifts still on the table in the Final Round. */
+  leftoverGifts: number;
   /** Whether the person looking runs this Game. */
   role: "host" | "cohost" | null;
 }
