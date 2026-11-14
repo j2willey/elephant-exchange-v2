@@ -147,6 +147,8 @@ function resolveTheme(gameId: string, { org, own }: LoadedGame["theme"]) {
     page: own.page ?? org?.page ?? null,
     logoUrl: image("logo"),
     backgroundUrl: image("background"),
+    /** Which parts are the Game's own rather than its Organization's. */
+    overrides: { color: own.color !== null, page: own.page !== null, logo: own.logo !== null, background: own.background !== null },
   };
 }
 

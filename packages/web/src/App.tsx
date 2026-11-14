@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, Route, Routes, useNavigate, useSearchParams } from "react-router";
-import { isReturnPath, type MyGame, type RosterMode } from "./api.js";
+import { isReturnPath, type MyGame, type MyOrg, type RosterMode } from "./api.js";
 import { useApi } from "./ApiContext.js";
 import { GamePage } from "./GamePage.js";
 import { MyOrgs, OrgPage } from "./Orgs.js";
@@ -113,14 +113,31 @@ function NewGame() {
   const [slots, setSlots] = useState("1");
   const [steals, setSteals] = useState("3");
   const [turnSeconds, setTurnSeconds] = useState("60");
+  const [orgs, setOrgs] = useState<MyOrg[]>([]);
+  const [orgId, setOrgId] = useState("");
   const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let current = true;
+    api.myOrgs().then((mine) => current && setOrgs(mine));
+    return () => {
+      current = false;
+    };
+  }, [api, open]);
 
   if (!open) return <button onClick={() => setOpen(true)}>New Game</button>;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     try {
-      const id = await api.createGame({ activeSlots: Number(slots), maxSteals: Number(steals) }, name.trim(), rosterMode, Number(turnSeconds));
+      const id = await api.createGame(
+        { activeSlots: Number(slots), maxSteals: Number(steals) },
+        name.trim(),
+        rosterMode,
+        Number(turnSeconds),
+        orgId || undefined,
+      );
       navigate(`/games/${id}`);
     } catch {
       setFailed(true);
@@ -132,6 +149,19 @@ function NewGame() {
       <h2>New Game</h2>
       <label htmlFor="game-name">Name of the Game</label>
       <input id="game-name" required maxLength={100} autoComplete="off" value={name} onChange={(e) => setName(e.target.value)} />
+      {orgs.length > 0 && (
+        <>
+          <label htmlFor="new-game-org">Organization</label>
+          <select id="new-game-org" value={orgId} onChange={(e) => setOrgId(e.target.value)}>
+            <option value="">None (the app's own look)</option>
+            {orgs.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name}
+              </option>
+            ))}
+          </select>
+        </>
+      )}
       <label htmlFor="slots">Players taking a turn at once</label>
       <input id="slots" type="number" inputMode="numeric" min={1} max={10} required value={slots} onChange={(e) => setSlots(e.target.value)} />
       <label htmlFor="steals">Steals before a Gift is Frozen</label>

@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 import { createServer } from "../src/server.js";
 import { capturingMailer, post, signIn } from "./support.js";
 
-type Theme = { organization: { id: string; name: string } | null; color: string | null; page: string | null; logoUrl: string | null; backgroundUrl: string | null };
+type Theme = {
+  organization: { id: string; name: string } | null;
+  color: string | null;
+  page: string | null;
+  logoUrl: string | null;
+  backgroundUrl: string | null;
+  overrides: Record<"color" | "page" | "logo" | "background", boolean>;
+};
 
 const patch = (body: unknown, cookie?: string) => ({ ...post(body, cookie), method: "PATCH" });
 
@@ -59,7 +66,14 @@ describe("A Game's Theme", () => {
     const { id: org } = await newOrg(host, "Lodge 22");
     await editOrg(host, org, { color: "#c8102e" });
     const game = await newGame(host);
-    expect(await theme(game)).toEqual({ organization: null, color: null, page: null, logoUrl: null, backgroundUrl: null });
+    expect(await theme(game)).toEqual({
+      organization: null,
+      color: null,
+      page: null,
+      logoUrl: null,
+      backgroundUrl: null,
+      overrides: { color: false, page: false, logo: false, background: false },
+    });
 
     expect((await setOrg(host, game, org)).status).toBe(204);
 
@@ -110,6 +124,8 @@ describe("A Game's Theme", () => {
     expect((await editGameTheme(host, game, { color: "nope" })).status).toBe(400);
     expect((await editGameTheme(host, game, { color: "#0B6623" })).status).toBe(200);
     expect(await theme(game)).toMatchObject({ color: "#0b6623", page: "#ffffff" });
+    // Says which parts are the Game's own, so the Host can be offered to hand those back.
+    expect((await theme(game)).overrides).toEqual({ color: true, page: false, logo: false, background: false });
 
     await editOrg(host, org, { color: "#000080" });
     expect((await theme(game)).color).toBe("#0b6623"); // the Game's own still wins

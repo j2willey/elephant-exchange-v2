@@ -5,6 +5,7 @@ import type { CommandResult, GameView, Post, SharedGame, Viewer } from "./api.js
 import { useApi } from "./ApiContext.js";
 import { Countdown } from "./Countdown.js";
 import { Feed, PostPhoto, useFeed } from "./Feed.js";
+import { GameLook } from "./GameLook.js";
 import { SignInForm, useSignedIn } from "./SignIn.js";
 import { ThemeLogo, useTheme } from "./theme.js";
 import { useLiveGame } from "./useLiveGame.js";
@@ -138,6 +139,8 @@ export function GamePage() {
           </button>
         )}
       </section>
+
+      {runs && <GameLook game={game} />}
 
       {runs && game.phase !== "ended" && <EndGame send={send} />}
     </div>

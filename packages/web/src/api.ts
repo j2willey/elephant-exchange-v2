@@ -41,6 +41,8 @@ export interface Theme {
   page: string | null;
   logoUrl: string | null;
   backgroundUrl: string | null;
+  /** Which parts are the Game's own, overriding its Organization's. */
+  overrides: Record<"color" | "page" | "logo" | "background", boolean>;
 }
 
 /** An Organization the signed-in person is the Organizer of, with its Theme. */

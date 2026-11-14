@@ -123,11 +123,15 @@ export function OrgPage() {
 export function ThemeColors({
   color,
   page,
+  own = { color: color !== null, page: page !== null },
   fallback,
   onChange,
 }: {
+  /** The colors in effect (null: the app's own). */
   color: string | null;
   page: string | null;
+  /** Which of them are set here, and so can be handed back; by default, whichever are set. */
+  own?: { color: boolean; page: boolean };
   fallback: string;
   onChange: (change: ColorChange) => Promise<void>;
 }) {
@@ -143,7 +147,7 @@ export function ThemeColors({
         <label htmlFor="theme-color">Main color</label>
         <input id="theme-color" type="color" value={main} onChange={(e) => setMain(e.target.value)} />
         <span className="muted hint">Buttons, headings and the big screen's highlights.</span>
-        {color && (
+        {own.color && (
           <button type="button" className="link" onClick={() => void onChange({ color: null })}>
             Use {fallback} main color
           </button>
@@ -153,7 +157,7 @@ export function ThemeColors({
         <label htmlFor="theme-page">Page color</label>
         <input id="theme-page" type="color" value={background} onChange={(e) => setBackground(e.target.value)} />
         <span className="muted hint">Behind the cards. Text colors adjust so they stay readable.</span>
-        {page && (
+        {own.page && (
           <button type="button" className="link" onClick={() => void onChange({ page: null })}>
             Use {fallback} page color
           </button>
