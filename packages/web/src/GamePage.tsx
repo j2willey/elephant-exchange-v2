@@ -146,7 +146,7 @@ function JoinPanel({ gameId, onJoined }: { gameId: string; onJoined: (game: Shar
   const api = useApi();
   const { pathname } = useLocation();
   const signedIn = useSignedIn();
-  const [name, setName] = useState("");
+  const [name, setName] = useState(() => api.guestName());
   const [error, setError] = useState<string | null>(null);
 
   async function join(e: FormEvent) {
@@ -154,7 +154,10 @@ function JoinPanel({ gameId, onJoined }: { gameId: string; onJoined: (game: Shar
     const trimmed = name.trim();
     if (!trimmed) return;
     const result = await api.join(gameId, trimmed);
-    if (result.ok) onJoined(result.game, { me: result.me });
+    if (result.ok) {
+      api.setGuestName(trimmed);
+      onJoined(result.game, { me: result.me });
+    }
     else setError(result.message.endsWith(".") ? result.message : `${result.message}.`);
   }
 

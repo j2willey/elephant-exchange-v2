@@ -142,7 +142,7 @@ function Composer({ game, onPosted, offerSignIn }: { game: GameView; onPosted: (
   const api = useApi();
   const { pathname } = useLocation();
   const signedIn = useSignedIn();
-  const [name, setName] = useState("");
+  const [name, setName] = useState(() => api.guestName());
   const [text, setText] = useState("");
   const [giftId, setGiftId] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
@@ -170,6 +170,7 @@ function Composer({ game, onPosted, offerSignIn }: { game: GameView; onPosted: (
       .catch(() => "failed" as const);
     setSending(false);
     if (result === "posted") {
+      if (asks) api.setGuestName(name.trim());
       setText("");
       setGiftId("");
       setPhoto(null);

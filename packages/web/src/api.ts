@@ -224,6 +224,15 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
       }
     },
 
+    /** The name this phone last posted or joined as, to fill in next time. Kept on the phone only. */
+    guestName(): string {
+      return storage.getItem("guestName") ?? "";
+    },
+
+    setGuestName(name: string): void {
+      storage.setItem("guestName", name);
+    },
+
     setStars(gameId: string, giftIds: string[]): void {
       storage.setItem(starsKey(gameId), JSON.stringify(giftIds));
     },
