@@ -150,3 +150,38 @@ button.link {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+.turn {
+  border-color: var(--brand);
+  border-width: 2px;
+}
+
+.steals {
+  display: grid;
+  gap: 8px;
+}
+
+.gifts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gifts li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 44px;
+  border-bottom: 1px solid var(--line);
+}
+
+.badge {
+  margin-left: 8px;
+  padding: 2px 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--brand-ink);
+  background: var(--brand);
+  border-radius: 999px;
+}
