@@ -113,3 +113,31 @@ test("a reload anywhere in the app still works, and the build's files are cached
   expect(script).toBeTruthy();
   expect((await request.get(script!)).headers()["cache-control"]).toMatch(/immutable/);
 });
+
+test("an Organizer themes their Organization, and a Game in it shows that Theme", async ({ browser }) => {
+  const page = await (await browser.newContext()).newPage();
+  await page.goto("/");
+  await signIn(page, `organizer-${run}@example.com`);
+
+  const orgs = page.getByRole("region", { name: /your organizations/i });
+  await orgs.getByLabel(/new organization/i).fill(`Lodge ${run}`);
+  await orgs.getByRole("button", { name: /create/i }).click();
+  await page.getByLabel(/main color/i).fill("#0b3d91");
+  await page.getByLabel(/page color/i).fill("#ffd700");
+  await page.getByRole("button", { name: /save colors/i }).click();
+  await page.getByLabel(/^logo/i).setInputFiles("e2e/fixtures/sideways-camera-photo.jpg");
+  await expect(page.getByRole("img", { name: new RegExp(`lodge ${run} logo`, "i") })).toBeVisible();
+
+  await page.getByRole("link", { name: /back to your games/i }).click();
+  await page.getByRole("button", { name: /new game/i }).click();
+  await page.getByLabel(/^organization$/i).selectOption({ label: `Lodge ${run}` });
+  await page.getByRole("button", { name: /create game/i }).click();
+  await expect(page.getByRole("img", { name: new RegExp(`lodge ${run} logo`, "i") })).toBeVisible();
+
+  const screen = await (await browser.newContext({ viewport: { width: 1280, height: 720 } })).newPage();
+  await screen.goto(`${page.url()}/screen`);
+  await expect(screen.getByRole("img", { name: new RegExp(`lodge ${run} logo`, "i") })).toBeVisible();
+  // The page really is drawn in the Theme's colors.
+  await expect.poll(() => screen.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe("rgb(255, 215, 0)");
+  if (process.env["SMOKE_SCREENSHOT"]) await screen.screenshot({ path: process.env["SMOKE_SCREENSHOT"].replace(/\.png$/, "-theme.png") });
+});
