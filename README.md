@@ -58,3 +58,23 @@ npm run dev --workspace @elephant/web      # app on http://localhost:5173
 ```
 
 When developing, sign-in links are printed to the server log instead of being emailed. Settings are environment variables: `PORT`, `DB_PATH`, `BASE_URL` (where the app is served) and `TRUST_PROXY=1` (set it behind a reverse proxy such as Caddy).
+
+## Running it in Docker
+
+This is how it runs in production: one image holds the server and the built app, and the database lives on a volume.
+
+```sh
+docker compose up -d --build      # http://localhost:3000
+docker compose logs -f app        # sign-in links appear here until email is set up
+```
+
+The container shuts down cleanly on `docker stop`, leaving the database complete in its one file.
+
+## Smoke test
+
+The smoke test uses Playwright to drive real phone-sized browsers against the running, packaged app. A Host signs in and sets up a Game; a guest follows from the Game's link, signs in, joins and posts; and the big screen shows the result, with live updates throughout.
+
+```sh
+docker compose up -d --build
+npm run smoke                      # or SMOKE_URL=https://… SMOKE_LOGS="ssh … docker compose logs app --no-log-prefix" npm run smoke
+```

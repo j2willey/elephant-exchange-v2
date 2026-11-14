@@ -5,9 +5,13 @@
     "packages/*"
   ],
   "scripts": {
-    "test": "npm test --workspaces"
+    "test": "npm test --workspaces",
+    "smoke": "playwright test"
   },
   "allowScripts": {
     "better-sqlite3@13.0.3": true
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1"
   }
 }
