@@ -44,8 +44,10 @@ It's built test-first. The rules have unit tests. The server is tested over HTTP
 ```sh
 npm install
 npm test                          # every package
-npm run typecheck --workspaces
+npm run typecheck
 ```
+
+GitHub Actions runs the typecheck and every test on each push, then builds the Docker image, starts it and runs the smoke test against it (`.github/workflows/ci.yml`).
 
 ## Running it locally
 
