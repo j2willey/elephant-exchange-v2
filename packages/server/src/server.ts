@@ -1,5 +1,5 @@
 import { randomBytes, randomInt } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { Hono, type Context } from "hono";
 import {
   activePlayers,
@@ -11,11 +11,12 @@ import {
   phase,
   roster,
   type DrawFn,
+  type Event,
   type GameSettings,
   type GameState,
 } from "@elephant/rules";
 import type { z } from "zod";
-import { games, openDb } from "./db.js";
+import { gameEvents, games, openDb } from "./db.js";
 import { command, createGameBody } from "./schemas.js";
 
 export interface ServerOptions {
@@ -50,17 +51,20 @@ async function parseBody<T>(c: Context, schema: z.ZodType<T>): Promise<{ ok: tru
 
 export function createServer({ dbPath, draw = randomDraw }: ServerOptions) {
   const db = openDb(dbPath);
-  /** Rebuilt Game states, so a Game's log is replayed only once per server start. */
-  const cache = new Map<string, GameState>();
+  /** Rebuilt Games, so a Game's log is replayed only once per server start. `seq` counts its logged events. */
+  const cache = new Map<string, { state: GameState; seq: number }>();
 
-  function load(id: string): GameState | undefined {
+  function load(id: string): { state: GameState; seq: number } | undefined {
     const cached = cache.get(id);
     if (cached) return cached;
     const row = db.select().from(games).where(eq(games.id, id)).get();
     if (!row) return undefined;
-    const state = newGame(JSON.parse(row.settings) as GameSettings);
-    cache.set(id, state);
-    return state;
+    const log = db.select().from(gameEvents).where(eq(gameEvents.gameId, id)).orderBy(asc(gameEvents.seq)).all();
+    // Replaying the log never draws: every Draw was logged as a PlayerDrawn event (ADR-0001).
+    const state = log.map((e) => JSON.parse(e.event) as Event).reduce(evolve, newGame(JSON.parse(row.settings) as GameSettings));
+    const game = { state, seq: log.length };
+    cache.set(id, game);
+    return game;
   }
 
   const app = new Hono();
@@ -76,24 +80,31 @@ export function createServer({ dbPath, draw = randomDraw }: ServerOptions) {
 
   app.get("/api/games/:id", (c) => {
     const id = c.req.param("id");
-    const state = load(id);
-    if (!state) return c.json({ error: "Game not found" }, 404);
-    return c.json(view(id, state));
+    const game = load(id);
+    if (!game) return c.json({ error: "Game not found" }, 404);
+    return c.json(view(id, game.state));
   });
 
   app.post("/api/games/:id/commands", async (c) => {
     const id = c.req.param("id");
-    const state = load(id);
-    if (!state) return c.json({ error: "Game not found" }, 404);
     const body = await parseBody(c, command);
     if (!body.ok) return body.res;
+    const game = load(id);
+    if (!game) return c.json({ error: "Game not found" }, 404);
 
     // Everything from here to the cache update is synchronous, so two commands never interleave.
-    const result = decide(state, body.data, draw);
+    const result = decide(game.state, body.data, draw);
     if (!Array.isArray(result)) return c.json(result, 409);
-    const next = result.reduce(evolve, state);
+    const now = new Date();
+    // One transaction: a command's events are all logged, or none are.
+    db.transaction((tx) => {
+      result.forEach((event, i) => {
+        tx.insert(gameEvents).values({ gameId: id, seq: game.seq + i + 1, event: JSON.stringify(event), createdAt: now }).run();
+      });
+    });
+    const next = { state: result.reduce(evolve, game.state), seq: game.seq + result.length };
     cache.set(id, next);
-    return c.json(view(id, next));
+    return c.json(view(id, next.state));
   });
 
   return { app };
