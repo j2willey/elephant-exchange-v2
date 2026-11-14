@@ -81,6 +81,18 @@ docker compose -f compose.yaml -f compose.prod.yaml up -d --build
 
 To try it on a laptop, use `DOMAIN=localhost` (Caddy makes its own local certificate). Pick other ports if 80 and 443 are taken: `HTTP_PORT=8080 HTTPS_PORT=8443`, then `SMOKE_URL=https://localhost:8443 npm run smoke`.
 
+### Backups
+
+`scripts/backup.sh` copies the database while the app runs (SQLite's online backup, so nothing is caught half-written), keeps the newest 14 in the data volume, and copies each out to `./backups` on the host. On the droplet, run it nightly from cron (the script's header has the line), and pull `./backups` to another machine now and then with `rsync`, since a backup on the same droplet won't survive losing it.
+
+To restore one:
+
+```sh
+docker compose stop app
+docker compose cp backups/elephant-2026-12-13T0315Z.db app:/data/elephant.db
+docker compose start app
+```
+
 ## Smoke test
 
 The smoke test uses Playwright to drive real phone-sized browsers against the running, packaged app. A Host signs in and sets up a Game; a guest follows from the Game's link, signs in, joins and posts; and the big screen shows the result, with live updates throughout.
