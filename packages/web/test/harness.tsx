@@ -1,3 +1,4 @@
+import { File as NodeFile } from "node:buffer";
 import { StrictMode } from "react";
 import { render } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
@@ -63,6 +64,51 @@ export async function startServer(options: { draw?: DrawFn } = {}) {
 export const drawInOrder: DrawFn = (candidates) => candidates[0]!;
 
 /**
+ * Runs a request while the server (in this same process) has Node's own File. jsdom replaces the global
+ * File, and Node's multipart parser then fails its own check on the files it reads. Only this test setup
+ * has the server and jsdom sharing globals; in production the server runs alone.
+ */
+async function asNodeServer<T>(request: () => Promise<T>): Promise<T> {
+  const jsdomFile = globalThis.File;
+  globalThis.File = NodeFile as unknown as typeof File;
+  try {
+    return await request();
+  } finally {
+    globalThis.File = jsdomFile;
+  }
+}
+
+/** A jsdom Blob's bytes (Node's fetch can't read them: it sends a jsdom File as an empty part). */
+const bytesOf = (blob: Blob) =>
+  new Promise<Uint8Array>((done, fail) => {
+    const reader = new FileReader();
+    reader.onload = () => done(new Uint8Array(reader.result as ArrayBuffer));
+    reader.onerror = () => fail(reader.error);
+    reader.readAsArrayBuffer(blob);
+  });
+
+/** Encodes a form as a browser would send it (multipart/form-data), with its files' real bytes. */
+async function toMultipart(form: FormData): Promise<{ body: Uint8Array; type: string }> {
+  const boundary = `----harness${Math.random().toString(36).slice(2)}`;
+  const parts: Uint8Array[] = [];
+  const text = (s: string) => parts.push(new TextEncoder().encode(s));
+  for (const [name, value] of form.entries()) {
+    if (typeof value === "string") {
+      text(`--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`);
+    } else {
+      const type = value.type || "application/octet-stream";
+      text(`--${boundary}\r\nContent-Disposition: form-data; name="${name}"; filename="${value.name}"\r\nContent-Type: ${type}\r\n\r\n`);
+      parts.push(await bytesOf(value));
+      text("\r\n");
+    }
+  }
+  text(`--${boundary}--\r\n`);
+  const body = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+  parts.reduce((at, p) => (body.set(p, at), at + p.length), 0);
+  return { body, type: `multipart/form-data; boundary=${boundary}` };
+}
+
+/**
  * One person's browser: requests go to the server and cookies are kept between them, as a browser would.
  * Rendering the app again with the same browser is like reloading the page; its Stars are kept too.
  */
@@ -71,7 +117,15 @@ export function browser(origin: string, { clockWrongBy = 0 }: { clockWrongBy?: n
   const fetchWithCookies: typeof fetch = async (input, init) => {
     const headers = new Headers(init?.headers);
     if (jar.size) headers.set("cookie", [...jar].map(([k, v]) => `${k}=${v}`).join("; "));
-    const res = await fetch(new URL(String(input), origin), { ...init, headers });
+    const body = init?.body;
+    let res: Response;
+    if (body instanceof FormData) {
+      const multipart = await toMultipart(body);
+      headers.set("content-type", multipart.type);
+      res = await asNodeServer(() => fetch(new URL(String(input), origin), { ...init, headers, body: multipart.body as BodyInit }));
+    } else {
+      res = await fetch(new URL(String(input), origin), { ...init, headers, ...(body === undefined ? {} : { body }) });
+    }
     for (const line of res.headers.getSetCookie()) {
       const [pair, ...attrs] = line.split(";");
       const [name, value = ""] = pair!.split("=");

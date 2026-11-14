@@ -66,6 +66,15 @@ test("a Host runs a Game while a guest follows along on their phone", async ({ b
   await guest.getByRole("button", { name: /^post$/i }).click();
   await expect(host.getByRole("feed").getByText("Nice socks!")).toBeVisible();
 
+  // A camera photo, stored sideways with an orientation tag and GPS: the phone shrinks it and the server
+  // keeps an upright copy without the EXIF, which the Host sees live.
+  await guest.getByLabel(/add a photo/i).setInputFiles("e2e/fixtures/sideways-camera-photo.jpg");
+  await guest.getByLabel(/what's happening/i).fill("Group photo");
+  await guest.getByRole("button", { name: /^post$/i }).click();
+  const photo = host.getByRole("feed").getByRole("img", { name: /photo from cat/i });
+  await expect(photo).toBeVisible();
+  await expect.poll(() => photo.evaluate((img: HTMLImageElement) => [img.naturalWidth, img.naturalHeight])).toEqual([1200, 1600]);
+
   // The big screen, with its QR code.
   const screen = await (await browser.newContext({ viewport: { width: 1280, height: 720 } })).newPage();
   await screen.goto(`${gameUrl}/screen`);

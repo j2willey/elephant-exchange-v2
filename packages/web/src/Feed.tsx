@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useLocation } from "react-router";
 import type { GameView, Moderation, Post } from "./api.js";
 import { useApi } from "./ApiContext.js";
+import { shrinkPhoto } from "./shrinkPhoto.js";
 import { SignInForm, useSignedIn } from "./SignIn.js";
 
 /**
@@ -84,7 +85,8 @@ export function Feed({
             </p>
             {p.status === "pending" && <p className="badge">Waiting for the Host to approve</p>}
             {p.status === "hidden" && <p className="badge">Hidden</p>}
-            <p className="post-text">{p.text}</p>
+            {p.text && <p className="post-text">{p.text}</p>}
+            {p.photo && <PostPhoto post={p} />}
             {hosting && (
               <div className="inline">
                 {p.status === "pending" && <button onClick={() => void setStatus(p, "visible")}>Approve</button>}
@@ -106,6 +108,28 @@ export function Feed({
   );
 }
 
+/** A Post's Photo, sized from the start so the Feed doesn't jump as it loads. */
+export function PostPhoto({ post, className = "post-photo" }: { post: Post; className?: string }) {
+  if (!post.photo) return null;
+  return (
+    <img
+      className={className}
+      src={post.photo.url}
+      alt={`Photo from ${post.author}`}
+      width={post.photo.width}
+      height={post.photo.height}
+      loading="lazy"
+    />
+  );
+}
+
+const postErrors = {
+  paused: "The Host has paused posting.",
+  notPhoto: "That doesn't look like a photo we can use. Try another?",
+  tooBig: "That Photo is too big to send. Try another?",
+  failed: "That didn't post. Please try again.",
+};
+
 function Composer({ game, onPosted, offerSignIn }: { game: GameView; onPosted: () => void; offerSignIn: boolean }) {
   const api = useApi();
   const { pathname } = useLocation();
@@ -113,7 +137,10 @@ function Composer({ game, onPosted, offerSignIn }: { game: GameView; onPosted: (
   const [name, setName] = useState("");
   const [text, setText] = useState("");
   const [giftId, setGiftId] = useState("");
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const preview = usePreview(photo);
 
   if (game.moderation === "paused") return <p className="muted">The Host has paused posting for now.</p>;
   if (signedIn === "loading") return null;
@@ -124,18 +151,24 @@ function Composer({ game, onPosted, offerSignIn }: { game: GameView; onPosted: (
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    const result = await api.post(game.id, {
-      text: text.trim(),
-      ...(asks ? { name: name.trim() } : {}),
-      ...(giftId ? { giftId } : {}),
-    });
+    setSending(true);
+    const result = await api
+      .post(game.id, {
+        text: text.trim(),
+        ...(asks ? { name: name.trim() } : {}),
+        ...(giftId ? { giftId } : {}),
+        ...(photo ? { photo: await shrinkPhoto(photo) } : {}),
+      })
+      .catch(() => "failed" as const);
+    setSending(false);
     if (result === "posted") {
       setText("");
       setGiftId("");
+      setPhoto(null);
       setError(null);
       onPosted();
     } else {
-      setError(result === "paused" ? "The Host has paused posting." : "That didn't post. Please try again.");
+      setError(postErrors[result]);
     }
   }
 
@@ -148,7 +181,31 @@ function Composer({ game, onPosted, offerSignIn }: { game: GameView; onPosted: (
         </>
       )}
       <label htmlFor="post-text">What's happening?</label>
-      <textarea id="post-text" rows={2} maxLength={500} required value={text} onChange={(e) => setText(e.target.value)} />
+      <textarea id="post-text" rows={2} maxLength={500} value={text} onChange={(e) => setText(e.target.value)} />
+      {photo ? (
+        <div className="photo-to-post">
+          <img src={preview} alt="Photo to post" />
+          <button type="button" className="link danger" onClick={() => setPhoto(null)}>
+            Remove photo
+          </button>
+        </div>
+      ) : (
+        <>
+          <label htmlFor="post-photo" className="photo-pick">
+            Add a Photo
+          </label>
+          <input
+            id="post-photo"
+            type="file"
+            accept="image/*"
+            className="visually-hidden"
+            onChange={(e) => {
+              setPhoto(e.target.files?.[0] ?? null);
+              e.target.value = ""; // so choosing the same file again still counts
+            }}
+          />
+        </>
+      )}
       {game.gifts.length > 0 && (
         <>
           <label htmlFor="post-gift">About a Gift? (optional)</label>
@@ -168,9 +225,21 @@ function Composer({ game, onPosted, offerSignIn }: { game: GameView; onPosted: (
           {error}
         </p>
       )}
-      <button type="submit" disabled={!text.trim() || (asks && !name.trim())}>
-        Post
+      <button type="submit" disabled={sending || (!text.trim() && !photo) || (asks && !name.trim())}>
+        {sending ? "Posting…" : "Post"}
       </button>
     </form>
   );
+}
+
+/** A local address for showing a chosen Photo before it's sent, released when it's no longer shown. */
+function usePreview(file: File | null): string | undefined {
+  const [url, setUrl] = useState<string>();
+  useEffect(() => {
+    if (!file || typeof URL.createObjectURL !== "function") return setUrl(undefined);
+    const made = URL.createObjectURL(file);
+    setUrl(made);
+    return () => URL.revokeObjectURL(made);
+  }, [file]);
+  return url;
 }

@@ -418,7 +418,9 @@ export function createServer({
     if (c.req.header("content-type")?.startsWith("multipart/form-data")) {
       const form = await c.req.parseBody();
       const field = (k: string) => (typeof form[k] === "string" && form[k] !== "" ? form[k] : undefined);
-      upload = form["photo"] instanceof File ? form["photo"] : undefined;
+      const file = form["photo"];
+      // A file rather than a text field (checked by type, not `instanceof File`, which depends on whose File).
+      upload = file !== undefined && typeof file !== "string" ? (file as File) : undefined;
       const parsed = postBody.safeParse({ text: field("text"), name: field("name"), giftId: field("giftId") });
       body = parsed.success ? { ok: true, data: parsed.data } : { ok: false, res: c.json({ error: "Invalid request", issues: parsed.error.issues }, 400) };
     } else {

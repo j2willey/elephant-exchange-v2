@@ -38,7 +38,10 @@ export interface Post {
   author: string;
   /** The Gift it's about, if the poster said. */
   giftId: string | null;
+  /** Empty when the Post is just a Photo. */
   text: string;
+  /** Its Photo, if it has one: where to load it, and its size (so the page can make room before it loads). */
+  photo: { url: string; width: number; height: number } | null;
   /** Pending and Hidden Posts reach only their poster and the Hosts. */
   status: "visible" | "pending" | "hidden";
   createdAt: number;
@@ -233,10 +236,25 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
     },
 
     /** `name` is what a Guest posts as; a Player always posts as their Player. */
-    async post(gameId: string, post: { text: string; name?: string; giftId?: string }): Promise<"posted" | "paused" | "failed"> {
-      const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/posts`, post);
+    /** Posts words and/or a Photo. A Photo goes as a multipart form; words alone as JSON. */
+    async post(
+      gameId: string,
+      { photo, ...post }: { text: string; name?: string; giftId?: string; photo?: Blob },
+    ): Promise<"posted" | "paused" | "notPhoto" | "tooBig" | "failed"> {
+      const path = `/api/games/${encodeURIComponent(gameId)}/posts`;
+      let res: Response;
+      if (photo) {
+        const form = new FormData();
+        for (const [k, v] of Object.entries(post)) if (v) form.append(k, v);
+        form.append("photo", photo, "photo.jpg");
+        res = await fetchFn(path, { method: "POST", body: form });
+      } else {
+        res = await postJson(path, post);
+      }
       if (res.status === 201) return "posted";
       if (res.status === 409) return "paused";
+      if (res.status === 413) return "tooBig";
+      if (res.status === 400 && photo) return "notPhoto";
       return "failed";
     },
 

@@ -4,7 +4,7 @@ import type { Command } from "@elephant/rules";
 import type { CommandResult, GameView, Post, SharedGame, Viewer } from "./api.js";
 import { useApi } from "./ApiContext.js";
 import { Countdown } from "./Countdown.js";
-import { Feed, useFeed } from "./Feed.js";
+import { Feed, PostPhoto, useFeed } from "./Feed.js";
 import { SignInForm, useSignedIn } from "./SignIn.js";
 import { useLiveGame } from "./useLiveGame.js";
 
@@ -383,7 +383,9 @@ export function Gifts({ game, stars, posts = [] }: { game: Pick<GameView, "gifts
                 .filter((p) => p.giftId === g.id && p.status === "visible")
                 .map((p) => (
                   <span key={p.id} className="gift-post">
-                    {p.author}: {p.text}
+                    {p.author}
+                    {p.text && `: ${p.text}`}
+                    <PostPhoto post={p} className="gift-photo" />
                   </span>
                 ))}
             </span>
