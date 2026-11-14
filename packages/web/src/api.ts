@@ -332,8 +332,9 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
 
     /** The Organizations the signed-in person is the Organizer of. */
     async myOrgs(): Promise<MyOrg[]> {
-      const res = await fetchFn("/api/orgs");
-      return res.ok ? ((await res.json()) as MyOrg[]) : [];
+      // Only ever offered as choices: if they can't be loaded (offline, or signed out), there are none to offer.
+      const res = await fetchFn("/api/orgs").catch(() => undefined);
+      return res?.ok ? ((await res.json()) as MyOrg[]) : [];
     },
 
     async editOrg(orgId: string, change: { name?: string } & ColorChange): Promise<MyOrg | undefined> {
