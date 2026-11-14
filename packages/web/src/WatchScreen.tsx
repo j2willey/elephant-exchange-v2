@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useParams } from "react-router";
 import { renderSVG } from "uqr";
+import { Countdown } from "./Countdown.js";
 import { Gifts } from "./GamePage.js";
 import { useLiveGame } from "./useLiveGame.js";
 
@@ -35,6 +36,9 @@ export function WatchScreen() {
             {game.phase === "finalRound" && <h2 className="label">Final Round</h2>}
             <p className="label">Up now</p>
             <p className="big">{game.active.map(nameOf).join(", ") || "—"}</p>
+            {game.active.map((playerId) => (
+              <Countdown key={playerId} game={game} playerId={playerId} name={nameOf(playerId)} />
+            ))}
           </section>
           <section className="card">
             <p className="label">On deck</p>

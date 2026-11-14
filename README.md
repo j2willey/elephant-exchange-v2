@@ -16,8 +16,9 @@ This is v2, a full rewrite of [v1](https://github.com/j2willey/Elephant-Exchange
 - **My Games:** each person's home screen lists the Games they run.
 - **Joining from the QR code:** anyone can follow a Game without signing in. In a Self sign-up Game, people can add themselves as Players from their phones, even after the Game has started. The sign-in link brings them straight back to the Game.
 - **Stars:** anyone following on a phone can Star the Gifts they'd like to steal; Starred Gifts move to the top of their list. Stars stay on that phone and are never sent anywhere.
+- **The turn timer:** a countdown for each Player who's up, set per Game (60 seconds by default), on the Host's page and the big screen. It turns amber at 30 seconds and red at 10. It's a guide only: nobody is skipped automatically, and the Host can reset it. Screens count against the server's clock, so a phone set to the wrong time still agrees with the room.
 
-Coming before launch: the turn timer, Comments and Photos with Moderation, the Worst Gift Vote, and Organization Themes. The words used throughout (Turn, Pick, Victim, Frozen and so on) are defined in [CONTEXT.md](CONTEXT.md).
+Coming before launch: Comments and Photos with Moderation, the Worst Gift Vote, and Organization Themes. The words used throughout (Turn, Pick, Victim, Frozen and so on) are defined in [CONTEXT.md](CONTEXT.md).
 
 ## How it's built
 

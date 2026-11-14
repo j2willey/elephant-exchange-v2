@@ -11,6 +11,9 @@ const noDraws: DrawFn = () => {
   throw new Error("replay must not draw");
 };
 
+/** One moment for both servers, so a Game fetched from each can be compared whole (it carries the server's time). */
+const fixedNow = () => new Date(Date.UTC(2026, 11, 13, 19, 0, 0));
+
 describe("Surviving a restart", () => {
   let dir: string;
   beforeEach(() => {
@@ -21,7 +24,7 @@ describe("Surviving a restart", () => {
   it("a new server on the same database shows every Game exactly as it was, and play carries on", async () => {
     const dbPath = join(dir, "games.db");
     const { sent, mailer } = capturingMailer();
-    const first = createServer({ dbPath, mailer, draw: scriptedDraw(["ann", "bob", "cat"]) });
+    const first = createServer({ dbPath, mailer, now: fixedNow, draw: scriptedDraw(["ann", "bob", "cat"]) });
     const { id, cookie } = await hostGame(first.app, sent);
     const send = (app: typeof first.app, command: unknown) => app.request(`/api/games/${id}/commands`, post(command, cookie));
 
@@ -35,7 +38,7 @@ describe("Surviving a restart", () => {
     await send(first.app, { type: "Undo" });
     const before = await (await first.app.request(`/api/games/${id}`)).json();
 
-    const second = createServer({ dbPath, mailer, draw: noDraws });
+    const second = createServer({ dbPath, mailer, now: fixedNow, draw: noDraws });
     expect(await (await second.app.request(`/api/games/${id}`)).json()).toEqual(before);
 
     // The Host is still signed in, and Ann still holds the floor after the Undo: she opens a different Gift.
@@ -52,7 +55,7 @@ describe("Surviving a restart", () => {
   it("refused commands leave nothing in the log", async () => {
     const dbPath = join(dir, "games.db");
     const { sent, mailer } = capturingMailer();
-    const first = createServer({ dbPath, mailer, draw: scriptedDraw(["ann", "bob"]) });
+    const first = createServer({ dbPath, mailer, now: fixedNow, draw: scriptedDraw(["ann", "bob"]) });
     const { id, cookie } = await hostGame(first.app, sent);
     const send = (command: unknown) => first.app.request(`/api/games/${id}/commands`, post(command, cookie));
     await send({ type: "AddPlayer", playerId: "ann", name: "Ann" });
@@ -61,7 +64,7 @@ describe("Surviving a restart", () => {
     expect((await send({ type: "OpenGift", playerId: "bob", giftId: "g1", name: "Socks" })).status).toBe(409);
     const before = await (await first.app.request(`/api/games/${id}`)).json();
 
-    const second = createServer({ dbPath, mailer, draw: noDraws });
+    const second = createServer({ dbPath, mailer, now: fixedNow, draw: noDraws });
     expect(await (await second.app.request(`/api/games/${id}`)).json()).toEqual(before);
   });
 });

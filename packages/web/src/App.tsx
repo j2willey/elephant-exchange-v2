@@ -107,6 +107,7 @@ function NewGame() {
   const [rosterMode, setRosterMode] = useState<RosterMode>("host");
   const [slots, setSlots] = useState("1");
   const [steals, setSteals] = useState("3");
+  const [turnSeconds, setTurnSeconds] = useState("60");
   const [failed, setFailed] = useState(false);
 
   if (!open) return <button onClick={() => setOpen(true)}>New Game</button>;
@@ -114,7 +115,7 @@ function NewGame() {
   async function submit(e: FormEvent) {
     e.preventDefault();
     try {
-      const id = await api.createGame({ activeSlots: Number(slots), maxSteals: Number(steals) }, name.trim(), rosterMode);
+      const id = await api.createGame({ activeSlots: Number(slots), maxSteals: Number(steals) }, name.trim(), rosterMode, Number(turnSeconds));
       navigate(`/games/${id}`);
     } catch {
       setFailed(true);
@@ -130,6 +131,21 @@ function NewGame() {
       <input id="slots" type="number" inputMode="numeric" min={1} max={10} required value={slots} onChange={(e) => setSlots(e.target.value)} />
       <label htmlFor="steals">Steals before a Gift is Frozen</label>
       <input id="steals" type="number" inputMode="numeric" min={0} max={20} required value={steals} onChange={(e) => setSteals(e.target.value)} />
+      <label htmlFor="turn-seconds">Seconds per turn</label>
+      <input
+        id="turn-seconds"
+        type="number"
+        inputMode="numeric"
+        min={0}
+        max={600}
+        required
+        aria-describedby="turn-seconds-hint"
+        value={turnSeconds}
+        onChange={(e) => setTurnSeconds(e.target.value)}
+      />
+      <p id="turn-seconds-hint" className="muted hint">
+        A countdown to keep things moving. Nobody is skipped when it runs out. 0 for none.
+      </p>
       <fieldset className="choices">
         <legend>Who adds the Players?</legend>
         <label>

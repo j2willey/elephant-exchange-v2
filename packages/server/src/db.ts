@@ -11,6 +11,8 @@ export const games = sqliteTable("games", {
   name: text("name").notNull().default("Gift exchange"),
   /** Who adds Players: only the Host and Co-hosts ("host"), or people themselves from their phones too ("self"). */
   rosterMode: text("roster_mode", { enum: ["host", "self"] }).notNull().default("host"),
+  /** How long each Turn's countdown runs, as a guide for the Host; 0 shows no timer. Nobody is ever skipped by it. */
+  turnSeconds: integer("turn_seconds").notNull().default(60),
   /** The GameSettings the Game was created with (JSON); later changes are SettingsChanged events. */
   settings: text("settings").notNull(),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
@@ -87,6 +89,22 @@ export const gamePlayers = sqliteTable(
     email: text("email").notNull(),
   },
   (t) => [primaryKey({ columns: [t.gameId, t.playerId] }), uniqueIndex("game_players_person").on(t.gameId, t.email)],
+);
+
+/**
+ * When each Player who's up now was called up (or their timer last reset), for the turn timer. Kept beside the
+ * log rather than in it: the timer is only a guide and changes nothing in the Game.
+ */
+export const turnClocks = sqliteTable(
+  "turn_clocks",
+  {
+    gameId: text("game_id")
+      .notNull()
+      .references(() => games.id),
+    playerId: text("player_id").notNull(),
+    startedAt: integer("started_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.gameId, t.playerId] })],
 );
 
 /** Opens the database, bringing its tables up to date with any migrations it hasn't had yet. */

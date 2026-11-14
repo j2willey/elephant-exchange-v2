@@ -24,8 +24,8 @@ import {
 import { Server as SocketServer } from "socket.io";
 import type { z } from "zod";
 import { createAuth, DEFAULT_LIMITS, logMailer, SESSION_LIFETIME_MS, type LinkLimits, type Mailer } from "./auth.js";
-import { gameEvents, gameHosts, gamePlayers, games, openDb, type Tx } from "./db.js";
-import { cohostBody, command, createGameBody, joinBody, linkRedemption, linkRequest } from "./schemas.js";
+import { gameEvents, gameHosts, gamePlayers, games, openDb, turnClocks, type Tx } from "./db.js";
+import { cohostBody, command, createGameBody, joinBody, linkRedemption, linkRequest, timerBody } from "./schemas.js";
 
 export type { Mailer } from "./auth.js";
 
@@ -57,16 +57,21 @@ const randomDraw: DrawFn = (candidates) => candidates[randomInt(candidates.lengt
 interface LoadedGame {
   name: string;
   rosterMode: "host" | "self";
+  turnSeconds: number;
+  /** When each Player who's up was called up, or had their timer reset (ms since 1970). */
+  clocks: ReadonlyMap<string, number>;
   state: GameState;
   seq: number;
 }
 
 /** What screens are shown about a Game: answers from the rules module, never its internal state. */
-function view(id: string, { name, rosterMode, state, seq }: LoadedGame) {
+function view(id: string, { name, rosterMode, turnSeconds, clocks, state, seq }: LoadedGame, now: Date) {
   return {
     id,
     name,
     rosterMode,
+    /** The turn timer. `now` is the server's time, so a screen can count down correctly even if its own clock is off. */
+    clock: { now: now.getTime(), turnSeconds, startedAt: Object.fromEntries(clocks) },
     /** Rises with every change (it counts the Game's logged events), so a screen keeps the newest copy it has seen. */
     version: seq,
     phase: phase(state),
@@ -126,7 +131,15 @@ export function createServer({
     const log = db.select().from(gameEvents).where(eq(gameEvents.gameId, id)).orderBy(asc(gameEvents.seq)).all();
     // Replaying the log never draws: every Draw was logged as a PlayerDrawn event (ADR-0001).
     const state = log.map((e) => JSON.parse(e.event) as Event).reduce(evolve, newGame(JSON.parse(row.settings) as GameSettings));
-    const game: LoadedGame = { name: row.name, rosterMode: row.rosterMode, state, seq: log.length };
+    const clocks = db.select().from(turnClocks).where(eq(turnClocks.gameId, id)).all();
+    const game: LoadedGame = {
+      name: row.name,
+      rosterMode: row.rosterMode,
+      turnSeconds: row.turnSeconds,
+      clocks: new Map(clocks.map((c) => [c.playerId, c.startedAt.getTime()])),
+      state,
+      seq: log.length,
+    };
     cache.set(id, game);
     return game;
   }
@@ -150,15 +163,25 @@ export function createServer({
     const result = decide(game.state, cmd, draw);
     if (!Array.isArray(result)) return result;
     const at = now();
+    const state = result.reduce(evolve, game.state);
+    // A Player's clock starts when they're called up (a Victim's too) and goes once they're no longer up.
+    const clocks = new Map<string, number>();
+    for (const playerId of activePlayers(state)) clocks.set(playerId, game.clocks.get(playerId) ?? at.getTime());
     db.transaction((tx) => {
       result.forEach((event, i) => {
         tx.insert(gameEvents).values({ gameId: id, seq: game.seq + i + 1, event: JSON.stringify(event), createdAt: at }).run();
       });
+      tx.delete(turnClocks).where(eq(turnClocks.gameId, id)).run();
+      for (const [playerId, ms] of clocks) tx.insert(turnClocks).values({ gameId: id, playerId, startedAt: new Date(ms) }).run();
       alsoWrite?.(tx);
     });
-    const next = { ...game, state: result.reduce(evolve, game.state), seq: game.seq + result.length };
+    return publish(id, { ...game, clocks, state, seq: game.seq + result.length });
+  }
+
+  /** Keeps the Game's new copy and sends it to every screen watching. */
+  function publish(id: string, next: LoadedGame) {
     cache.set(id, next);
-    const shown = view(id, next);
+    const shown = view(id, next, now());
     io?.to(id).emit("game", shown);
     return shown;
   }
@@ -218,7 +241,7 @@ export function createServer({
     // 16 random bytes: unguessable, so a Game can't be found without its link or QR code.
     const id = randomBytes(16).toString("base64url");
     db.transaction((tx) => {
-      tx.insert(games).values({ id, name: body.data.name, rosterMode: body.data.rosterMode, settings: JSON.stringify(body.data.settings), createdAt: now() }).run();
+      tx.insert(games).values({ id, name: body.data.name, rosterMode: body.data.rosterMode, turnSeconds: body.data.turnSeconds, settings: JSON.stringify(body.data.settings), createdAt: now() }).run();
       tx.insert(gameHosts).values({ gameId: id, email, role: "host" }).run();
     });
     return c.json({ id }, 201);
@@ -262,7 +285,7 @@ export function createServer({
     // Only this answer says who is asking: live updates go to everyone watching, so they never carry a role.
     const email = signedInAs(c);
     const playerId = email ? playerOf(id, email, game) : undefined;
-    return c.json({ ...view(id, game), role: (email && roleIn(id, email)) ?? null, me: playerId ? { playerId } : null });
+    return c.json({ ...view(id, game, now()), role: (email && roleIn(id, email)) ?? null, me: playerId ? { playerId } : null });
   });
 
   app.post("/api/games/:id/commands", async (c) => {
@@ -277,6 +300,28 @@ export function createServer({
 
     const result = run(id, game, body.data);
     return "code" in result ? c.json(result, 409) : c.json(result);
+  });
+
+  // The Host restarts a Player's countdown, say after explaining the rules. Not a Pick: it isn't logged or undone.
+  app.post("/api/games/:id/timer", async (c) => {
+    const id = c.req.param("id");
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const body = await parseBody(c, timerBody);
+    if (!body.ok) return body.res;
+    const game = load(id);
+    if (!game) return c.json({ error: "Game not found" }, 404);
+    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can run this Game" }, 403);
+    const { playerId } = body.data;
+    if (!game.clocks.has(playerId)) return c.json({ code: "NotActive", message: "That Player isn't up" }, 409);
+
+    const at = now();
+    db.update(turnClocks)
+      .set({ startedAt: at })
+      .where(and(eq(turnClocks.gameId, id), eq(turnClocks.playerId, playerId)))
+      .run();
+    // The version doesn't change, since the Game didn't: screens take a copy at the same version as the newer one.
+    return c.json(publish(id, { ...game, clocks: new Map(game.clocks).set(playerId, at.getTime()) }));
   });
 
   // A person adds themselves as a Player, in a Self sign-up Game. The server picks the Player's id and
@@ -328,7 +373,7 @@ export function createServer({
       sockets.on("connection", (socket) => {
         const gameId = socket.handshake.auth["gameId"] as string;
         void socket.join(gameId);
-        socket.emit("game", view(gameId, load(gameId)!));
+        socket.emit("game", view(gameId, load(gameId)!, now()));
       });
     });
   }

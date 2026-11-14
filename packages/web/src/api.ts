@@ -8,6 +8,8 @@ export interface GameView {
   name: string;
   /** Who adds Players: only the Host and Co-hosts, or people themselves from their phones too. */
   rosterMode: RosterMode;
+  /** The turn timer: the server's time when sent, the countdown's length (0: no timer), and when each Player up was called. */
+  clock: { now: number; turnSeconds: number; startedAt: Record<string, number> };
   /** Rises with every change; the newest copy wins. */
   version: number;
   phase: Phase;
@@ -54,6 +56,8 @@ export interface ApiOptions {
   transports?: ("polling" | "websocket")[];
   /** What's kept on this device (Stars); the browser's localStorage when left out. */
   storage?: DeviceStorage;
+  /** This device's clock (ms since 1970), which may be wrong; Date.now when left out. */
+  now?: () => number;
 }
 
 export type DeviceStorage = Pick<Storage, "getItem" | "setItem">;
@@ -86,6 +90,7 @@ function browserStorage(): DeviceStorage {
 export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, init), options: ApiOptions = {}) {
   const storage = options.storage ?? browserStorage();
   const starsKey = (gameId: string) => `stars:${gameId}`;
+  const now = options.now ?? (() => Date.now());
 
   const postJson = (path: string, body?: unknown) =>
     fetchFn(path, {
@@ -94,6 +99,9 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
     });
 
   return {
+    /** This device's clock. */
+    now,
+
     /** Who is signed in on this browser, if anyone. */
     async session(): Promise<{ email: string } | undefined> {
       const res = await fetchFn("/api/session");
@@ -123,8 +131,13 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
       await postJson("/api/auth/sign-out");
     },
 
-    async createGame(settings: GameSettings, name?: string, rosterMode?: RosterMode): Promise<string> {
-      const res = await postJson("/api/games", { settings, ...(name === undefined ? {} : { name }), ...(rosterMode ? { rosterMode } : {}) });
+    async createGame(settings: GameSettings, name?: string, rosterMode?: RosterMode, turnSeconds?: number): Promise<string> {
+      const res = await postJson("/api/games", {
+        settings,
+        ...(name === undefined ? {} : { name }),
+        ...(rosterMode ? { rosterMode } : {}),
+        ...(turnSeconds === undefined ? {} : { turnSeconds }),
+      });
       if (res.status !== 201) throw new Error(`creating a Game failed: ${res.status}`);
       return ((await res.json()) as { id: string }).id;
     },
@@ -191,6 +204,12 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
 
     setStars(gameId: string, giftIds: string[]): void {
       storage.setItem(starsKey(gameId), JSON.stringify(giftIds));
+    },
+
+    /** Restarts a Player's countdown; the Game as it now stands, or undefined if that didn't work. */
+    async resetTimer(gameId: string, playerId: string): Promise<SharedGame | undefined> {
+      const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/timer`, { playerId });
+      return res.ok ? ((await res.json()) as SharedGame) : undefined;
     },
 
     async command(gameId: string, command: Command): Promise<CommandResult> {

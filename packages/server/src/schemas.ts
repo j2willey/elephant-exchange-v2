@@ -12,7 +12,14 @@ export const gameSettings = z.strictObject({ activeSlots, maxSteals }) satisfies
 
 export const rosterMode = z.enum(["host", "self"]);
 
-export const createGameBody = z.object({ name: name.default("Gift exchange"), rosterMode: rosterMode.default("host"), settings: gameSettings });
+export const createGameBody = z.object({
+  name: name.default("Gift exchange"),
+  rosterMode: rosterMode.default("host"),
+  turnSeconds: z.int().min(0).max(600).default(60),
+  settings: gameSettings,
+});
+
+export const timerBody = z.object({ playerId: id });
 
 export const joinBody = z.object({ name });
 

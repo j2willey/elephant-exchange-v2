@@ -11,7 +11,23 @@ import { AppRoutes } from "../src/App.js";
 const running: (() => Promise<void>)[] = [];
 afterEach(async () => {
   for (const close of running.splice(0)) await close();
+  clock.reset();
 });
+
+/**
+ * The time, as the server and every test browser see it: it stands still until a test moves it on.
+ * Each browser's clock can be set wrong by some amount, as a phone's can be.
+ */
+export const clock = {
+  ms: Date.UTC(2026, 11, 13, 19, 0, 0),
+  now: () => new Date(clock.ms),
+  advance(seconds: number) {
+    clock.ms += seconds * 1000;
+  },
+  reset() {
+    clock.ms = Date.UTC(2026, 11, 13, 19, 0, 0);
+  },
+};
 
 /** Starts the real server, in memory on a free port. Sign-in links are kept in `sent` instead of emailed. */
 export async function startServer(options: { draw?: DrawFn } = {}) {
@@ -21,7 +37,7 @@ export async function startServer(options: { draw?: DrawFn } = {}) {
       sent.push({ email, url });
     },
   };
-  const server = createServer({ dbPath: ":memory:", mailer, baseUrl: "http://app.test", ...options });
+  const server = createServer({ dbPath: ":memory:", mailer, baseUrl: "http://app.test", now: clock.now, ...options });
   const { port, close } = await server.listen(0);
   running.push(close);
   /** The path (with its token) of the latest link emailed to this address, as the app would be opened at. */
@@ -50,7 +66,7 @@ export const drawInOrder: DrawFn = (candidates) => candidates[0]!;
  * One person's browser: requests go to the server and cookies are kept between them, as a browser would.
  * Rendering the app again with the same browser is like reloading the page; its Stars are kept too.
  */
-export function browser(origin: string): Api {
+export function browser(origin: string, { clockWrongBy = 0 }: { clockWrongBy?: number } = {}): Api {
   const jar = new Map<string, string>();
   const fetchWithCookies: typeof fetch = async (input, init) => {
     const headers = new Headers(init?.headers);
@@ -68,7 +84,7 @@ export function browser(origin: string): Api {
   // Each browser has its own device storage, as two phones would.
   const kept = new Map<string, string>();
   const storage = { getItem: (key: string) => kept.get(key) ?? null, setItem: (key: string, value: string) => void kept.set(key, value) };
-  return createApi(fetchWithCookies, { socketOrigin: origin, transports: ["websocket"], storage });
+  return createApi(fetchWithCookies, { socketOrigin: origin, transports: ["websocket"], storage, now: () => clock.ms + clockWrongBy * 1000 });
 }
 
 /** Opens the app at this path in this browser. */

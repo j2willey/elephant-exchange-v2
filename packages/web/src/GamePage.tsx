@@ -3,6 +3,7 @@ import { Link, useLocation, useParams } from "react-router";
 import type { Command } from "@elephant/rules";
 import type { CommandResult, GameView, SharedGame, Viewer } from "./api.js";
 import { useApi } from "./ApiContext.js";
+import { Countdown } from "./Countdown.js";
 import { SignInForm } from "./SignIn.js";
 import { useLiveGame } from "./useLiveGame.js";
 
@@ -76,7 +77,18 @@ export function GamePage() {
 
       {runs &&
         (game.phase === "playing" || game.phase === "finalRound") &&
-        game.active.map((playerId) => <Turn key={playerId} game={game} playerId={playerId} send={send} />)}
+        game.active.map((playerId) => (
+          <Turn
+            key={playerId}
+            game={game}
+            playerId={playerId}
+            send={send}
+            resetTimer={async () => {
+              const next = await api.resetTimer(game.id, playerId);
+              if (next) accept(next);
+            }}
+          />
+        ))}
 
       {runs && game.phase === "playing" && game.active.length === 0 && game.gifts.length > 0 && (
         <FinalRoundPanel game={game} send={send} />
@@ -241,7 +253,17 @@ function plainWords(result: Extract<CommandResult, { ok: false }>): string {
 }
 
 /** One active Player's Turn: open a Gift, steal one, or skip them. In the Final Round: keep, steal, or take. */
-function Turn({ game, playerId, send }: { game: GameView; playerId: string; send: (c: Command) => Promise<void> }) {
+function Turn({
+  game,
+  playerId,
+  send,
+  resetTimer,
+}: {
+  game: GameView;
+  playerId: string;
+  send: (c: Command) => Promise<void>;
+  resetTimer: () => Promise<void>;
+}) {
   const name = game.players.find((p) => p.id === playerId)?.name ?? "?";
   const [gift, setGift] = useState("");
   const holderName = (id: string | null) => game.players.find((p) => p.id === id)?.name ?? "?";
@@ -261,7 +283,10 @@ function Turn({ game, playerId, send }: { game: GameView; playerId: string; send
 
   return (
     <section className="card turn" aria-label={final ? `${name}'s final turn` : `${name}'s turn`}>
-      <h2>{final ? `${name}'s final turn` : `${name}'s turn`}</h2>
+      <div className="turn-head">
+        <h2>{final ? `${name}'s final turn` : `${name}'s turn`}</h2>
+        <Countdown game={game} playerId={playerId} name={name} />
+      </div>
       {final && held && (
         <button onClick={() => send({ type: "KeepGift", playerId })}>Keep {held.name}</button>
       )}
@@ -303,11 +328,18 @@ function Turn({ game, playerId, send }: { game: GameView; playerId: string; send
           ))}
         </div>
       )}
-      {!final && (
-        <button className="link" onClick={() => send({ type: "Skip", playerId })}>
-          Skip {name}
-        </button>
-      )}
+      <div className="inline">
+        {!final && (
+          <button className="link" onClick={() => send({ type: "Skip", playerId })}>
+            Skip {name}
+          </button>
+        )}
+        {game.clock.turnSeconds > 0 && (
+          <button className="link" aria-label={`Reset ${name}'s timer`} onClick={() => void resetTimer()}>
+            Reset timer
+          </button>
+        )}
+      </div>
     </section>
   );
 }
