@@ -34,6 +34,9 @@ export const users = sqliteTable("users", {
 export const signInLinks = sqliteTable("sign_in_links", {
   tokenHash: text("token_hash").primaryKey(),
   email: text("email").notNull(),
+  /** When and from where it was asked for: the rate limits count these. */
+  requestedAt: integer("requested_at", { mode: "timestamp_ms" }).notNull(),
+  clientIp: text("client_ip").notNull(),
   expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
   usedAt: integer("used_at", { mode: "timestamp_ms" }),
 });
@@ -84,9 +87,12 @@ export function openDb(path: string) {
     CREATE TABLE IF NOT EXISTS sign_in_links (
       token_hash TEXT PRIMARY KEY,
       email TEXT NOT NULL,
+      requested_at INTEGER NOT NULL,
+      client_ip TEXT NOT NULL,
       expires_at INTEGER NOT NULL,
       used_at INTEGER
     );
+    CREATE INDEX IF NOT EXISTS sign_in_links_requested_at ON sign_in_links (requested_at);
     CREATE TABLE IF NOT EXISTS sessions (
       token_hash TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id),

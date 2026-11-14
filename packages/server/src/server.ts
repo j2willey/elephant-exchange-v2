@@ -1,6 +1,7 @@
 import { randomBytes, randomInt } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import { serve } from "@hono/node-server";
+import { getConnInfo } from "@hono/node-server/conninfo";
 import { and, asc, eq } from "drizzle-orm";
 import { Hono, type Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
@@ -20,7 +21,7 @@ import {
 } from "@elephant/rules";
 import { Server as SocketServer } from "socket.io";
 import type { z } from "zod";
-import { createAuth, logMailer, SESSION_LIFETIME_MS, type Mailer } from "./auth.js";
+import { createAuth, DEFAULT_LIMITS, logMailer, SESSION_LIFETIME_MS, type LinkLimits, type Mailer } from "./auth.js";
 import { gameEvents, gameHosts, games, openDb } from "./db.js";
 import { cohostBody, command, createGameBody, linkRedemption, linkRequest } from "./schemas.js";
 
@@ -39,6 +40,13 @@ export interface ServerOptions {
   now?: () => Date;
   /** Where the web app is served; sign-in links point at its sign-in page. */
   baseUrl?: string;
+  /** Limits on emailing sign-in links; any left out take their defaults. */
+  limits?: Partial<LinkLimits>;
+  /**
+   * True when a reverse proxy (Caddy on the droplet) sits in front and sets X-Forwarded-For. Only then is
+   * that header believed: otherwise a client could forge it to dodge the per-IP limit.
+   */
+  trustProxy?: boolean;
 }
 
 const randomDraw: DrawFn = (candidates) => candidates[randomInt(candidates.length)]!;
@@ -70,9 +78,24 @@ export function createServer({
   mailer = logMailer,
   now = () => new Date(),
   baseUrl = "http://localhost:3000",
+  limits = {},
+  trustProxy = false,
 }: ServerOptions) {
   const db = openDb(dbPath);
-  const auth = createAuth(db, now);
+  const auth = createAuth(db, now, { ...DEFAULT_LIMITS, ...limits });
+
+  function clientIp(c: Context): string {
+    if (trustProxy) {
+      // The proxy appends the address it saw; anything to the left of that came from the client and could be forged.
+      const forwarded = c.req.header("x-forwarded-for")?.split(",").at(-1)?.trim();
+      if (forwarded) return forwarded;
+    }
+    try {
+      return getConnInfo(c).remote.address ?? "unknown";
+    } catch {
+      return "unknown"; // no socket, as in app.request() tests
+    }
+  }
   const signedInAs = (c: Context) => auth.sessionEmail(getCookie(c, SESSION_COOKIE));
   const roleIn = (gameId: string, email: string) =>
     db.select().from(gameHosts).where(and(eq(gameHosts.gameId, gameId), eq(gameHosts.email, email))).get()?.role;
@@ -101,7 +124,8 @@ export function createServer({
   app.post("/api/auth/link", async (c) => {
     const body = await parseBody(c, linkRequest);
     if (!body.ok) return body.res;
-    const token = auth.issueLink(body.data.email);
+    const token = auth.issueLink(body.data.email, clientIp(c));
+    if (!token) return c.json({ error: "Too many sign-in links asked for; try again in a few minutes" }, 429);
     // The link opens the web app's sign-in page, which redeems it with a POST. A GET that signed people in
     // would be used up by email scanners (such as Outlook Safe Links) that open every link to check it.
     await mailer.sendSignInLink(body.data.email, `${baseUrl}/sign-in?token=${token}`);

@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, count, eq, gt, isNull, type SQL } from "drizzle-orm";
 import { users, sessions, signInLinks, type Db } from "./db.js";
 
 /** Sends sign-in links. Resend in production; tests capture the links instead. */
@@ -17,17 +17,47 @@ export const logMailer: Mailer = {
 export const LINK_LIFETIME_MS = 15 * 60_000;
 export const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60_000;
 
+/** How many sign-in links may be emailed. Every email costs quota, and links can be asked for any address. */
+export interface LinkLimits {
+  /** To one address in 15 minutes: stops anyone flooding someone's inbox. */
+  perEmail: number;
+  /** From one client IP in an hour. Generous: a whole party may share the venue's Wi-Fi. */
+  perIp: number;
+  /** In all, in 24 hours: protects the email quota (Resend's free plan allows 100 a day). */
+  perDay: number;
+}
+
+export const DEFAULT_LIMITS: LinkLimits = { perEmail: 3, perIp: 120, perDay: 100 };
+
+const MINUTE = 60_000;
+
 /** 32 random bytes: far beyond guessing. */
 const newToken = () => randomBytes(32).toString("base64url");
 const hash = (token: string) => createHash("sha256").update(token).digest("hex");
 
-export function createAuth(db: Db, now: () => Date) {
+export function createAuth(db: Db, now: () => Date, limits: LinkLimits) {
+  /** Links asked for in the last `minutes` that match the condition. */
+  const recent = (minutes: number, where?: SQL) =>
+    db
+      .select({ n: count() })
+      .from(signInLinks)
+      .where(and(gt(signInLinks.requestedAt, new Date(now().getTime() - minutes * MINUTE)), where))
+      .get()!.n;
+
   return {
-    /** Records a new sign-in link for this email and returns its token. */
-    issueLink(email: string): string {
+    /** Records a new sign-in link and returns its token, or undefined if a limit has been reached. */
+    issueLink(email: string, clientIp: string): string | undefined {
+      if (
+        recent(15, eq(signInLinks.email, email)) >= limits.perEmail ||
+        recent(60, eq(signInLinks.clientIp, clientIp)) >= limits.perIp ||
+        recent(24 * 60) >= limits.perDay
+      ) {
+        return undefined;
+      }
       const token = newToken();
+      const at = now();
       db.insert(signInLinks)
-        .values({ tokenHash: hash(token), email, expiresAt: new Date(now().getTime() + LINK_LIFETIME_MS) })
+        .values({ tokenHash: hash(token), email, clientIp, requestedAt: at, expiresAt: new Date(at.getTime() + LINK_LIFETIME_MS) })
         .run();
       return token;
     },
