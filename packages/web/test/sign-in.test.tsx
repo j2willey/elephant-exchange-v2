@@ -1,0 +1,83 @@
+import { screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it } from "vitest";
+import { browser, openApp, startServer } from "./harness.js";
+
+async function askForLink(email: string) {
+  const user = userEvent.setup();
+  await user.type(await screen.findByLabelText(/email/i), email);
+  await user.click(screen.getByRole("button", { name: /send.*link/i }));
+}
+
+describe("Signing in", () => {
+  it("asks a signed-out visitor for their email, then tells them to check it", async () => {
+    const { origin, sent } = await startServer();
+    openApp(browser(origin));
+
+    await askForLink("ann@example.com");
+
+    expect(await screen.findByText(/check your email/i)).toBeInTheDocument();
+    expect(sent.map((m) => m.email)).toEqual(["ann@example.com"]);
+  });
+
+  it("signs the Host in from the emailed link, and they stay signed in", async () => {
+    const { origin, linkFor } = await startServer();
+    const ann = browser(origin);
+    openApp(ann);
+    await askForLink("ann@example.com");
+    await screen.findByText(/check your email/i);
+
+    const { unmount } = openApp(ann, linkFor("ann@example.com"));
+    expect(await screen.findByText(/signed in as ann@example\.com/i)).toBeInTheDocument();
+    unmount();
+
+    openApp(ann); // reloading the app
+    expect(await screen.findByText(/signed in as ann@example\.com/i)).toBeInTheDocument();
+  });
+
+  it("says when a link has already been used, and offers to send a new one", async () => {
+    const { origin, linkFor } = await startServer();
+    const ann = browser(origin);
+    openApp(ann);
+    await askForLink("ann@example.com");
+    await screen.findByText(/check your email/i);
+    const link = linkFor("ann@example.com");
+    const first = openApp(ann, link);
+    await screen.findByText(/signed in as/i);
+    first.unmount();
+
+    openApp(browser(origin), link); // someone opening the same link again, on another phone
+
+    expect(await screen.findByText(/link has already been used or has expired/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+  });
+
+  it("treats a link with no token as one that doesn't work", async () => {
+    const { origin } = await startServer();
+    openApp(browser(origin), "/sign-in");
+    expect(await screen.findByText(/link has already been used or has expired/i)).toBeInTheDocument();
+  });
+
+  it("explains when too many links have been asked for", async () => {
+    const { origin } = await startServer();
+    for (let i = 0; i < 3; i++) await browser(origin).requestLink("ann@example.com");
+    openApp(browser(origin));
+
+    await askForLink("ann@example.com");
+
+    expect(await screen.findByText(/too many/i)).toBeInTheDocument();
+  });
+
+  it("signs out, back to the sign-in form", async () => {
+    const { origin, linkFor } = await startServer();
+    const ann = browser(origin);
+    await ann.requestLink("ann@example.com");
+    openApp(ann, linkFor("ann@example.com"));
+    await screen.findByText(/signed in as/i);
+
+    await userEvent.setup().click(screen.getByRole("button", { name: /sign out/i }));
+
+    expect(await screen.findByLabelText(/email/i)).toBeInTheDocument();
+    expect(await ann.session()).toBeUndefined();
+  });
+});
