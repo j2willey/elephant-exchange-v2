@@ -7,6 +7,8 @@ sharp.cache(false);
 
 /** The longest side a stored Photo may have: plenty for a phone or the big screen. */
 export const PHOTO_MAX_SIDE = 1600;
+/** Photos are deleted this long after their Game's last move (see CONTEXT.md: Photo). */
+export const PHOTO_KEEP_DAYS = 60;
 /** The most a Photo upload may weigh. Phones shrink Photos before sending, so this is only for when they can't. */
 export const PHOTO_MAX_BYTES = 12 * 1024 * 1024;
 

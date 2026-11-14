@@ -108,7 +108,7 @@ Something a signed-in Player or Guest shares during a Game: a few words, a Photo
 _Avoid_: Comment (as a separate thing), message
 
 **Photo**:
-A picture attached to a Post, at most one per Post. It is deleted 60 days after the Game; the Host can download them all first.
+A picture attached to a Post, at most one per Post; a Post may be just a Photo. Photos are deleted 60 days after the Game's last move (whether it ended or was left unfinished): a Post that was only a Photo goes with it, and one with words keeps them. Before then the Host or a Co-host can download the **Album**: every visible Photo, with who posted it and what they said.
 
 **Feed**:
 All of a Game's visible Posts, newest first, on phones and the big screen.

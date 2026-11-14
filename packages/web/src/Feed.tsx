@@ -74,6 +74,14 @@ export function Feed({
           ))}
         </fieldset>
       )}
+      {hosting && (
+        <p className="album">
+          <a href={`/api/games/${encodeURIComponent(game.id)}/album.zip`} download>
+            Download all the Photos
+          </a>{" "}
+          <span className="muted hint">(a .zip). Photos are deleted 60 days after the Game's last move, so keep a copy.</span>
+        </p>
+      )}
       {game.phase !== "ended" && <Composer game={game} onPosted={reload} offerSignIn={offerSignIn} />}
       <div role="feed" aria-label="Feed" className="feed">
         {posts.length === 0 && <p className="muted">No Posts yet.</p>}

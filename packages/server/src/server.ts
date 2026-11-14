@@ -6,7 +6,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { and, asc, desc, eq, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, or, sql } from "drizzle-orm";
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
@@ -29,7 +29,8 @@ import {
 import { Server as SocketServer } from "socket.io";
 import type { z } from "zod";
 import { createAuth, DEFAULT_LIMITS, logMailer, SESSION_LIFETIME_MS, type LinkLimits, type Mailer } from "./auth.js";
-import { PHOTO_MAX_BYTES, photoStore, preparePhoto } from "./photos.js";
+import { PHOTO_KEEP_DAYS, PHOTO_MAX_BYTES, photoStore, preparePhoto } from "./photos.js";
+import { zip } from "./zip.js";
 import { gameEvents, gameHosts, gamePlayers, games, openDb, posts, turnClocks, type Tx } from "./db.js";
 import {
   cohostBody,
@@ -112,6 +113,14 @@ function view(id: string, { name, rosterMode, moderation, turnSeconds, clocks, s
 }
 
 /** Reads and checks a JSON body; on failure, the 400 response to send instead. */
+/** A name made safe for a file name: letters, digits and single dashes. */
+const fileSafe = (name: string) =>
+  name
+    .normalize("NFKD")
+    .replace(/[^A-Za-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+
 async function parseBody<T>(c: Context, schema: z.ZodType<T>): Promise<{ ok: true; data: T } | { ok: false; res: Response }> {
   const raw: unknown = await c.req.json().catch(() => undefined);
   const parsed = schema.safeParse(raw);
@@ -467,6 +476,40 @@ export function createServer({
     return c.body(null, 201);
   });
 
+  // Every visible Photo in one zip, for the Host to keep before they're deleted (hidden ones stay out).
+  app.get("/api/games/:id/album.zip", (c) => {
+    const id = c.req.param("id");
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const game = load(id);
+    if (!game) return c.json({ error: "Game not found" }, 404);
+    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can download the album" }, 403);
+
+    const rows = db
+      .select()
+      .from(posts)
+      .where(and(eq(posts.gameId, id), eq(posts.status, "visible"), isNotNull(posts.photoWidth)))
+      .orderBy(asc(posts.createdAt), asc(sql`${posts}.rowid`))
+      .all();
+    const digits = Math.max(2, String(rows.length).length);
+    const files: { name: string; data: Uint8Array }[] = [];
+    const captions: string[] = [];
+    rows.forEach((p, i) => {
+      const data = photos.read(p.gameId, p.id);
+      if (!data) return;
+      const name = `${String(i + 1).padStart(digits, "0")}-${fileSafe(p.author) || "photo"}.jpg`;
+      files.push({ name, data });
+      captions.push(`${name}  ${p.author}${p.text ? `: ${p.text.replace(/\s+/g, " ")}` : ""}`);
+    });
+    files.push({ name: "captions.txt", data: Buffer.from(captions.join("\n") + "\n", "utf8") });
+
+    return c.body(new Uint8Array(zip(files, now())), 200, {
+      "content-type": "application/zip",
+      "content-disposition": `attachment; filename="${fileSafe(game.name) || "game"}-photos.zip"`,
+      "cache-control": "no-store",
+    });
+  });
+
   // A Post's Photo, to whoever may see the Post: anyone if it's visible, otherwise only its poster and the Hosts.
   app.get("/api/games/:id/posts/:postId/photo", (c) => {
     const { id, postId } = c.req.param();
@@ -556,10 +599,43 @@ export function createServer({
     });
   }
 
+  /**
+   * Deletes the Photos of every Game whose last move was PHOTO_KEEP_DAYS ago or more. A Post that was only a
+   * Photo goes with it; one with words keeps them. Files go first, so a failure never leaves a Photo behind
+   * that the database has forgotten. Returns how many Photos were deleted.
+   */
+  function sweepPhotos(): number {
+    const cutoff = now().getTime() - PHOTO_KEEP_DAYS * 24 * 60 * 60_000;
+    const withPhotos = db.selectDistinct({ gameId: posts.gameId }).from(posts).where(isNotNull(posts.photoWidth)).all();
+    let deleted = 0;
+    for (const { gameId } of withPhotos) {
+      const lastMove =
+        db.select({ at: sql<number | null>`max(${gameEvents.createdAt})` }).from(gameEvents).where(eq(gameEvents.gameId, gameId)).get()?.at ??
+        db.select({ at: sql<number>`${games.createdAt}` }).from(games).where(eq(games.id, gameId)).get()!.at;
+      if (lastMove > cutoff) continue;
+
+      photos.removeGame(gameId);
+      const photoPosts = and(eq(posts.gameId, gameId), isNotNull(posts.photoWidth));
+      deleted += db.transaction((tx) => {
+        const count = tx.select({ n: sql<number>`count(*)` }).from(posts).where(photoPosts).get()!.n;
+        tx.delete(posts).where(and(photoPosts, eq(posts.text, ""))).run();
+        tx.update(posts).set({ photoWidth: null, photoHeight: null }).where(photoPosts).run();
+        return count;
+      });
+      postsChanged(gameId);
+    }
+    return deleted;
+  }
+
+  /** Clears out what's kept only for a while: old sign-in records, and Photos past their time. */
+  function sweep() {
+    return { ...auth.sweep(), photos: sweepPhotos() };
+  }
+
   /** Serves HTTP and live updates on one port (0 picks a free one). Screens only listen; moves go over HTTP. */
   function listen(port: number): Promise<{ port: number; close: () => Promise<void> }> {
-    auth.sweep();
-    const sweeping = setInterval(() => auth.sweep(), 60 * 60_000);
+    sweep();
+    const sweeping = setInterval(() => sweep(), 60 * 60_000);
     sweeping.unref(); // never what keeps the process alive
     return new Promise((resolve) => {
       const http = serve({ fetch: app.fetch, port }, (info: AddressInfo) => {
@@ -591,5 +667,5 @@ export function createServer({
     });
   }
 
-  return { app, listen, sweep: auth.sweep };
+  return { app, listen, sweep };
 }

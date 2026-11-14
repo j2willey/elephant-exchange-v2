@@ -94,3 +94,22 @@ describe("Photos in Posts", () => {
     expect(await within(form).findByRole("alert")).toHaveTextContent(/doesn't look like a photo/i);
   });
 });
+
+describe("The album", () => {
+  it("is offered to the Host, with word of when the Photos go", async () => {
+    const server = await startServer({ draw: drawInOrder });
+    const host = await server.signedIn("host@example.com");
+    const id = await host.createGame({ activeSlots: 1, maxSteals: 3 });
+    openApp(host, `/games/${id}`);
+
+    const link = await screen.findByRole("link", { name: /download all the photos/i });
+    expect(link).toHaveAttribute("href", `/api/games/${id}/album.zip`);
+    expect(screen.getByText(/deleted 60 days after the game's last move/i)).toBeInTheDocument();
+  });
+
+  it("isn't offered to anyone else", async () => {
+    const { form } = await underway();
+    expect(form).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /download all the photos/i })).not.toBeInTheDocument();
+  });
+});

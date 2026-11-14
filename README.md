@@ -18,8 +18,9 @@ This is v2, a full rewrite of [v1](https://github.com/j2willey/Elephant-Exchange
 - **Stars:** anyone following on a phone can Star the Gifts they'd like to steal; Starred Gifts move to the top of their list. Stars stay on that phone and are never sent anywhere.
 - **The turn timer:** a countdown for each Player who's up, set per Game (60 seconds by default), on the Host's page and the big screen. It turns amber at 30 seconds and red at 10. It's a guide only: nobody is skipped automatically, and the Host can reset it. Screens count against the server's clock, so a phone set to the wrong time still agrees with the room.
 - **Posts and the Feed:** signed-in Players and Guests post a few words to the Game's Feed, optionally about a Gift, which then shows them under it. The Host or a Co-host can switch Moderation at any moment: **Open**, **Approval** (each Post waits to be approved) or **Paused**, and can hide any single Post. Pending and Hidden Posts never leave the server except to their poster and the Hosts.
+- **Photos:** a Post can carry a Photo, or be just one. The phone shrinks it before sending, and the server re-encodes it (with [sharp](https://sharp.pixelplumbing.com)), which removes EXIF data such as where it was taken. Photos are deleted 60 days after the Game's last move; before then the Host can download them all as a .zip album, with captions.
 
-Coming before launch: Photos, Posts on the big screen, the Worst Gift Vote, and Organization Themes. The words used throughout (Turn, Pick, Victim, Frozen and so on) are defined in [CONTEXT.md](CONTEXT.md).
+Coming before launch: Posts on the big screen, the Worst Gift Vote, and Organization Themes. The words used throughout (Turn, Pick, Victim, Frozen and so on) are defined in [CONTEXT.md](CONTEXT.md).
 
 ## How it's built
 

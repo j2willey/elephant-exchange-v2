@@ -75,6 +75,10 @@ test("a Host runs a Game while a guest follows along on their phone", async ({ b
   await expect(photo).toBeVisible();
   await expect.poll(() => photo.evaluate((img: HTMLImageElement) => [img.naturalWidth, img.naturalHeight])).toEqual([1200, 1600]);
 
+  // The Host can keep them all.
+  const [album] = await Promise.all([host.waitForEvent("download"), host.getByRole("link", { name: /download all the photos/i }).click()]);
+  expect(album.suggestedFilename()).toMatch(/-photos\.zip$/);
+
   // The big screen, with its QR code.
   const screen = await (await browser.newContext({ viewport: { width: 1280, height: 720 } })).newPage();
   await screen.goto(`${gameUrl}/screen`);
