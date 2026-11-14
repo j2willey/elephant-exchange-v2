@@ -23,6 +23,42 @@ export const gameEvents = sqliteTable(
   (t) => [primaryKey({ columns: [t.gameId, t.seq] })],
 );
 
+/** People who have signed in at least once. */
+export const users = sqliteTable("users", {
+  id: text("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+});
+
+/** Emailed sign-in links. Only a hash of each token is kept, so a leaked database can't sign anyone in. */
+export const signInLinks = sqliteTable("sign_in_links", {
+  tokenHash: text("token_hash").primaryKey(),
+  email: text("email").notNull(),
+  expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+  usedAt: integer("used_at", { mode: "timestamp_ms" }),
+});
+
+export const sessions = sqliteTable("sessions", {
+  tokenHash: text("token_hash").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id),
+  expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+});
+
+/** Who runs each Game. By email, so a Co-host can be appointed before they have ever signed in. */
+export const gameHosts = sqliteTable(
+  "game_hosts",
+  {
+    gameId: text("game_id")
+      .notNull()
+      .references(() => games.id),
+    email: text("email").notNull(),
+    role: text("role", { enum: ["host", "cohost"] }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.gameId, t.email] })],
+);
+
 export function openDb(path: string) {
   const sqlite = new Database(path);
   sqlite.pragma("journal_mode = WAL");
@@ -39,6 +75,28 @@ export function openDb(path: string) {
       event TEXT NOT NULL,
       created_at INTEGER NOT NULL,
       PRIMARY KEY (game_id, seq)
+    );
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL UNIQUE,
+      created_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS sign_in_links (
+      token_hash TEXT PRIMARY KEY,
+      email TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      used_at INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS sessions (
+      token_hash TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      expires_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS game_hosts (
+      game_id TEXT NOT NULL REFERENCES games(id),
+      email TEXT NOT NULL,
+      role TEXT NOT NULL CHECK (role IN ('host', 'cohost')),
+      PRIMARY KEY (game_id, email)
     );
   `);
   return drizzle(sqlite);

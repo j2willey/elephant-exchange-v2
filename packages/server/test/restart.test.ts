@@ -4,21 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { DrawFn } from "@elephant/rules";
 import { createServer } from "../src/server.js";
-
-const post = (body: unknown) => ({
-  method: "POST",
-  headers: { "content-type": "application/json" },
-  body: JSON.stringify(body),
-});
-
-function scriptedDraw(order: string[]): DrawFn {
-  const queue = [...order];
-  return (candidates) => {
-    const next = queue.shift();
-    if (!next || !candidates.includes(next)) throw new Error(`script can't draw ${next} from ${candidates.join(",")}`);
-    return next;
-  };
-}
+import { capturingMailer, hostGame, post, scriptedDraw } from "./support.js";
 
 /** A restarted server must replay its log, never draw again: any Draw here fails the test. */
 const noDraws: DrawFn = () => {
@@ -34,10 +20,10 @@ describe("Surviving a restart", () => {
 
   it("a new server on the same database shows every Game exactly as it was, and play carries on", async () => {
     const dbPath = join(dir, "games.db");
-    const first = createServer({ dbPath, draw: scriptedDraw(["ann", "bob", "cat"]) });
-    const created = await first.app.request("/api/games", post({ settings: { activeSlots: 1, maxSteals: 3 } }));
-    const { id } = (await created.json()) as { id: string };
-    const send = (app: typeof first.app, command: unknown) => app.request(`/api/games/${id}/commands`, post(command));
+    const { sent, mailer } = capturingMailer();
+    const first = createServer({ dbPath, mailer, draw: scriptedDraw(["ann", "bob", "cat"]) });
+    const { id, cookie } = await hostGame(first.app, sent);
+    const send = (app: typeof first.app, command: unknown) => app.request(`/api/games/${id}/commands`, post(command, cookie));
 
     for (const [pid, name] of [["ann", "Ann"], ["bob", "Bob"], ["cat", "Cat"]]) {
       await send(first.app, { type: "AddPlayer", playerId: pid, name });
@@ -49,10 +35,10 @@ describe("Surviving a restart", () => {
     await send(first.app, { type: "Undo" });
     const before = await (await first.app.request(`/api/games/${id}`)).json();
 
-    const second = createServer({ dbPath, draw: noDraws });
+    const second = createServer({ dbPath, mailer, draw: noDraws });
     expect(await (await second.app.request(`/api/games/${id}`)).json()).toEqual(before);
 
-    // Ann still holds the floor after the Undo; she can open a different Gift on the restarted server.
+    // The Host is still signed in, and Ann still holds the floor after the Undo: she opens a different Gift.
     const res = await send(second.app, { type: "OpenGift", playerId: "ann", giftId: "g3", name: "Candle" });
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({
@@ -65,16 +51,17 @@ describe("Surviving a restart", () => {
 
   it("refused commands leave nothing in the log", async () => {
     const dbPath = join(dir, "games.db");
-    const first = createServer({ dbPath, draw: scriptedDraw(["ann", "bob"]) });
-    const { id } = (await (await first.app.request("/api/games", post({ settings: { activeSlots: 1, maxSteals: 3 } }))).json()) as { id: string };
-    const send = (command: unknown) => first.app.request(`/api/games/${id}/commands`, post(command));
+    const { sent, mailer } = capturingMailer();
+    const first = createServer({ dbPath, mailer, draw: scriptedDraw(["ann", "bob"]) });
+    const { id, cookie } = await hostGame(first.app, sent);
+    const send = (command: unknown) => first.app.request(`/api/games/${id}/commands`, post(command, cookie));
     await send({ type: "AddPlayer", playerId: "ann", name: "Ann" });
     await send({ type: "AddPlayer", playerId: "bob", name: "Bob" });
     await send({ type: "StartGame" });
     expect((await send({ type: "OpenGift", playerId: "bob", giftId: "g1", name: "Socks" })).status).toBe(409);
     const before = await (await first.app.request(`/api/games/${id}`)).json();
 
-    const second = createServer({ dbPath, draw: noDraws });
+    const second = createServer({ dbPath, mailer, draw: noDraws });
     expect(await (await second.app.request(`/api/games/${id}`)).json()).toEqual(before);
   });
 });

@@ -12,6 +12,12 @@ export const gameSettings = z.strictObject({ activeSlots, maxSteals }) satisfies
 
 export const createGameBody = z.object({ settings: gameSettings });
 
+const email = z.string().trim().toLowerCase().pipe(z.email().max(254));
+
+export const linkRequest = z.object({ email });
+export const linkRedemption = z.object({ token: z.string().min(1).max(100) });
+export const cohostBody = z.object({ email });
+
 export const command = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("AddPlayer"), playerId: id, name }),
   z.strictObject({ type: z.literal("StartGame") }),
