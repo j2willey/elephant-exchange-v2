@@ -68,7 +68,18 @@ docker compose up -d --build      # http://localhost:3000
 docker compose logs -f app        # sign-in links appear here until email is set up
 ```
 
-The container shuts down cleanly on `docker stop`, leaving the database complete in its one file.
+The container shuts down cleanly on `docker stop`, leaving the database complete in its one file. Docker checks `/api/health` every 30 seconds and marks the container unhealthy if the app or its database stops answering.
+
+### With HTTPS, as on the droplet
+
+`compose.prod.yaml` puts [Caddy](https://caddyserver.com) in front: it gets and renews the certificate, redirects http to https, and is the only way in to the app. Settings live in `.env` (see `.env.example`): the domain, and the Resend key and sender address for emailing sign-in links.
+
+```sh
+cp .env.example .env              # then fill it in
+docker compose -f compose.yaml -f compose.prod.yaml up -d --build
+```
+
+To try it on a laptop, use `DOMAIN=localhost` (Caddy makes its own local certificate). Pick other ports if 80 and 443 are taken: `HTTP_PORT=8080 HTTPS_PORT=8443`, then `SMOKE_URL=https://localhost:8443 npm run smoke`.
 
 ## Smoke test
 
