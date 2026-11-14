@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/main.ts",
-    "start": "tsx src/main.ts",
+    "start": "node --import tsx src/main.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
@@ -17,8 +17,7 @@
   "devDependencies": {
     "@types/better-sqlite3": "9.6.0",
     "drizzle-kit": "0.31.11",
-    "socket.io-client": "4.8.4",
-    "tsx": "4.23.15"
+    "socket.io-client": "4.8.4"
   },
   "dependencies": {
     "@elephant/rules": "0.0.0",
@@ -27,6 +26,7 @@
     "drizzle-orm": "0.45.4",
     "hono": "4.13.16",
     "socket.io": "4.8.4",
+    "tsx": "4.23.15",
     "zod": "4.6.7"
   }
 }

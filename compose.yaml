@@ -1,0 +1,19 @@
+# Runs Elephant Exchange with its database on a named volume.
+# Locally: docker compose up --build, then open http://localhost:3000 (sign-in links appear in the log).
+services:
+  app:
+    build: .
+    image: elephant-exchange
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Where people open the app; sign-in links point here.
+      BASE_URL: ${BASE_URL:-http://localhost:3000}
+    volumes:
+      - data:/data
+    # Time to finish requests and close the database before being killed.
+    stop_grace_period: 10s
+
+volumes:
+  data:
