@@ -1,4 +1,6 @@
 import { randomBytes, randomInt } from "node:crypto";
+import type { AddressInfo } from "node:net";
+import { serve } from "@hono/node-server";
 import { asc, eq } from "drizzle-orm";
 import { Hono, type Context } from "hono";
 import {
@@ -15,6 +17,7 @@ import {
   type GameSettings,
   type GameState,
 } from "@elephant/rules";
+import { Server as SocketServer } from "socket.io";
 import type { z } from "zod";
 import { gameEvents, games, openDb } from "./db.js";
 import { command, createGameBody } from "./schemas.js";
@@ -67,6 +70,9 @@ export function createServer({ dbPath, draw = randomDraw }: ServerOptions) {
     return game;
   }
 
+  /** Set once listening: every screen watching a Game sits in a room named by the Game's id. */
+  let io: SocketServer | undefined;
+
   const app = new Hono();
 
   app.post("/api/games", async (c) => {
@@ -104,8 +110,33 @@ export function createServer({ dbPath, draw = randomDraw }: ServerOptions) {
     });
     const next = { state: result.reduce(evolve, game.state), seq: game.seq + result.length };
     cache.set(id, next);
-    return c.json(view(id, next.state));
+    const shown = view(id, next.state);
+    io?.to(id).emit("game", shown);
+    return c.json(shown);
   });
 
-  return { app };
+  /** Serves HTTP and live updates on one port (0 picks a free one). Screens only listen; moves go over HTTP. */
+  function listen(port: number): Promise<{ port: number; close: () => Promise<void> }> {
+    return new Promise((resolve) => {
+      const http = serve({ fetch: app.fetch, port }, (info: AddressInfo) => {
+        resolve({ port: info.port, close: () => new Promise((done) => sockets.close(() => done())) });
+      });
+      const sockets = new SocketServer(http);
+      io = sockets;
+
+      sockets.use((socket, next) => {
+        const gameId: unknown = socket.handshake.auth["gameId"];
+        if (typeof gameId !== "string" || !load(gameId)) return next(new Error("Game not found"));
+        next();
+      });
+      // On every connection, including a phone waking and reconnecting, send the whole Game.
+      sockets.on("connection", (socket) => {
+        const gameId = socket.handshake.auth["gameId"] as string;
+        void socket.join(gameId);
+        socket.emit("game", view(gameId, load(gameId)!.state));
+      });
+    });
+  }
+
+  return { app, listen };
 }
