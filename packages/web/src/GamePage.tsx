@@ -11,6 +11,7 @@ export function GamePage() {
   const { id = "" } = useParams();
   const [game, accept] = useLiveGame(id);
   const [error, setError] = useState<string | null>(null);
+  const stars = useStars(id);
 
   if (game === "loading") return <p className="muted">Loading…</p>;
   if (!game) return <p className="error">There's no Game at this link. Check it with your Host.</p>;
@@ -81,7 +82,7 @@ export function GamePage() {
         <FinalRoundPanel game={game} send={send} />
       )}
 
-      {game.gifts.length > 0 && <Gifts game={game} />}
+      {game.gifts.length > 0 && <Gifts game={game} stars={stars} />}
 
       {error && (
         <p className="error" role="alert">
@@ -311,15 +312,43 @@ function Turn({ game, playerId, send }: { game: GameView; playerId: string; send
   );
 }
 
-export function Gifts({ game }: { game: GameView }) {
+/** This device's Stars for a Game: kept on the device, never sent anywhere. */
+function useStars(gameId: string): Stars {
+  const api = useApi();
+  const [starred, setStarred] = useState(() => new Set(api.stars(gameId)));
+  return {
+    starred,
+    toggle(giftId) {
+      const next = new Set(starred);
+      if (!next.delete(giftId)) next.add(giftId);
+      setStarred(next);
+      api.setStars(gameId, [...next]);
+    },
+  };
+}
+
+interface Stars {
+  starred: ReadonlySet<string>;
+  toggle: (giftId: string) => void;
+}
+
+/** The Gifts in the order they were opened; with `stars`, Starred ones come first and each has a Star button. */
+export function Gifts({ game, stars }: { game: Pick<GameView, "gifts" | "players">; stars?: Stars }) {
   const holderName = (id: string | null) => (id === null ? "on the table" : (game.players.find((p) => p.id === id)?.name ?? "?"));
+  const isStarred = (giftId: string) => stars?.starred.has(giftId) ?? false;
+  const shown = [...game.gifts.filter((g) => isStarred(g.id)), ...game.gifts.filter((g) => !isStarred(g.id))];
   return (
     <section className="card">
       <h2>Gifts</h2>
       <ul className="gifts" aria-label="Gifts">
-        {game.gifts.map((g) => (
-          <li key={g.id} aria-label={g.name}>
-            <span>
+        {shown.map((g) => (
+          <li key={g.id} aria-label={g.name} className={isStarred(g.id) ? "starred" : undefined}>
+            {stars && (
+              <button className="star" aria-label={`Star ${g.name}`} aria-pressed={isStarred(g.id)} onClick={() => stars.toggle(g.id)}>
+                {isStarred(g.id) ? "★" : "☆"}
+              </button>
+            )}
+            <span className="gift-name">
               <strong>{g.name}</strong> — {holderName(g.holderId)}
             </span>
             <span className="muted">

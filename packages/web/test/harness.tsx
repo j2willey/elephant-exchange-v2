@@ -48,7 +48,7 @@ export const drawInOrder: DrawFn = (candidates) => candidates[0]!;
 
 /**
  * One person's browser: requests go to the server and cookies are kept between them, as a browser would.
- * Rendering the app again with the same browser is like reloading the page.
+ * Rendering the app again with the same browser is like reloading the page; its Stars are kept too.
  */
 export function browser(origin: string): Api {
   const jar = new Map<string, string>();
@@ -65,7 +65,10 @@ export function browser(origin: string): Api {
     }
     return res;
   };
-  return createApi(fetchWithCookies, { socketOrigin: origin, transports: ["websocket"] });
+  // Each browser has its own device storage, as two phones would.
+  const kept = new Map<string, string>();
+  const storage = { getItem: (key: string) => kept.get(key) ?? null, setItem: (key: string, value: string) => void kept.set(key, value) };
+  return createApi(fetchWithCookies, { socketOrigin: origin, transports: ["websocket"], storage });
 }
 
 /** Opens the app at this path in this browser. */

@@ -233,6 +233,27 @@ button.link {
   border-bottom: 1px solid var(--line);
 }
 
+.gifts .gift-name {
+  flex: 1;
+}
+
+/* A Star is a tap target the size of a fingertip, quiet until it's on. */
+.gifts .star {
+  flex: none;
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+}
+
+.gifts .star[aria-pressed="true"] {
+  color: var(--brand);
+}
+
 .badge {
   margin-left: 8px;
   padding: 2px 8px;

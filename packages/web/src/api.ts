@@ -52,10 +52,41 @@ export interface ApiOptions {
   socketOrigin?: string;
   /** Socket.IO transports; left out, it starts with polling and upgrades, which gets through strict networks. */
   transports?: ("polling" | "websocket")[];
+  /** What's kept on this device (Stars); the browser's localStorage when left out. */
+  storage?: DeviceStorage;
+}
+
+export type DeviceStorage = Pick<Storage, "getItem" | "setItem">;
+
+/**
+ * localStorage, or nothing if the browser won't allow it (some private windows throw): Stars then last
+ * until the page is closed, which is fine for a party.
+ */
+function browserStorage(): DeviceStorage {
+  const kept = new Map<string, string>();
+  return {
+    getItem: (key) => {
+      try {
+        return window.localStorage.getItem(key);
+      } catch {
+        return kept.get(key) ?? null;
+      }
+    },
+    setItem: (key, value) => {
+      try {
+        window.localStorage.setItem(key, value);
+      } catch {
+        kept.set(key, value);
+      }
+    },
+  };
 }
 
 /** Talks to the server. Screens use this, never fetch directly, so tests can hand in a browser with a cookie jar. */
 export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, init), options: ApiOptions = {}) {
+  const storage = options.storage ?? browserStorage();
+  const starsKey = (gameId: string) => `stars:${gameId}`;
+
   const postJson = (path: string, body?: unknown) =>
     fetchFn(path, {
       method: "POST",
@@ -146,6 +177,20 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
       if (res.status === 403) return { ok: false, message: "The Host adds the Players in this Game." };
       if (res.status === 401) return { ok: false, message: "Please sign in again." };
       return { ok: false, message: "Something went wrong. Please try again." };
+    },
+
+    /** The Gifts this device has Starred in a Game. Personal: they never leave the device. */
+    stars(gameId: string): string[] {
+      try {
+        const kept: unknown = JSON.parse(storage.getItem(starsKey(gameId)) ?? "[]");
+        return Array.isArray(kept) ? kept.filter((id): id is string => typeof id === "string") : [];
+      } catch {
+        return [];
+      }
+    },
+
+    setStars(gameId: string, giftIds: string[]): void {
+      storage.setItem(starsKey(gameId), JSON.stringify(giftIds));
     },
 
     async command(gameId: string, command: Command): Promise<CommandResult> {
