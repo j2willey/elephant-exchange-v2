@@ -219,6 +219,17 @@ export function createServer({
 
   const app = new Hono();
 
+  // For Docker's HEALTHCHECK and uptime monitors: up only if the database answers.
+  app.get("/api/health", (c) => {
+    c.header("Cache-Control", "no-store");
+    try {
+      db.$client.prepare("select 1").get();
+      return c.json({ ok: true });
+    } catch {
+      return c.json({ ok: false }, 503);
+    }
+  });
+
   // Always 202, whether or not the address has been seen before, so this can't be used to find out who has an account.
   app.post("/api/auth/link", async (c) => {
     const body = await parseBody(c, linkRequest);
