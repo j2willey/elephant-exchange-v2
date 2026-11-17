@@ -100,7 +100,7 @@ export function GamePage() {
 
   // Someone who doesn't run the Game is on their phone: one panel at a time, picked from a tab bar.
   if (!runs) {
-    return <GuestView game={game} accept={accept} posts={posts} reloadFeed={reloadFeed} stars={stars} joinOffered={joinOffered} status={status} players={players} />;
+    return <GuestView game={game} accept={accept} posts={posts} reloadFeed={reloadFeed} stars={stars} joinOffered={joinOffered} players={players} />;
   }
 
   return (
@@ -167,17 +167,17 @@ export function GamePage() {
   );
 }
 
-type GuestTab = "gifts" | "up" | "feed" | "post";
+type GuestTab = "gifts" | "you" | "feed" | "post";
 const guestTabs: { id: GuestTab; icon: string; label: string }[] = [
   { id: "gifts", icon: "🎁", label: "Gifts" },
-  { id: "up", icon: "⏱", label: "Up now" },
+  { id: "you", icon: "👤", label: "You" },
   { id: "feed", icon: "💬", label: "Feed" },
   { id: "post", icon: "📷", label: "Post" },
 ];
 
 /**
- * A guest's phone (anyone who doesn't run the Game): the Gifts first, and a tab bar, always in reach at the
- * bottom, for who's up, the Feed and posting. Each panel scrolls on its own; the Feed's newest Post is at the top.
+ * A guest's phone (anyone who doesn't run the Game): who's up in a bar pinned to the top, the Gifts first, and a tab
+ * bar, always in reach at the bottom, for themselves, the Feed and posting. The Feed's newest Post is at the top.
  */
 function GuestView({
   game,
@@ -186,7 +186,6 @@ function GuestView({
   reloadFeed,
   stars,
   joinOffered,
-  status,
   players,
 }: {
   game: GameView;
@@ -195,7 +194,6 @@ function GuestView({
   reloadFeed: () => void;
   stars: Stars;
   joinOffered: boolean;
-  status: ReactNode;
   players: ReactNode;
 }) {
   const [tab, setTab] = useState<GuestTab>("gifts");
@@ -204,10 +202,14 @@ function GuestView({
     if (game.phase === "ended") setTab("gifts");
   }, [game.phase]);
   const myName = game.me && game.players.find((p) => p.id === game.me!.playerId)?.name;
-  const myTurn = game.me !== undefined && game.me !== null && game.active.includes(game.me.playerId);
+  const myId = game.me?.playerId;
+  const myTurn = myId !== undefined && game.active.includes(myId);
+  const onDeck = myId !== undefined && game.onDeck.includes(myId);
+  const holding = myId !== undefined ? game.gifts.find((g) => g.holderId === myId) : undefined;
 
   return (
     <div className="guest">
+      <StatusBar game={game} mine={myTurn} />
       <header className="guest-head">
         <ThemeLogo theme={game.theme} />
         <h2>{game.name}</h2>
@@ -218,7 +220,7 @@ function GuestView({
           <>
             {game.phase === "ended" && <VotePanel game={game} accept={accept} />}
             {joinOffered && (
-              <button className="secondary" onClick={() => setTab("up")}>
+              <button className="secondary" onClick={() => setTab("you")}>
                 Playing? Join the Game
               </button>
             )}
@@ -229,11 +231,22 @@ function GuestView({
             )}
           </>
         )}
-        {tab === "up" && (
+        {tab === "you" && (
           <>
             {myTurn && <p className="card your-turn">It's your turn!</p>}
-            {myName ? <p className="card you">You're playing as {myName}</p> : joinOffered && <JoinPanel gameId={game.id} onJoined={accept} />}
-            {status}
+            {myName ? (
+              <section className="card you" aria-label="You">
+                <p>You're playing as {myName}</p>
+                {onDeck && <p>You're on deck: get ready!</p>}
+                {holding && (
+                  <p>You're holding: {holding.name}</p>
+                )}
+              </section>
+            ) : joinOffered ? (
+              <JoinPanel gameId={game.id} onJoined={accept} />
+            ) : (
+              <p className="card muted">You're following along. The Host enters the Players for this Game.</p>
+            )}
             {players}
           </>
         )}
@@ -274,7 +287,7 @@ function GuestView({
             role="tab"
             aria-selected={tab === t.id}
             aria-controls={`panel-${t.id}`}
-            className={t.id === "up" && myTurn ? "alert" : undefined}
+            className={t.id === "you" && myTurn ? "alert" : undefined}
             onClick={() => {
               setTab(t.id);
               window.scrollTo?.(0, 0);
@@ -286,6 +299,47 @@ function GuestView({
         ))}
       </nav>
     </div>
+  );
+}
+
+/**
+ * Who's up and who's on deck, pinned to the top of a guest's phone. One row when 1 or 2 take a turn at once;
+ * with more, Up now and On deck get a row each so the names have room.
+ */
+function StatusBar({ game, mine }: { game: GameView; mine: boolean }) {
+  const names = (ids: string[]) => ids.map((id) => game.players.find((p) => p.id === id)?.name ?? "?").join(", ") || "nobody";
+  const final = game.phase === "finalRound" ? "Final Round · " : "";
+  let body: ReactNode;
+  if (game.phase === "setup") {
+    body = (
+      <p>
+        Waiting for the Host to start · {game.players.length} {game.players.length === 1 ? "player" : "players"} so far
+      </p>
+    );
+  } else if (game.phase === "ended") {
+    body = <p>Game over</p>;
+  } else if (game.settings.activeSlots <= 2) {
+    body = (
+      <p>
+        {final}Up now: <strong>{names(game.active)}</strong> · On deck: <strong>{names(game.onDeck)}</strong>
+      </p>
+    );
+  } else {
+    body = (
+      <>
+        <p>
+          {final}Up now: <strong>{names(game.active)}</strong>
+        </p>
+        <p>
+          On deck: <strong>{names(game.onDeck)}</strong>
+        </p>
+      </>
+    );
+  }
+  return (
+    <section role="status" aria-label="Who's up" className={mine ? "statusbar mine" : "statusbar"}>
+      {body}
+    </section>
   );
 }
 

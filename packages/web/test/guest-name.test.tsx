@@ -53,7 +53,7 @@ describe("A Guest's name", () => {
     first.unmount();
 
     openApp(phone, `/games/${id}`);
-    await onTab(/up now/i);
+    await onTab(/^you$/i);
     const join = await screen.findByRole("region", { name: /play in this game/i });
     expect(await within(join).findByLabelText(/your name/i)).toHaveValue("Gus");
   });
@@ -71,7 +71,7 @@ describe("A Guest's name", () => {
   it("is remembered once they join as a Player", async () => {
     const { id, newGame, phone, user } = await underway();
     const first = openApp(phone, `/games/${id}`);
-    await onTab(/up now/i);
+    await onTab(/^you$/i);
     const join = await screen.findByRole("region", { name: /play in this game/i });
     await user.type(await within(join).findByLabelText(/your name/i), "Gus");
     await user.click(within(join).getByRole("button", { name: /join as a player/i }));

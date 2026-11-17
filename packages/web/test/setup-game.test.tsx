@@ -140,7 +140,7 @@ describe("Setting up a Game", () => {
     first.unmount();
 
     openApp(browser(origin), gameLink);
-    await onTab(/up now/i);
+    await onTab(/^you$/i);
 
     await screen.findByText("Ann");
     expect(screen.queryByLabelText(/player's name/i)).not.toBeInTheDocument();

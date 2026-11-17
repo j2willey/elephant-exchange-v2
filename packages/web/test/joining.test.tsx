@@ -10,7 +10,7 @@ const rosterNames = () =>
 
 async function joinAs(name: string) {
   const user = userEvent.setup();
-  await onTab(/up now/i);
+  await onTab(/^you$/i);
   const panel = await screen.findByRole("region", { name: /play in this game/i });
   await user.type(await within(panel).findByLabelText(/your name/i), name);
   await user.click(within(panel).getByRole("button", { name: /join as a player/i }));
@@ -62,7 +62,7 @@ describe("Joining a Game from a phone", () => {
     first.unmount();
 
     openApp(dan, `/games/${id}`);
-    await onTab(/up now/i);
+    await onTab(/^you$/i);
 
     expect(await screen.findByText(/you're playing as dan/i)).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: /play in this game/i })).not.toBeInTheDocument();
@@ -75,7 +75,7 @@ describe("Joining a Game from a phone", () => {
     const phone = browser(origin);
     const first = openApp(phone, `/games/${id}`);
     const user = userEvent.setup();
-    await onTab(/up now/i);
+    await onTab(/^you$/i);
     const panel = await screen.findByRole("region", { name: /play in this game/i });
 
     await user.type(await within(panel).findByLabelText(/email/i), "eve@example.com");
@@ -111,7 +111,7 @@ describe("Joining a Game from a phone", () => {
     await host.command(id, { type: "AddPlayer", playerId: "ann", name: "Ann" });
 
     openApp(await signedIn("dan@example.com"), `/games/${id}`);
-    await onTab(/up now/i);
+    await onTab(/^you$/i);
 
     await screen.findByText("Ann");
     expect(screen.queryByRole("region", { name: /play in this game/i })).not.toBeInTheDocument();

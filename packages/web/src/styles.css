@@ -743,3 +743,26 @@ button.danger-solid {
   color: var(--brand-ink);
   background: var(--brand);
 }
+
+/* Who's up, pinned to the top of a guest's phone; it turns the brand color when it's their turn. */
+.statusbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: grid;
+  gap: 2px;
+  margin: 0 -16px;
+  padding: 10px 16px;
+  font-size: 1rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.statusbar p {
+  margin: 0;
+}
+
+.statusbar.mine {
+  color: var(--brand-ink);
+  background: var(--brand);
+}

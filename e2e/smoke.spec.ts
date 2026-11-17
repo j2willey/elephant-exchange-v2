@@ -47,12 +47,12 @@ test("a Host runs a Game while a guest follows along on their phone", async ({ b
   // A guest scans the QR code: no sign-in needed to follow, then signs in to join as a Player.
   const guest = await (await browser.newContext()).newPage();
   await guest.goto(gameUrl); // a Game's own address, straight from the server
-  // A phone shows one panel at a time; joining is under Up now.
-  await guest.getByRole("tab", { name: /up now/i }).click();
+  // A phone shows one panel at a time; joining is under You.
+  await guest.getByRole("tab", { name: /^you$/i }).click();
   const join = guest.getByRole("region", { name: /play in this game/i });
   await signIn(guest, `guest-${run}@example.com`);
   await expect(guest).toHaveURL(gameUrl); // back at the Game after signing in
-  await guest.getByRole("tab", { name: /up now/i }).click();
+  await guest.getByRole("tab", { name: /^you$/i }).click();
   await join.getByLabel(/your name/i).fill("Cat");
   await join.getByRole("button", { name: /join as a player/i }).click();
   await expect(guest.getByText(/you're playing as cat/i)).toBeVisible();
