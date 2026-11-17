@@ -766,3 +766,51 @@ button.danger-solid {
   color: var(--brand-ink);
   background: var(--brand);
 }
+
+/* A checkbox with its words beside it (not above, as other labels are). */
+label.check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-weight: 400;
+}
+
+label.check input {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+}
+
+/* The admin page is for a laptop: wide enough for its tables. */
+.page:has(.admin) {
+  max-width: 72rem;
+}
+
+/* The admin page's tables: they scroll sideways on a phone rather than squeeze. */
+.table-scroll {
+  overflow-x: auto;
+}
+
+.admin table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.admin th,
+.admin td {
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.admin .badge {
+  margin-left: 8px;
+}
+
+.select-all {
+  user-select: all;
+}

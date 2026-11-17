@@ -57,6 +57,13 @@
       "when": 1794672034559,
       "tag": "0007_organizations_and_themes",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1794956298325,
+      "tag": "0008_admin",
+      "breakpoints": true
     }
   ]
 }

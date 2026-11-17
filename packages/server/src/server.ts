@@ -6,7 +6,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { and, asc, desc, eq, isNotNull, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNotNull, like, or, sql } from "drizzle-orm";
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
@@ -40,11 +40,12 @@ import {
   type ThemeImage,
 } from "./photos.js";
 import { zip } from "./zip.js";
-import { gameEvents, gameHosts, gamePlayers, games, openDb, organizations, posts, turnClocks, votes, type Tx } from "./db.js";
+import { gameEvents, gameHosts, gamePlayers, games, openDb, organizations, posts, sessions, signInLinks, turnClocks, users, votes, type Tx } from "./db.js";
 import {
   cohostBody,
   command,
   createGameBody,
+  feedbackBody,
   gameOrgBody,
   gameThemeEdit,
   joinBody,
@@ -92,6 +93,8 @@ export interface ServerOptions {
   photosDir?: string;
   /** Where Theme logos and backgrounds are stored; likewise a temporary folder if left out. */
   themesDir?: string;
+  /** Who may use the admin pages (from ADMIN_EMAILS). Left out, there are none and those pages don't exist. */
+  adminEmails?: readonly string[];
 }
 
 const randomDraw: DrawFn = (candidates) => candidates[randomInt(candidates.length)]!;
@@ -221,6 +224,7 @@ export function createServer({
   limits = {},
   trustProxy = false,
   webRoot,
+  adminEmails = [],
 }: ServerOptions) {
   const db = openDb(dbPath);
   const photos = photoStore(photosDir ?? mkdtempSync(join(tmpdir(), "elephant-photos-")));
@@ -364,7 +368,7 @@ export function createServer({
   app.post("/api/auth/link", async (c) => {
     const body = await parseBody(c, linkRequest);
     if (!body.ok) return body.res;
-    const token = auth.issueLink(body.data.email, clientIp(c));
+    const token = auth.issueLink(body.data.email, clientIp(c), body.data.feedbackOk);
     if (!token) return c.json({ error: "Too many sign-in links asked for; try again in a few minutes" }, 429);
     // Someone who scanned a Game's QR code goes back to that Game once signed in.
     const next = body.data.next ? `&next=${encodeURIComponent(body.data.next)}` : "";
@@ -398,7 +402,18 @@ export function createServer({
   app.get("/api/session", (c) => {
     const email = signedInAs(c);
     if (!email) return c.json({ error: "Not signed in" }, 401);
-    return c.json({ email });
+    const feedbackOk = db.select({ ok: users.feedbackOk }).from(users).where(eq(users.email, email)).get()?.ok ?? false;
+    return c.json({ email, feedbackOk, admin: isAdmin(email) });
+  });
+
+  /** Whether it's OK to email the signed-in person to ask how it went. */
+  app.post("/api/me/feedback", async (c) => {
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const body = await parseBody(c, feedbackBody);
+    if (!body.ok) return body.res;
+    db.update(users).set({ feedbackOk: body.data.ok }).where(eq(users.email, email)).run();
+    return c.body(null, 204);
   });
 
   app.post("/api/auth/sign-out", (c) => {
@@ -425,6 +440,7 @@ export function createServer({
           rosterMode: body.data.rosterMode,
           turnSeconds: body.data.turnSeconds,
           orgId: orgId ?? null,
+          demo: body.data.demo,
           settings: JSON.stringify(body.data.settings),
           createdAt: now(),
         })
@@ -927,6 +943,112 @@ export function createServer({
       tx.insert(gamePlayers).values({ gameId: id, playerId, email }).run();
     });
     return "code" in result ? c.json(result, 409) : c.json({ ...result, me: { playerId } });
+  });
+
+  // The admin pages: only for ADMIN_EMAILS. To anyone else they answer 404, as if they weren't there.
+  const admins = new Set(adminEmails.map((e) => e.trim().toLowerCase()).filter(Boolean));
+  function isAdmin(email: string | undefined): boolean {
+    return email !== undefined && admins.has(email.toLowerCase());
+  }
+  app.use("/api/admin/*", async (c, next) => {
+    if (!isAdmin(signedInAs(c))) return c.json({ error: "Not found" }, 404);
+    await next();
+  });
+
+  /** Everyone who has signed in, newest first: when, whether a feedback email is OK, and what they've made. */
+  app.get("/api/admin/people", (c) => {
+    const hosted = db
+      .select({ email: gameHosts.email, demo: games.demo, n: count() })
+      .from(gameHosts)
+      .innerJoin(games, eq(games.id, gameHosts.gameId))
+      .where(eq(gameHosts.role, "host"))
+      .groupBy(gameHosts.email, games.demo)
+      .all();
+    const orgs = db.select({ email: organizations.organizerEmail, name: organizations.name }).from(organizations).orderBy(asc(organizations.createdAt)).all();
+    const people = db.select().from(users).orderBy(desc(users.createdAt)).all();
+    return c.json(
+      people.map((u) => ({
+        email: u.email,
+        firstSeen: u.createdAt.toISOString(),
+        lastSignIn: u.lastSignInAt?.toISOString() ?? null,
+        feedbackOk: u.feedbackOk,
+        games: hosted.find((h) => h.email === u.email && !h.demo)?.n ?? 0,
+        demoGames: hosted.find((h) => h.email === u.email && h.demo)?.n ?? 0,
+        organizations: orgs.filter((o) => o.email === u.email).map((o) => o.name),
+      })),
+    );
+  });
+
+  /** Every Game, newest first, with its Host and how far along it is. */
+  app.get("/api/admin/games", (c) => {
+    const rows = db
+      .select({ id: games.id, demo: games.demo, createdAt: games.createdAt, host: gameHosts.email })
+      .from(games)
+      .leftJoin(gameHosts, and(eq(gameHosts.gameId, games.id), eq(gameHosts.role, "host")))
+      .orderBy(desc(games.createdAt), desc(sql`${games}.rowid`))
+      .all();
+    return c.json(
+      rows.map((r) => {
+        const game = load(r.id)!;
+        return {
+          id: r.id,
+          name: game.name,
+          demo: r.demo,
+          host: r.host ?? "",
+          phase: phase(game.state),
+          players: roster(game.state).length,
+          createdAt: r.createdAt.toISOString(),
+        };
+      }),
+    );
+  });
+
+  /** Removes a Game and everything kept for it: its log, Hosts, Players, Posts and their Photos, votes, Theme images. */
+  function deleteGame(id: string) {
+    db.transaction((tx) => {
+      for (const table of [votes, posts, turnClocks, gamePlayers, gameHosts, gameEvents]) tx.delete(table).where(eq(table.gameId, id)).run();
+      tx.delete(games).where(eq(games.id, id)).run();
+    });
+    cache.delete(id);
+    photos.removeGame(id);
+    for (const kind of ["logo", "background"] as const) themeImages.remove(`game-${id}`, kind);
+  }
+
+  app.delete("/api/admin/games/:id", (c) => {
+    const id = c.req.param("id");
+    if (!db.select({ id: games.id }).from(games).where(eq(games.id, id)).get()) return c.json({ error: "No such Game" }, 404);
+    deleteGame(id);
+    return c.body(null, 204);
+  });
+
+  /**
+   * Clears out what the smoke test leaves behind: everyone with an @example.com address (a domain nobody can
+   * really have), the Games they host and the Organizations they run. Games of anyone else are kept.
+   */
+  app.post("/api/admin/test-data/delete", (c) => {
+    const testers = like(sql`lower(${users.email})`, "%@example.com");
+    const people = db.select({ id: users.id, email: users.email }).from(users).where(testers).all();
+    const emails = people.map((p) => p.email);
+    const testGames = emails.length
+      ? db.selectDistinct({ id: gameHosts.gameId }).from(gameHosts).where(and(eq(gameHosts.role, "host"), inArray(gameHosts.email, emails))).all()
+      : [];
+    for (const { id } of testGames) deleteGame(id);
+    const testOrgs = emails.length ? db.select({ id: organizations.id }).from(organizations).where(inArray(organizations.organizerEmail, emails)).all() : [];
+    db.transaction((tx) => {
+      for (const { id } of testOrgs) {
+        tx.update(games).set({ orgId: null }).where(eq(games.orgId, id)).run();
+        tx.delete(organizations).where(eq(organizations.id, id)).run();
+      }
+      if (people.length) {
+        tx.delete(sessions).where(inArray(sessions.userId, people.map((p) => p.id))).run();
+        tx.delete(signInLinks).where(inArray(signInLinks.email, emails)).run();
+        tx.delete(users).where(inArray(users.id, people.map((p) => p.id))).run();
+      }
+    });
+    for (const { id } of testOrgs) for (const kind of ["logo", "background"] as const) themeImages.remove(`org-${id}`, kind);
+    // Games that showed a removed Organization's Theme are rebuilt without it.
+    cache.clear();
+    return c.json({ people: people.length, games: testGames.length, organizations: testOrgs.length });
   });
 
   // Anything else under /api is a mistake, never a page of the app.

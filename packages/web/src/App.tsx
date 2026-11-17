@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, Route, Routes, useNavigate, useSearchParams } from "react-router";
-import { isReturnPath, type MyGame, type MyOrg, type RosterMode } from "./api.js";
+import { isReturnPath, type MyGame, type MyOrg, type RosterMode, type Session } from "./api.js";
 import { useApi } from "./ApiContext.js";
+import { AdminPage } from "./Admin.js";
 import { DemoGame } from "./Demo.js";
 import { GamePage } from "./GamePage.js";
 import { GameSettings } from "./GameSettings.js";
@@ -22,6 +23,7 @@ export function AppRoutes() {
         <Route path="/games/:id/screen" element={<WatchScreen />} />
         <Route path="/games/:id/settings" element={<GameSettings />} />
         <Route path="/orgs/:orgId" element={<OrgPage />} />
+        <Route path="/admin" element={<AdminPage />} />
       </Routes>
     </main>
   );
@@ -29,7 +31,7 @@ export function AppRoutes() {
 
 function Home() {
   const api = useApi();
-  const [session, setSession] = useState<{ email: string } | null | "loading">("loading");
+  const [session, setSession] = useState<Session | null | "loading">("loading");
 
   useEffect(() => {
     let current = true;
@@ -55,6 +57,19 @@ function Home() {
       <MyOrgs />
       <section className="card">
         <p>Signed in as {session.email}</p>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={session.feedbackOk}
+            onChange={(e) => {
+              const ok = e.target.checked;
+              setSession({ ...session, feedbackOk: ok });
+              void api.setFeedbackOk(ok);
+            }}
+          />
+          OK to contact me to ask how it went
+        </label>
+        {session.admin && <Link to="/admin">Admin</Link>}
         <button className="secondary" onClick={signOut}>
           Sign out
         </button>

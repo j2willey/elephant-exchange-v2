@@ -65,6 +65,33 @@ export type VoteDisplay = "live" | "hidden" | "parade";
 export type RosterMode = "host" | "self";
 export type Moderation = "open" | "approval" | "paused";
 
+/** Who's signed in: whether a feedback email is OK, and whether they may use the admin pages. */
+export interface Session {
+  email: string;
+  feedbackOk: boolean;
+  admin: boolean;
+}
+
+export interface AdminPerson {
+  email: string;
+  firstSeen: string;
+  lastSignIn: string | null;
+  feedbackOk: boolean;
+  games: number;
+  demoGames: number;
+  organizations: string[];
+}
+
+export interface AdminGame {
+  id: string;
+  name: string;
+  demo: boolean;
+  host: string;
+  phase: "setup" | "playing" | "finalRound" | "ended";
+  players: number;
+  createdAt: string;
+}
+
 /** A Post in the Feed, as this viewer may see it. */
 export interface Post {
   id: string;
@@ -169,16 +196,24 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
     now,
 
     /** Who is signed in on this browser, if anyone. */
-    async session(): Promise<{ email: string } | undefined> {
+    async session(): Promise<Session | undefined> {
       const res = await fetchFn("/api/session");
       if (res.status === 401) return undefined;
       if (!res.ok) throw new Error(`session check failed: ${res.status}`);
-      return (await res.json()) as { email: string };
+      return (await res.json()) as Session;
     },
 
-    /** `next`: the page of this app the emailed link should bring them back to. */
-    async requestLink(email: string, next?: string): Promise<"sent" | "tooMany" | "invalidEmail"> {
-      const res = await postJson("/api/auth/link", next === undefined ? { email } : { email, next });
+    /** Says whether it's OK to email the signed-in person to ask how it went. */
+    async setFeedbackOk(ok: boolean): Promise<boolean> {
+      return (await postJson("/api/me/feedback", { ok })).ok;
+    },
+
+    /**
+     * `next`: the page of this app the emailed link should bring them back to. `feedbackOk`: they ticked "OK to
+     * email me for feedback".
+     */
+    async requestLink(email: string, next?: string, feedbackOk = false): Promise<"sent" | "tooMany" | "invalidEmail"> {
+      const res = await postJson("/api/auth/link", { email, ...(next === undefined ? {} : { next }), ...(feedbackOk ? { feedbackOk } : {}) });
       if (res.status === 202) return "sent";
       if (res.status === 429) return "tooMany";
       if (res.status === 400) return "invalidEmail";
@@ -193,17 +228,43 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
       return (await res.json()) as { email: string };
     },
 
+    /** The admin pages' lists: "notFound" for anyone who isn't an admin. */
+    async adminPeople(): Promise<AdminPerson[] | "notFound"> {
+      const res = await fetchFn("/api/admin/people");
+      if (res.status === 404) return "notFound";
+      if (!res.ok) throw new Error(`listing people failed: ${res.status}`);
+      return (await res.json()) as AdminPerson[];
+    },
+
+    async adminGames(): Promise<AdminGame[] | "notFound"> {
+      const res = await fetchFn("/api/admin/games");
+      if (res.status === 404) return "notFound";
+      if (!res.ok) throw new Error(`listing games failed: ${res.status}`);
+      return (await res.json()) as AdminGame[];
+    },
+
+    async adminDeleteGame(id: string): Promise<boolean> {
+      return (await fetchFn(`/api/admin/games/${encodeURIComponent(id)}`, { method: "DELETE" })).ok;
+    },
+
+    /** Deletes the smoke test's @example.com people, their Games and Organizations; says how many of each. */
+    async adminDeleteTestData(): Promise<{ people: number; games: number; organizations: number } | undefined> {
+      const res = await postJson("/api/admin/test-data/delete", {});
+      return res.ok ? ((await res.json()) as { people: number; games: number; organizations: number }) : undefined;
+    },
+
     async signOut(): Promise<void> {
       await postJson("/api/auth/sign-out");
     },
 
-    async createGame(settings: GameSettings, name?: string, rosterMode?: RosterMode, turnSeconds?: number, orgId?: string): Promise<string> {
+    async createGame(settings: GameSettings, name?: string, rosterMode?: RosterMode, turnSeconds?: number, orgId?: string, demo = false): Promise<string> {
       const res = await postJson("/api/games", {
         settings,
         ...(name === undefined ? {} : { name }),
         ...(rosterMode ? { rosterMode } : {}),
         ...(turnSeconds === undefined ? {} : { turnSeconds }),
         ...(orgId ? { orgId } : {}),
+        ...(demo ? { demo } : {}),
       });
       if (res.status !== 201) throw new Error(`creating a Game failed: ${res.status}`);
       return ((await res.json()) as { id: string }).id;

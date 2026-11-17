@@ -22,6 +22,8 @@ const server = createServer({
   ...(apiKey && from ? { mailer: resendMailer({ apiKey, from }) } : {}),
   // The built web app, in production. In development it's left unset and Vite serves the app.
   ...(env["WEB_ROOT"] ? { webRoot: env["WEB_ROOT"] } : {}),
+  // Who may use the admin pages: comma-separated emails. Unset, nobody can.
+  adminEmails: (env["ADMIN_EMAILS"] ?? "").split(","),
 });
 const { port, close } = await server.listen(Number(env["PORT"] ?? 3001));
 console.log(`Elephant Exchange server listening on port ${port}`);

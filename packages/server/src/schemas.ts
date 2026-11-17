@@ -19,6 +19,8 @@ export const createGameBody = z.object({
   settings: gameSettings,
   /** The Organization whose Theme it shows: one the Host is the Organizer of. */
   orgId: id.optional(),
+  /** Made with "Try a demo game". */
+  demo: z.boolean().default(false),
 });
 
 /** A Theme color: "#rrggbb" only (it goes into the page's styles), kept lowercase. Null clears it. */
@@ -57,7 +59,8 @@ const returnPath = z.string().max(200).regex(/^\/(?![/\\])[\x21-\x7e]*$/);
 
 const email = z.string().trim().toLowerCase().pipe(z.email().max(254));
 
-export const linkRequest = z.object({ email, next: returnPath.optional() });
+export const linkRequest = z.object({ email, next: returnPath.optional(), feedbackOk: z.boolean().default(false) });
+export const feedbackBody = z.object({ ok: z.boolean() });
 export const linkRedemption = z.object({ token: z.string().min(1).max(100) });
 export const cohostBody = z.object({ email });
 

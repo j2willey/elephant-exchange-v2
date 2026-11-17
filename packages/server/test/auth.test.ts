@@ -24,7 +24,7 @@ describe("Signing in by emailed link", () => {
     const cookie = await signIn(app, sent, "ann@example.com");
     const me = await app.request("/api/session", { headers: { cookie } });
     expect(me.status).toBe(200);
-    expect(await me.json()).toEqual({ email: "ann@example.com" });
+    expect(await me.json()).toEqual({ email: "ann@example.com", feedbackOk: false, admin: false });
   });
 
   it("marks the session cookie HttpOnly so page scripts can't read it", async () => {

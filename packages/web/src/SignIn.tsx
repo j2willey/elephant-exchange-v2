@@ -28,12 +28,13 @@ const linkMessages = {
 export function SignInForm({ next, heading = "Sign in" }: { next?: string; heading?: string }) {
   const api = useApi();
   const [email, setEmail] = useState("");
+  const [feedbackOk, setFeedbackOk] = useState(false);
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | keyof typeof linkMessages>("idle");
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setStatus("sending");
-    setStatus(await api.requestLink(email, next).catch(() => "failed" as const));
+    setStatus(await api.requestLink(email, next, feedbackOk).catch(() => "failed" as const));
   }
 
   if (status === "sent") {
@@ -60,6 +61,10 @@ export function SignInForm({ next, heading = "Sign in" }: { next?: string; headi
         value={email}
         onChange={(e) => setEmail(e.target.value)}
       />
+      <label className="check">
+        <input type="checkbox" checked={feedbackOk} onChange={(e) => setFeedbackOk(e.target.checked)} />
+        OK to contact me later to ask how it went
+      </label>
       {status in linkMessages && (
         <p className="error" role="alert">
           {linkMessages[status as keyof typeof linkMessages]}

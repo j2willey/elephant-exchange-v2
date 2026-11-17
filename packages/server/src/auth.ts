@@ -45,8 +45,11 @@ export function createAuth(db: Db, now: () => Date, limits: LinkLimits) {
       .get()!.n;
 
   return {
-    /** Records a new sign-in link and returns its token, or undefined if a limit has been reached. */
-    issueLink(email: string, clientIp: string): string | undefined {
+    /**
+     * Records a new sign-in link and returns its token, or undefined if a limit has been reached. `feedbackOk`:
+     * they ticked "OK to email me for feedback", which takes effect once the link is used.
+     */
+    issueLink(email: string, clientIp: string, feedbackOk = false): string | undefined {
       if (
         recent(15, eq(signInLinks.email, email)) >= limits.perEmail ||
         recent(60, eq(signInLinks.clientIp, clientIp)) >= limits.perIp ||
@@ -57,7 +60,7 @@ export function createAuth(db: Db, now: () => Date, limits: LinkLimits) {
       const token = newToken();
       const at = now();
       db.insert(signInLinks)
-        .values({ tokenHash: hash(token), email, clientIp, requestedAt: at, expiresAt: new Date(at.getTime() + LINK_LIFETIME_MS) })
+        .values({ tokenHash: hash(token), email, clientIp, feedbackOk, requestedAt: at, expiresAt: new Date(at.getTime() + LINK_LIFETIME_MS) })
         .run();
       return token;
     },
@@ -74,6 +77,11 @@ export function createAuth(db: Db, now: () => Date, limits: LinkLimits) {
       if (!link) return undefined;
 
       db.insert(users).values({ id: newToken(), email: link.email, createdAt: at }).onConflictDoNothing().run();
+      // A box left unticked on a later sign-in doesn't take back a yes; the home screen is where they change it.
+      db.update(users)
+        .set({ lastSignInAt: at, ...(link.feedbackOk ? { feedbackOk: true } : {}) })
+        .where(eq(users.email, link.email))
+        .run();
       const user = db.select().from(users).where(eq(users.email, link.email)).get()!;
       const sessionToken = newToken();
       db.insert(sessions)

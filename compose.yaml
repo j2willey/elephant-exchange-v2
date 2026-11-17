@@ -10,6 +10,8 @@ services:
     environment:
       # Where people open the app; sign-in links point here.
       BASE_URL: ${BASE_URL:-http://localhost:3000}
+      # Who may use the admin page (/admin): comma-separated emails. Unset, nobody can.
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
     volumes:
       - data:/data
     # Time to finish requests and close the database before being killed.

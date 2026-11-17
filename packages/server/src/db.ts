@@ -31,6 +31,8 @@ export const games = sqliteTable("games", {
   themePage: text("theme_page"),
   themeLogo: text("theme_logo"),
   themeBackground: text("theme_background"),
+  /** Made with "Try a demo game": made-up Players, to show the app off. */
+  demo: integer("demo", { mode: "boolean" }).notNull().default(false),
   /** The GameSettings the Game was created with (JSON); later changes are SettingsChanged events. */
   settings: text("settings").notNull(),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
@@ -73,6 +75,9 @@ export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
   email: text("email").notNull().unique(),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  lastSignInAt: integer("last_sign_in_at", { mode: "timestamp_ms" }),
+  /** They said it's OK to email them to ask how it went (ticked at sign-in, changed on the home screen). */
+  feedbackOk: integer("feedback_ok", { mode: "boolean" }).notNull().default(false),
 });
 
 /** Emailed sign-in links. Only a hash of each token is kept, so a leaked database can't sign anyone in. */
@@ -84,6 +89,8 @@ export const signInLinks = sqliteTable(
     /** When and from where it was asked for: the rate limits count these. */
     requestedAt: integer("requested_at", { mode: "timestamp_ms" }).notNull(),
     clientIp: text("client_ip").notNull(),
+    /** The "OK to email me for feedback" box, ticked when asking; carried to the person when the link is used. */
+    feedbackOk: integer("feedback_ok", { mode: "boolean" }).notNull().default(false),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
     usedAt: integer("used_at", { mode: "timestamp_ms" }),
   },

@@ -35,7 +35,7 @@ export function DemoGame() {
     e.preventDefault();
     setBusy(true);
     try {
-      const id = await api.createGame({ activeSlots: 1, maxSteals: 3 }, "Demo game", "self", 60);
+      const id = await api.createGame({ activeSlots: 1, maxSteals: 3 }, "Demo game", "self", 60, undefined, true);
       for (const name of shuffled(demoNames).slice(0, Number(players))) {
         await api.command(id, { type: "AddPlayer", playerId: crypto.randomUUID(), name });
       }
