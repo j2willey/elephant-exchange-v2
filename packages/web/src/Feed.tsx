@@ -34,10 +34,13 @@ export function Feed({
   posts,
   reload,
   offerSignIn,
+  composer = true,
 }: {
   game: GameView;
   posts: Post[];
   reload: () => void;
+  /** False where posting has a panel of its own (a guest's phone). */
+  composer?: boolean;
   /** False when the page already offers sign-in elsewhere (the join panel), so it isn't asked for twice. */
   offerSignIn: boolean;
 }) {
@@ -52,7 +55,7 @@ export function Feed({
   return (
     <section className="card" aria-label="Posts">
       <h2>Feed</h2>
-      {game.phase !== "ended" && <Composer game={game} onPosted={reload} offerSignIn={offerSignIn} />}
+      {composer && game.phase !== "ended" && <Composer game={game} onPosted={reload} offerSignIn={offerSignIn} />}
       <div role="feed" aria-label="Feed" className="feed">
         {posts.length === 0 && <p className="muted">No Posts yet.</p>}
         {posts.map((p) => (
@@ -108,7 +111,7 @@ const postErrors = {
   failed: "That didn't post. Please try again.",
 };
 
-function Composer({ game, onPosted, offerSignIn }: { game: GameView; onPosted: () => void; offerSignIn: boolean }) {
+export function Composer({ game, onPosted, offerSignIn }: { game: GameView; onPosted: () => void; offerSignIn: boolean }) {
   const api = useApi();
   const { pathname } = useLocation();
   const signedIn = useSignedIn();

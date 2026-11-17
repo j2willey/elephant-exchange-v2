@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { drawInOrder, openApp, startServer } from "./harness.js";
+import { drawInOrder, onTab, openApp, startServer } from "./harness.js";
 
 /** A small, real JPEG, as a phone's photo picker would hand over. */
 const jpeg = Uint8Array.from(
@@ -22,13 +22,14 @@ async function underway() {
   const guest = await server.signedIn("gus@example.com");
   openApp(guest, `/games/${id}`);
   const user = userEvent.setup();
+  await onTab(/^post/i);
   const form = await screen.findByRole("form", { name: /post to the feed/i });
   return { ...server, id, user, form };
 }
 
 /** The image a Post shows, once it's in the Feed. */
 const photoInFeed = async (author: string) =>
-  within(await screen.findByRole("feed", { name: /feed/i })).findByRole("img", { name: new RegExp(`photo from ${author}`, "i") });
+  (await onTab(/feed/i), within(await screen.findByRole("feed", { name: /feed/i })).findByRole("img", { name: new RegExp(`photo from ${author}`, "i") }));
 
 describe("Photos in Posts", () => {
   it("lets someone add a Photo to a Post, which everyone sees in the Feed", async () => {
@@ -68,6 +69,8 @@ describe("Photos in Posts", () => {
     await user.upload(within(form).getByLabelText(/add a photo/i), photoFile());
     await user.selectOptions(within(form).getByLabelText(/about a gift/i), "Mug");
     await user.click(within(form).getByRole("button", { name: /^post$/i }));
+    await photoInFeed("Gus");
+    await onTab(/gifts/i);
 
     await waitFor(() =>
       expect(within(screen.getByRole("listitem", { name: "Mug" })).getByRole("img", { name: /photo from gus/i })).toBeInTheDocument(),

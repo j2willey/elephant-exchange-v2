@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { browser, openApp, startServer } from "./harness.js";
+import { browser, onTab, openApp, startServer } from "./harness.js";
 
 const rosterNames = () =>
   within(screen.getByRole("list", { name: /players/i }))
@@ -10,6 +10,7 @@ const rosterNames = () =>
 
 async function joinAs(name: string) {
   const user = userEvent.setup();
+  await onTab(/up now/i);
   const panel = await screen.findByRole("region", { name: /play in this game/i });
   await user.type(await within(panel).findByLabelText(/your name/i), name);
   await user.click(within(panel).getByRole("button", { name: /join as a player/i }));
@@ -61,6 +62,7 @@ describe("Joining a Game from a phone", () => {
     first.unmount();
 
     openApp(dan, `/games/${id}`);
+    await onTab(/up now/i);
 
     expect(await screen.findByText(/you're playing as dan/i)).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: /play in this game/i })).not.toBeInTheDocument();
@@ -73,6 +75,7 @@ describe("Joining a Game from a phone", () => {
     const phone = browser(origin);
     const first = openApp(phone, `/games/${id}`);
     const user = userEvent.setup();
+    await onTab(/up now/i);
     const panel = await screen.findByRole("region", { name: /play in this game/i });
 
     await user.type(await within(panel).findByLabelText(/email/i), "eve@example.com");
@@ -108,6 +111,7 @@ describe("Joining a Game from a phone", () => {
     await host.command(id, { type: "AddPlayer", playerId: "ann", name: "Ann" });
 
     openApp(await signedIn("dan@example.com"), `/games/${id}`);
+    await onTab(/up now/i);
 
     await screen.findByText("Ann");
     expect(screen.queryByRole("region", { name: /play in this game/i })).not.toBeInTheDocument();

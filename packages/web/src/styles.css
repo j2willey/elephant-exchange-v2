@@ -671,3 +671,75 @@ button.danger-solid {
 .back {
   font-weight: 600;
 }
+
+/* A guest's phone: one panel at a time, and a tab bar always in reach at the bottom. */
+.guest {
+  display: grid;
+  gap: 16px;
+  /* Room for the tab bar, so the last card isn't hidden behind it. */
+  padding-bottom: calc(88px + env(safe-area-inset-bottom));
+}
+
+.guest-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.guest-head h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: var(--page-heading);
+}
+
+.guest-head .theme-logo {
+  max-height: 40px;
+}
+
+.tabbar {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  padding-bottom: env(safe-area-inset-bottom);
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+}
+
+.tabbar button {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-height: 60px;
+  padding: 8px 4px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  background: transparent;
+  border-radius: 0;
+}
+
+.tabbar button span {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.tabbar button[aria-selected="true"] {
+  color: var(--brand-text);
+  box-shadow: inset 0 3px 0 var(--brand);
+}
+
+/* It's this Player's turn: the Up now tab says so from wherever they are. */
+.tabbar button.alert {
+  color: var(--brand-ink);
+  background: var(--brand);
+}
+
+.your-turn {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--brand-ink);
+  background: var(--brand);
+}

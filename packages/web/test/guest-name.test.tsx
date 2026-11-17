@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { drawInOrder, openApp, startServer } from "./harness.js";
+import { drawInOrder, onTab, openApp, startServer } from "./harness.js";
 
 /** A Self sign-up Game in play, and Gus signed in on his phone. */
 async function underway() {
@@ -18,7 +18,10 @@ async function underway() {
   return { ...server, host, id, newGame, phone, user: userEvent.setup() };
 }
 
-const composer = () => screen.findByRole("form", { name: /post to the feed/i });
+const composer = async () => {
+  await onTab(/^post/i);
+  return screen.findByRole("form", { name: /post to the feed/i });
+};
 
 async function postAs(user: ReturnType<typeof userEvent.setup>, name: string, words: string) {
   const form = await composer();
@@ -50,6 +53,7 @@ describe("A Guest's name", () => {
     first.unmount();
 
     openApp(phone, `/games/${id}`);
+    await onTab(/up now/i);
     const join = await screen.findByRole("region", { name: /play in this game/i });
     expect(await within(join).findByLabelText(/your name/i)).toHaveValue("Gus");
   });
@@ -67,6 +71,7 @@ describe("A Guest's name", () => {
   it("is remembered once they join as a Player", async () => {
     const { id, newGame, phone, user } = await underway();
     const first = openApp(phone, `/games/${id}`);
+    await onTab(/up now/i);
     const join = await screen.findByRole("region", { name: /play in this game/i });
     await user.type(await within(join).findByLabelText(/your name/i), "Gus");
     await user.click(within(join).getByRole("button", { name: /join as a player/i }));

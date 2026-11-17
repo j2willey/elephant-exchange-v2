@@ -1,10 +1,10 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useLocation, useParams } from "react-router";
 import type { Command } from "@elephant/rules";
 import type { CommandResult, GameView, Post, SharedGame, Viewer } from "./api.js";
 import { useApi } from "./ApiContext.js";
 import { Countdown } from "./Countdown.js";
-import { Feed, PostPhoto, useFeed } from "./Feed.js";
+import { Composer, Feed, PostPhoto, useFeed } from "./Feed.js";
 import { SignInForm, useSignedIn } from "./SignIn.js";
 import { ThemeLogo, useTheme } from "./theme.js";
 import { useLiveGame } from "./useLiveGame.js";
@@ -68,6 +68,41 @@ export function GamePage() {
     </section>
   );
 
+  const status =
+    game.phase === "ended" ? (
+    <section className="card">
+      <h2>Game over</h2>
+      <p className="muted">Here's who went home with what.</p>
+    </section>
+  ) : (
+    game.phase !== "setup" && (
+      <section className="card" aria-live="polite">
+        {game.phase === "finalRound" && <h2>Final Round</h2>}
+        <p>
+          Up now: <strong>{game.active.map(nameOf).join(", ") || "nobody"}</strong>
+        </p>
+        <p>
+          On deck: <strong>{game.onDeck.map(nameOf).join(", ") || "nobody"}</strong>
+        </p>
+        {game.phase === "finalRound" && (
+          <p className="muted">
+            {game.leftoverGifts} unopened {game.leftoverGifts === 1 ? "gift" : "gifts"} left
+          </p>
+        )}
+        {runs && (
+          <button className="secondary" onClick={() => send({ type: "Undo" })}>
+            Undo last pick
+          </button>
+        )}
+      </section>
+    )
+  );
+
+  // Someone who doesn't run the Game is on their phone: one panel at a time, picked from a tab bar.
+  if (!runs) {
+    return <GuestView game={game} accept={accept} posts={posts} reloadFeed={reloadFeed} stars={stars} joinOffered={joinOffered} status={status} players={players} />;
+  }
+
   return (
     <div className="stack">
       <section className="card">
@@ -99,34 +134,7 @@ export function GamePage() {
 
       {game.phase === "setup" && players}
 
-      {game.phase === "ended" ? (
-        <section className="card">
-          <h2>Game over</h2>
-          <p className="muted">Here's who went home with what.</p>
-        </section>
-      ) : (
-        game.phase !== "setup" && (
-          <section className="card" aria-live="polite">
-            {game.phase === "finalRound" && <h2>Final Round</h2>}
-            <p>
-              Up now: <strong>{game.active.map(nameOf).join(", ") || "nobody"}</strong>
-            </p>
-            <p>
-              On deck: <strong>{game.onDeck.map(nameOf).join(", ") || "nobody"}</strong>
-            </p>
-            {game.phase === "finalRound" && (
-              <p className="muted">
-                {game.leftoverGifts} unopened {game.leftoverGifts === 1 ? "gift" : "gifts"} left
-              </p>
-            )}
-            {runs && (
-              <button className="secondary" onClick={() => send({ type: "Undo" })}>
-                Undo last pick
-              </button>
-            )}
-          </section>
-        )
-      )}
+      {status}
 
       {runs &&
         (game.phase === "playing" || game.phase === "finalRound") &&
@@ -155,6 +163,128 @@ export function GamePage() {
 
 
       {game.phase !== "setup" && players}
+    </div>
+  );
+}
+
+type GuestTab = "gifts" | "up" | "feed" | "post";
+const guestTabs: { id: GuestTab; icon: string; label: string }[] = [
+  { id: "gifts", icon: "🎁", label: "Gifts" },
+  { id: "up", icon: "⏱", label: "Up now" },
+  { id: "feed", icon: "💬", label: "Feed" },
+  { id: "post", icon: "📷", label: "Post" },
+];
+
+/**
+ * A guest's phone (anyone who doesn't run the Game): the Gifts first, and a tab bar, always in reach at the
+ * bottom, for who's up, the Feed and posting. Each panel scrolls on its own; the Feed's newest Post is at the top.
+ */
+function GuestView({
+  game,
+  accept,
+  posts,
+  reloadFeed,
+  stars,
+  joinOffered,
+  status,
+  players,
+}: {
+  game: GameView;
+  accept: (game: SharedGame | null, viewer?: Partial<Viewer>) => void;
+  posts: Post[];
+  reloadFeed: () => void;
+  stars: Stars;
+  joinOffered: boolean;
+  status: ReactNode;
+  players: ReactNode;
+}) {
+  const [tab, setTab] = useState<GuestTab>("gifts");
+  // When the Game ends, everyone is wanted on the Gifts, where the Worst Gift Vote happens.
+  useEffect(() => {
+    if (game.phase === "ended") setTab("gifts");
+  }, [game.phase]);
+  const myName = game.me && game.players.find((p) => p.id === game.me!.playerId)?.name;
+  const myTurn = game.me !== undefined && game.me !== null && game.active.includes(game.me.playerId);
+
+  return (
+    <div className="guest">
+      <header className="guest-head">
+        <ThemeLogo theme={game.theme} />
+        <h2>{game.name}</h2>
+      </header>
+
+      <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className="stack">
+        {tab === "gifts" && (
+          <>
+            {game.phase === "ended" && <VotePanel game={game} accept={accept} />}
+            {joinOffered && (
+              <button className="secondary" onClick={() => setTab("up")}>
+                Playing? Join the Game
+              </button>
+            )}
+            {game.gifts.length > 0 ? (
+              <Gifts game={game} stars={stars} posts={posts} />
+            ) : (
+              <p className="card muted">No Gifts opened yet. They'll show up here as they're opened.</p>
+            )}
+          </>
+        )}
+        {tab === "up" && (
+          <>
+            {myTurn && <p className="card your-turn">It's your turn!</p>}
+            {myName ? <p className="card you">You're playing as {myName}</p> : joinOffered && <JoinPanel gameId={game.id} onJoined={accept} />}
+            {status}
+            {players}
+          </>
+        )}
+        {tab === "feed" && (
+          <>
+            {game.phase !== "ended" && (
+              <button className="secondary" onClick={() => setTab("post")}>
+                Write a Post
+              </button>
+            )}
+            <Feed game={game} posts={posts} reload={reloadFeed} offerSignIn={false} composer={false} />
+          </>
+        )}
+        {tab === "post" && (
+          <section className="card">
+            <h2>Post</h2>
+            {game.phase === "ended" ? (
+              <p className="muted">The Game is over, so posting has closed.</p>
+            ) : (
+              <Composer
+                game={game}
+                offerSignIn
+                onPosted={() => {
+                  reloadFeed();
+                  setTab("feed");
+                }}
+              />
+            )}
+          </section>
+        )}
+      </div>
+
+      <nav className="tabbar" role="tablist" aria-label="Game">
+        {guestTabs.map((t) => (
+          <button
+            key={t.id}
+            id={`tab-${t.id}`}
+            role="tab"
+            aria-selected={tab === t.id}
+            aria-controls={`panel-${t.id}`}
+            className={t.id === "up" && myTurn ? "alert" : undefined}
+            onClick={() => {
+              setTab(t.id);
+              window.scrollTo?.(0, 0);
+            }}
+          >
+            <span aria-hidden="true">{t.icon}</span>
+            {t.label}
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }

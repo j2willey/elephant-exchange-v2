@@ -1,7 +1,7 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { browser, drawInOrder, openApp, startServer } from "./harness.js";
+import { browser, drawInOrder, onTab, openApp, startServer } from "./harness.js";
 
 /** The Host, signed in, creates a Game from the home screen; resolves once its page is showing. */
 async function createGame(settings?: { slots?: string; steals?: string }) {
@@ -140,6 +140,7 @@ describe("Setting up a Game", () => {
     first.unmount();
 
     openApp(browser(origin), gameLink);
+    await onTab(/up now/i);
 
     await screen.findByText("Ann");
     expect(screen.queryByLabelText(/player's name/i)).not.toBeInTheDocument();

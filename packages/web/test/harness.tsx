@@ -1,8 +1,8 @@
 import { File as NodeFile } from "node:buffer";
 import { StrictMode } from "react";
-import { render } from "@testing-library/react";
+import { fireEvent, render, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
-import { afterEach } from "vitest";
+import { afterEach, expect } from "vitest";
 import type { DrawFn } from "@elephant/rules";
 import { createServer, type Mailer } from "@elephant/server";
 import { createApi, type Api } from "../src/api.js";
@@ -152,4 +152,14 @@ export function openApp(api: Api, path = "/") {
       </ApiProvider>
     </StrictMode>,
   );
+}
+
+/**
+ * On a guest's phone, shows the panel behind the tab `name` (Gifts, Up now, Feed, Post); on the Host's console,
+ * which has no tabs, does nothing. Waits for the Game to load first, since the tabs come with it.
+ */
+export async function onTab(name: RegExp, phone: HTMLElement = document.body) {
+  await waitFor(() => expect(within(phone).queryByText(/^loading…$/i)).not.toBeInTheDocument());
+  const tab = within(phone).queryByRole("tab", { name });
+  if (tab && tab.getAttribute("aria-selected") !== "true") fireEvent.click(tab);
 }

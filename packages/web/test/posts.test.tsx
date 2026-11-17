@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { browser, drawInOrder, openApp, startServer } from "./harness.js";
+import { browser, drawInOrder, onTab, openApp, startServer } from "./harness.js";
 
 /** A Game in play with Socks and Mug opened, Ann and Bob holding them. */
 async function underway() {
@@ -15,12 +15,16 @@ async function underway() {
   return { ...server, host, id, user: userEvent.setup() };
 }
 
-const feed = () => screen.findByRole("feed", { name: /feed/i });
+const feed = async () => {
+  await onTab(/feed/i);
+  return screen.findByRole("feed", { name: /feed/i });
+};
 const postsInFeed = async () => within(await feed()).queryAllByRole("article").map((a) => a.textContent);
 const feedShows = (text: RegExp) => waitFor(async () => expect((await postsInFeed()).join("\n")).toMatch(text));
 
-/** Writes a Post from the open screen, about a Gift if one is named. */
-async function post(user: ReturnType<typeof userEvent.setup>, words: string, opts: { as?: string; about?: string } = {}) {
+/** Writes a Post from the open screen, about a Gift if one is named; `phone` picks the screen when more than one is open. */
+async function post(user: ReturnType<typeof userEvent.setup>, words: string, opts: { as?: string; about?: string; phone?: HTMLElement } = {}) {
+  await onTab(/^post/i, opts.phone);
   const form = await screen.findByRole("form", { name: /post to the feed/i });
   const yourName = within(form).queryByLabelText(/your name/i);
   if (yourName && opts.as) await user.type(yourName, opts.as);
@@ -42,7 +46,7 @@ describe("Posts", () => {
 
     const guest = await signedIn("gus@example.com");
     const guestScreen = openApp(guest, `/games/${id}`);
-    await post(user, "Those socks are amazing", { as: "Gus" });
+    await post(user, "Those socks are amazing", { as: "Gus", phone: guestScreen.container });
     guestScreen.unmount();
 
     await feedShows(/gus.*those socks are amazing/i);
@@ -57,6 +61,7 @@ describe("Posts", () => {
     await post(user, "Hi all");
 
     await feedShows(/dan.*hi all/i);
+    await onTab(/^post/i);
     expect(within(await screen.findByRole("form", { name: /post to the feed/i })).queryByLabelText(/your name/i)).not.toBeInTheDocument();
   });
 
@@ -67,6 +72,7 @@ describe("Posts", () => {
     await post(user, "It's a heated mug!", { as: "Gus", about: "Mug" });
 
     await feedShows(/about mug.*it's a heated mug!/i);
+    await onTab(/gifts/i);
     await waitFor(() => expect(screen.getByRole("listitem", { name: "Mug" })).toHaveTextContent(/it's a heated mug!/i));
     expect(screen.getByRole("listitem", { name: "Socks" })).not.toHaveTextContent(/heated/i);
   });
@@ -79,6 +85,7 @@ describe("Posts", () => {
     openApp(browser(origin), `/games/${id}`);
 
     await feedShows(/first!/i);
+    await onTab(/^post/i);
     // The sign-in offer comes once the page has checked who's there, which may be after the Feed loads.
     expect(await screen.findByRole("button", { name: /send.*link/i })).toBeInTheDocument();
     expect(screen.queryByRole("form", { name: /post to the feed/i })).not.toBeInTheDocument();
@@ -132,6 +139,7 @@ describe("Moderation", () => {
     hostScreen.unmount();
 
     openApp(guest, `/games/${id}`);
+    await onTab(/^post/i);
 
     expect(await screen.findByText(/the host has paused posting/i)).toBeInTheDocument();
     expect(screen.queryByRole("form", { name: /post to the feed/i })).not.toBeInTheDocument();
