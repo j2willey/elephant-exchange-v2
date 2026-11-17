@@ -659,3 +659,15 @@ button.danger-solid {
   border-radius: 8px;
   object-fit: contain;
 }
+
+/* The Game's own links, on the Host's console: in a row that wraps on a phone. */
+.game-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+
+.settings-link,
+.back {
+  font-weight: 600;
+}

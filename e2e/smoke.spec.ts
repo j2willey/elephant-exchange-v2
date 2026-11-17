@@ -75,9 +75,11 @@ test("a Host runs a Game while a guest follows along on their phone", async ({ b
   await expect(photo).toBeVisible();
   await expect.poll(() => photo.evaluate((img: HTMLImageElement) => [img.naturalWidth, img.naturalHeight])).toEqual([1200, 1600]);
 
-  // The Host can keep them all.
+  // The Host can keep them all, from the Game's settings.
+  await host.getByRole("link", { name: /settings/i }).click();
   const [album] = await Promise.all([host.waitForEvent("download"), host.getByRole("link", { name: /download all the photos/i }).click()]);
   expect(album.suggestedFilename()).toMatch(/-photos\.zip$/);
+  await host.getByRole("link", { name: /back to the game/i }).click();
 
   // The big screen, with its QR code.
   const screen = await (await browser.newContext({ viewport: { width: 1280, height: 720 } })).newPage();
@@ -90,6 +92,7 @@ test("a Host runs a Game while a guest follows along on their phone", async ({ b
   if (process.env["SMOKE_SCREENSHOT"]) await screen.screenshot({ path: process.env["SMOKE_SCREENSHOT"], fullPage: true });
 
   // The end, and the Worst Gift Vote: the guest votes on their phone, the big screen counts it live.
+  await host.getByRole("link", { name: /settings/i }).click();
   await host.getByRole("button", { name: /end the game/i }).click();
   await host.getByRole("button", { name: /yes, end it now/i }).click();
   const vote = host.getByRole("region", { name: /worst gift vote/i });

@@ -75,12 +75,45 @@ describe("Setting up a Game", () => {
     const user = await createGame();
     await addPlayers(user, "Ann");
     expect(screen.getByRole("button", { name: /start game/i })).toBeDisabled();
+    expect(screen.getByText(/add at least 2 players to start/i)).toBeInTheDocument();
     await addPlayers(user, "Bob", "Cat");
+    expect(screen.queryByText(/add at least 2 players/i)).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /start game/i }));
 
     expect(await screen.findByText(/up now/i)).toHaveTextContent(/up now:\s*ann/i);
     expect(screen.getByText(/on deck/i)).toHaveTextContent(/on deck:\s*bob/i);
+  });
+
+  it("opens on the Host's console: the Players and Start come first, and the settings are a link away", async () => {
+    const { signedIn } = await startServer();
+    openApp(await signedIn("host@example.com"));
+    const user = await createGame();
+
+    const cards = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+    expect(cards.indexOf("Players")).toBeLessThan(cards.indexOf("Feed"));
+    expect(screen.getByRole("button", { name: /start game/i })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /how this game looks/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: /approval/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /end the game/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("link", { name: /settings/i }));
+    expect(await screen.findByRole("region", { name: /how this game looks/i })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /approval/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("link", { name: /back to the game/i }));
+    expect(await screen.findByRole("button", { name: /start game/i })).toBeInTheDocument();
+  });
+
+  it("keeps the settings page to the Host and Co-hosts", async () => {
+    const { origin, signedIn } = await startServer();
+    const host = await signedIn("host@example.com");
+    const id = await host.createGame({ activeSlots: 1, maxSteals: 3 });
+    openApp(browser(origin), `/games/${id}/settings`);
+
+    expect(await screen.findByText(/only the host/i)).toBeInTheDocument();
+    expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /back to the game/i })).toHaveAttribute("href", `/games/${id}`);
   });
 
   it("shows the same Game after a reload", async () => {
@@ -111,5 +144,6 @@ describe("Setting up a Game", () => {
     await screen.findByText("Ann");
     expect(screen.queryByLabelText(/player's name/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /start game|remove/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /settings/i })).not.toBeInTheDocument();
   });
 });

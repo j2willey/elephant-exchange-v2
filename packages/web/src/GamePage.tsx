@@ -5,7 +5,6 @@ import type { CommandResult, GameView, Post, SharedGame, Viewer } from "./api.js
 import { useApi } from "./ApiContext.js";
 import { Countdown } from "./Countdown.js";
 import { Feed, PostPhoto, useFeed } from "./Feed.js";
-import { GameLook } from "./GameLook.js";
 import { SignInForm, useSignedIn } from "./SignIn.js";
 import { ThemeLogo, useTheme } from "./theme.js";
 import { useLiveGame } from "./useLiveGame.js";
@@ -38,14 +37,52 @@ export function GamePage() {
     }
   }
 
+  const players = (
+    <section className="card">
+      <h2>Players</h2>
+      {game.players.length === 0 ? (
+        <p className="muted">No players yet.</p>
+      ) : (
+        <ol className="roster" aria-label="Players">
+          {game.players.map((p) => (
+            <li key={p.id}>
+              <span data-name>{p.name}</span>
+              {runs && game.phase === "setup" && (
+                <button className="link" aria-label={`Remove ${p.name}`} onClick={() => send({ type: "RemovePlayer", playerId: p.id })}>
+                  Remove
+                </button>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
+      {runs && game.phase !== "ended" && <AddPlayer onAdd={(name) => send({ type: "AddPlayer", playerId: crypto.randomUUID(), name })} />}
+      {runs && game.phase === "setup" && (
+        <>
+          <button disabled={game.players.length < 2} onClick={() => send({ type: "StartGame" })}>
+            Start game
+          </button>
+          {game.players.length < 2 && <p className="muted hint">Add at least 2 players to start.</p>}
+        </>
+      )}
+    </section>
+  );
+
   return (
     <div className="stack">
       <section className="card">
         <ThemeLogo theme={game.theme} />
         <h2>{game.name}</h2>
         <Settings game={game} />
-        <Link to={`/games/${game.id}`}>Link to this game</Link>
-        <Link to={`/games/${game.id}/screen`}>Open the big screen</Link>
+        <nav className="game-links" aria-label="This Game">
+          <Link to={`/games/${game.id}`}>Link to this game</Link>
+          <Link to={`/games/${game.id}/screen`}>Open the big screen</Link>
+          {runs && (
+            <Link to={`/games/${game.id}/settings`} className="settings-link">
+              ⚙ Settings
+            </Link>
+          )}
+        </nav>
       </section>
 
       {game.me ? (
@@ -53,6 +90,14 @@ export function GamePage() {
       ) : (
         joinOffered && <JoinPanel gameId={game.id} onJoined={accept} />
       )}
+
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+
+      {game.phase === "setup" && players}
 
       {game.phase === "ended" ? (
         <section className="card">
@@ -108,41 +153,8 @@ export function GamePage() {
 
       <Feed game={game} posts={posts} reload={reloadFeed} offerSignIn={!joinOffered} />
 
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
 
-      <section className="card">
-        <h2>Players</h2>
-        {game.players.length === 0 ? (
-          <p className="muted">No players yet.</p>
-        ) : (
-          <ol className="roster" aria-label="Players">
-            {game.players.map((p) => (
-              <li key={p.id}>
-                <span data-name>{p.name}</span>
-                {runs && game.phase === "setup" && (
-                  <button className="link" aria-label={`Remove ${p.name}`} onClick={() => send({ type: "RemovePlayer", playerId: p.id })}>
-                    Remove
-                  </button>
-                )}
-              </li>
-            ))}
-          </ol>
-        )}
-        {runs && game.phase !== "ended" && <AddPlayer onAdd={(name) => send({ type: "AddPlayer", playerId: crypto.randomUUID(), name })} />}
-        {runs && game.phase === "setup" && (
-          <button disabled={game.players.length < 2} onClick={() => send({ type: "StartGame" })}>
-            Start game
-          </button>
-        )}
-      </section>
-
-      {runs && <GameLook game={game} />}
-
-      {runs && game.phase !== "ended" && <EndGame send={send} />}
+      {game.phase !== "setup" && players}
     </div>
   );
 }
@@ -217,31 +229,6 @@ function FinalRoundPanel({ game, send }: { game: GameView; send: (c: Command) =>
         <input id="leftovers" type="number" inputMode="numeric" min={0} max={200} required value={leftovers} onChange={(e) => setLeftovers(e.target.value)} />
         <button type="submit">Start the Final Round</button>
       </form>
-    </section>
-  );
-}
-
-/** The Host may end the Game at any moment (the room booking may run out), but never by one stray tap. */
-function EndGame({ send }: { send: (c: Command) => Promise<void> }) {
-  const [asking, setAsking] = useState(false);
-  if (!asking) {
-    return (
-      <button className="link danger" onClick={() => setAsking(true)}>
-        End the Game
-      </button>
-    );
-  }
-  return (
-    <section className="card">
-      <p>End the Game now? Everyone keeps the Gift they're holding, and nobody else gets a turn.</p>
-      <div className="inline">
-        <button className="danger-solid" onClick={() => void send({ type: "EndGame" })}>
-          Yes, end it now
-        </button>
-        <button className="secondary" onClick={() => setAsking(false)}>
-          Keep playing
-        </button>
-      </div>
     </section>
   );
 }

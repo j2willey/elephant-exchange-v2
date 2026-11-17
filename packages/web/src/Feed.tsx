@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useLocation } from "react-router";
-import type { GameView, Moderation, Post } from "./api.js";
+import type { GameView, Post } from "./api.js";
 import { useApi } from "./ApiContext.js";
 import { shrinkPhoto } from "./shrinkPhoto.js";
 import { SignInForm, useSignedIn } from "./SignIn.js";
@@ -28,13 +28,7 @@ export function useFeed(gameId: string, changes: number): [Post[], () => void] {
   return [posts, () => setAsked((n) => n + 1)];
 }
 
-const modes: { mode: Moderation; label: string }[] = [
-  { mode: "open", label: "Open: Posts appear at once" },
-  { mode: "approval", label: "Approval: each Post waits for you to approve it" },
-  { mode: "paused", label: "Paused: nobody can post" },
-];
-
-/** The Game's Posts, newest first, with a way to post and, for the Hosts, to moderate. */
+/** The Game's Posts, newest first, with a way to post and, for the Hosts, to approve or hide each one (posting itself is set on the settings page). */
 export function Feed({
   game,
   posts,
@@ -58,30 +52,6 @@ export function Feed({
   return (
     <section className="card" aria-label="Posts">
       <h2>Feed</h2>
-      {hosting && (
-        <fieldset className="choices">
-          <legend>Posting</legend>
-          {modes.map(({ mode, label }) => (
-            <label key={mode}>
-              <input
-                type="radio"
-                name="moderation"
-                checked={game.moderation === mode}
-                onChange={() => void api.setModeration(game.id, mode)}
-              />
-              {label}
-            </label>
-          ))}
-        </fieldset>
-      )}
-      {hosting && (
-        <p className="album">
-          <a href={`/api/games/${encodeURIComponent(game.id)}/album.zip`} download>
-            Download all the Photos
-          </a>{" "}
-          <span className="muted hint">(a .zip). Photos are deleted 60 days after the Game's last move, so keep a copy.</span>
-        </p>
-      )}
       {game.phase !== "ended" && <Composer game={game} onPosted={reload} offerSignIn={offerSignIn} />}
       <div role="feed" aria-label="Feed" className="feed">
         {posts.length === 0 && <p className="muted">No Posts yet.</p>}

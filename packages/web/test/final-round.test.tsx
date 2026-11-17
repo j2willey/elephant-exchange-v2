@@ -103,12 +103,17 @@ describe("Ending the Game", () => {
     const user = userEvent.setup();
     await turnOf("Ann"); // mid-Turn
 
-    await user.click(screen.getByRole("button", { name: /end the game/i }));
+    // It's on the settings page, away from the buttons tapped all evening.
+    await user.click(screen.getByRole("link", { name: /settings/i }));
+    await user.click(await screen.findByRole("button", { name: /end the game/i }));
     await user.click(screen.getByRole("button", { name: /keep playing/i }));
+    await user.click(screen.getByRole("link", { name: /back to the game/i }));
     expect(await turnOf("Ann")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /end the game/i }));
+    await user.click(screen.getByRole("link", { name: /settings/i }));
+    await user.click(await screen.findByRole("button", { name: /end the game/i }));
     await user.click(screen.getByRole("button", { name: /yes, end it now/i }));
+    // and back to the Game, where the Vote is
 
     expect(await screen.findByRole("heading", { name: /game over/i })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: /turn/i })).not.toBeInTheDocument();

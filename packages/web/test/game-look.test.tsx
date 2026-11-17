@@ -38,7 +38,7 @@ describe("A Game's look", () => {
   it("can be switched to another Organization, or none, by the Host at any time", async () => {
     const { host, lodge, user } = await organizer();
     const id = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Party", "host", undefined, lodge);
-    openApp(host, `/games/${id}`);
+    openApp(host, `/games/${id}/settings`);
     await waitFor(() => expect(cssVar("--brand")).toBe("#c8102e"));
 
     await within(await panel()).findByRole("option", { name: "Troop 7" }); // once the Organizations have loaded
@@ -52,7 +52,7 @@ describe("A Game's look", () => {
   it("can have its own colors and logo for this Game only, and hand them back", async () => {
     const { host, lodge, user } = await organizer();
     const id = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Party", "host", undefined, lodge);
-    openApp(host, `/games/${id}`);
+    openApp(host, `/games/${id}/settings`);
     const look = await panel();
 
     fireEvent.input(within(look).getByLabelText(/main color/i), { target: { value: "#0b3d91" } });

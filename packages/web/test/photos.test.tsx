@@ -100,7 +100,7 @@ describe("The album", () => {
     const server = await startServer({ draw: drawInOrder });
     const host = await server.signedIn("host@example.com");
     const id = await host.createGame({ activeSlots: 1, maxSteals: 3 });
-    openApp(host, `/games/${id}`);
+    openApp(host, `/games/${id}/settings`);
 
     const link = await screen.findByRole("link", { name: /download all the photos/i });
     expect(link).toHaveAttribute("href", `/api/games/${id}/album.zip`);

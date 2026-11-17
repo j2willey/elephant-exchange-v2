@@ -88,7 +88,7 @@ describe("Posts", () => {
 describe("Moderation", () => {
   it("under Approval, holds each Post until the Host approves it", async () => {
     const { origin, host, signedIn, id, user } = await underway();
-    const hostScreen = openApp(host, `/games/${id}`);
+    const hostScreen = openApp(host, `/games/${id}/settings`);
     await setModeration(user, /approval/i);
     hostScreen.unmount();
 
@@ -127,7 +127,7 @@ describe("Moderation", () => {
   it("lets the Host pause posting, which takes the form away from everyone", async () => {
     const { host, signedIn, id, user } = await underway();
     const guest = await signedIn("gus@example.com");
-    const hostScreen = openApp(host, `/games/${id}`);
+    const hostScreen = openApp(host, `/games/${id}/settings`);
     await setModeration(user, /paused/i);
     hostScreen.unmount();
 
