@@ -17,7 +17,7 @@ describe("My Games", () => {
     await user.click(screen.getByRole("button", { name: /create game/i }));
 
     expect(await screen.findByRole("heading", { name: "OA Holiday Party" })).toBeInTheDocument();
-    const gameLink = screen.getByRole("link", { name: /link to this game/i }).getAttribute("href");
+    const gameLink = screen.getByRole("link", { name: /link for guests/i }).getAttribute("href");
     first.unmount();
 
     openApp(host);

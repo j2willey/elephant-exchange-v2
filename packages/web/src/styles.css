@@ -814,3 +814,32 @@ label.check input {
 .select-all {
   user-select: all;
 }
+
+/* "Host console", above the Game's name. */
+.eyebrow {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* The console's links: the scoreboard, the guests' link and Settings, in a row that wraps on a phone. */
+.console-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 24px;
+  font-weight: 600;
+}
+
+.console-links .inline {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.console-links button.link {
+  min-height: 0;
+  padding: 0;
+}

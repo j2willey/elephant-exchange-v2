@@ -34,6 +34,13 @@ const themeColor = z
 export const orgBody = z.object({ name });
 export const orgEdit = z.object({ name: name.optional(), color: themeColor, page: themeColor });
 export const gameOrgBody = z.object({ orgId: id.nullable() });
+/** A Game's options besides its rules: each optional, so one can be changed at a time. */
+export const gameOptionsEdit = z.object({
+  name: name.optional(),
+  turnSeconds: z.int().min(0).max(600).optional(),
+  rosterMode: rosterMode.optional(),
+});
+
 export const gameThemeEdit = z.object({ color: themeColor, page: themeColor });
 
 export const timerBody = z.object({ playerId: id });

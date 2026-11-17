@@ -34,7 +34,10 @@ export function MyOrgs() {
   return (
     <section className="card" aria-label="Your Organizations">
       <h2>Your Organizations</h2>
-      <p className="muted hint">An Organization's Theme (colors, logo, background) dresses up every Game you run for it.</p>
+      <p className="muted hint">
+        Optional. An Organization is a saved look (colors, logo, background) that dresses up every Game you run for it. To
+        start a Game, use New Game above.
+      </p>
       {orgs && orgs.length > 0 && (
         <ul className="my-games">
           {orgs.map((o) => (
@@ -48,7 +51,7 @@ export function MyOrgs() {
         <label htmlFor="new-org">New Organization's name</label>
         <input id="new-org" required maxLength={100} placeholder="Troop 7" value={name} onChange={(e) => setName(e.target.value)} />
         <button type="submit" className="secondary" disabled={!name.trim()}>
-          Create
+          Create Organization
         </button>
         {failed && (
           <p className="error" role="alert">

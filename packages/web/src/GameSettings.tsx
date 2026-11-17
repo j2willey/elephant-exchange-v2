@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import type { GameView, Moderation, SharedGame } from "./api.js";
+import type { GameView, Moderation, RosterMode, SharedGame } from "./api.js";
 import { useApi } from "./ApiContext.js";
 import { GameLook } from "./GameLook.js";
 import { useTheme } from "./theme.js";
@@ -37,10 +37,98 @@ export function GameSettings() {
       <section className="card">
         <h2>{game.name}: settings</h2>
       </section>
+      <GameOptions game={game} onSaved={accept} />
       <Posting game={game} />
       <GameLook game={game} />
       {game.phase !== "ended" && <EndGame game={game} onEnded={accept} />}
     </div>
+  );
+}
+
+/**
+ * The Game's name and rules, as set when it was created, changed here at any time (even mid-Game: a slow party
+ * can go to 2 at a time). Only what changed is sent.
+ */
+function GameOptions({ game, onSaved }: { game: GameView; onSaved: (game: SharedGame) => void }) {
+  const api = useApi();
+  const [name, setName] = useState(game.name);
+  const [slots, setSlots] = useState(String(game.settings.activeSlots));
+  const [steals, setSteals] = useState(String(game.settings.maxSteals));
+  const [turnSeconds, setTurnSeconds] = useState(String(game.clock.turnSeconds));
+  const [rosterMode, setRosterMode] = useState<RosterMode>(game.rosterMode);
+  const [status, setStatus] = useState<"idle" | "saving" | "saved" | string>("idle");
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setStatus("saving");
+    const rules = {
+      ...(Number(slots) !== game.settings.activeSlots ? { activeSlots: Number(slots) } : {}),
+      ...(Number(steals) !== game.settings.maxSteals ? { maxSteals: Number(steals) } : {}),
+    };
+    if (Object.keys(rules).length > 0) {
+      const result = await api.command(game.id, { type: "ChangeSettings", settings: rules });
+      if (!result.ok) return setStatus(result.message.endsWith(".") ? result.message : `${result.message}.`);
+      onSaved(result.game);
+    }
+    const options = {
+      ...(name.trim() !== game.name ? { name: name.trim() } : {}),
+      ...(Number(turnSeconds) !== game.clock.turnSeconds ? { turnSeconds: Number(turnSeconds) } : {}),
+      ...(rosterMode !== game.rosterMode ? { rosterMode } : {}),
+    };
+    if (Object.keys(options).length > 0) {
+      const saved = await api.setGameOptions(game.id, options);
+      if (!saved) return setStatus("That didn't save. Please try again.");
+      onSaved(saved);
+    }
+    setStatus("saved");
+  }
+
+  return (
+    <section className="card" aria-label="Game options">
+      <form className="stack" onSubmit={save}>
+        <h2>Game options</h2>
+        <label htmlFor="opt-name">Name of the Game</label>
+        <input id="opt-name" required maxLength={100} autoComplete="off" value={name} onChange={(e) => setName(e.target.value)} />
+        <label htmlFor="opt-slots">Players taking a turn at once</label>
+        <input id="opt-slots" type="number" inputMode="numeric" min={1} max={10} required value={slots} onChange={(e) => setSlots(e.target.value)} />
+        <label htmlFor="opt-steals">Steals before a Gift is Frozen</label>
+        <input id="opt-steals" type="number" inputMode="numeric" min={0} max={20} required value={steals} onChange={(e) => setSteals(e.target.value)} />
+        <label htmlFor="opt-seconds">Seconds per turn</label>
+        <input
+          id="opt-seconds"
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={600}
+          required
+          aria-describedby="opt-seconds-hint"
+          value={turnSeconds}
+          onChange={(e) => setTurnSeconds(e.target.value)}
+        />
+        <p id="opt-seconds-hint" className="muted hint">
+          A countdown to keep things moving. Nobody is skipped when it runs out. 0 for none.
+        </p>
+        <fieldset className="choices">
+          <legend>Who adds the Players?</legend>
+          <label>
+            <input type="radio" name="opt-roster" checked={rosterMode === "host"} onChange={() => setRosterMode("host")} />
+            I'll enter them
+          </label>
+          <label>
+            <input type="radio" name="opt-roster" checked={rosterMode === "self"} onChange={() => setRosterMode("self")} />
+            Players sign up on their phones
+          </label>
+        </fieldset>
+        {status !== "idle" && status !== "saving" && (
+          <p className={status === "saved" ? "muted" : "error"} role={status === "saved" ? "status" : "alert"}>
+            {status === "saved" ? "Saved." : status}
+          </p>
+        )}
+        <button type="submit" disabled={status === "saving"}>
+          Save options
+        </button>
+      </form>
+    </section>
   );
 }
 

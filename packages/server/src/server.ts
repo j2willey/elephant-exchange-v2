@@ -46,6 +46,7 @@ import {
   command,
   createGameBody,
   feedbackBody,
+  gameOptionsEdit,
   gameOrgBody,
   gameThemeEdit,
   joinBody,
@@ -805,6 +806,26 @@ export function createServer({
   });
 
   // The Game's own Theme, overriding its Organization's part by part (null hands a part back to it).
+  /** The Host or a Co-host changes the Game's name, turn timer or who adds the Players; every screen updates. */
+  app.patch("/api/games/:id/options", async (c) => {
+    const id = c.req.param("id");
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const body = await parseBody(c, gameOptionsEdit);
+    if (!body.ok) return body.res;
+    const game = load(id);
+    if (!game) return c.json({ error: "Game not found" }, 404);
+    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can change this Game" }, 403);
+    const { name, turnSeconds, rosterMode } = body.data;
+    const set = {
+      ...(name !== undefined ? { name } : {}),
+      ...(turnSeconds !== undefined ? { turnSeconds } : {}),
+      ...(rosterMode !== undefined ? { rosterMode } : {}),
+    };
+    if (Object.keys(set).length > 0) db.update(games).set(set).where(eq(games.id, id)).run();
+    return c.json(publish(id, { ...game, ...set }));
+  });
+
   app.patch("/api/games/:id/theme", async (c) => {
     const id = c.req.param("id");
     const email = signedInAs(c);

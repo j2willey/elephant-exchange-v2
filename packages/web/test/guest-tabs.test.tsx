@@ -25,7 +25,7 @@ describe("A guest's phone", () => {
     for (const name of [/^you$/i, /feed/i, /post/i]) expect(await tab(name)).toHaveAttribute("aria-selected", "false");
     expect(await screen.findByRole("listitem", { name: "Socks" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Troop swap" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /big screen|link to this game|settings/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /scoreboard|link for guests|settings/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("feed")).not.toBeInTheDocument();
   });
 

@@ -122,7 +122,7 @@ describe("Setting up a Game", () => {
     const first = openApp(host);
     const user = await createGame();
     await addPlayers(user, "Ann", "Bob");
-    const gameLink = screen.getByRole("link", { name: /link to this game/i }).getAttribute("href")!;
+    const gameLink = screen.getByRole("link", { name: /link for guests/i }).getAttribute("href")!;
     first.unmount();
 
     openApp(host, gameLink);
@@ -136,7 +136,7 @@ describe("Setting up a Game", () => {
     const first = openApp(await signedIn("host@example.com"));
     const user = await createGame();
     await addPlayers(user, "Ann");
-    const gameLink = screen.getByRole("link", { name: /link to this game/i }).getAttribute("href")!;
+    const gameLink = screen.getByRole("link", { name: /link for guests/i }).getAttribute("href")!;
     first.unmount();
 
     openApp(browser(origin), gameLink);

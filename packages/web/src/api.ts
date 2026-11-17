@@ -228,6 +228,12 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
       return (await res.json()) as { email: string };
     },
 
+    /** Changes a Game's name, turn timer or who adds the Players; only those given. */
+    async setGameOptions(gameId: string, options: { name?: string; turnSeconds?: number; rosterMode?: RosterMode }): Promise<SharedGame | undefined> {
+      const res = await sendJson("PATCH", `/api/games/${encodeURIComponent(gameId)}/options`, options);
+      return res.ok ? ((await res.json()) as SharedGame) : undefined;
+    },
+
     /** The admin pages' lists: "notFound" for anyone who isn't an admin. */
     async adminPeople(): Promise<AdminPerson[] | "notFound"> {
       const res = await fetchFn("/api/admin/people");

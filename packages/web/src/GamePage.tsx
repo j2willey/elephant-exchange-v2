@@ -107,16 +107,20 @@ export function GamePage() {
     <div className="stack">
       <section className="card">
         <ThemeLogo theme={game.theme} />
+        <p className="eyebrow">Host console</p>
         <h2>{game.name}</h2>
         <Settings game={game} />
-        <nav className="game-links" aria-label="This Game">
-          <Link to={`/games/${game.id}`}>Link to this game</Link>
-          <Link to={`/games/${game.id}/screen`}>Open the big screen</Link>
-          {runs && (
-            <Link to={`/games/${game.id}/settings`} className="settings-link">
-              ⚙ Settings
-            </Link>
-          )}
+        <nav className="console-links" aria-label="This Game">
+          {/* A new tab, to drag onto the TV; it's read-only, for everyone to watch. */}
+          <a href={`/games/${game.id}/screen`} target="_blank" rel="noopener">
+            📺 Open the scoreboard
+          </a>
+          {/* What the QR code opens: guests follow along and join from it. Copy it to send ahead of time. */}
+          <span className="inline">
+            <Link to={`/games/${game.id}`}>🔗 Link for guests</Link>
+            <CopyLink path={`/games/${game.id}`} />
+          </span>
+          <Link to={`/games/${game.id}/settings`}>⚙ Settings</Link>
         </nav>
       </section>
 
@@ -414,6 +418,25 @@ function FinalRoundPanel({ game, send }: { game: GameView; send: (c: Command) =>
         <button type="submit">Start the Final Round</button>
       </form>
     </section>
+  );
+}
+
+/** Copies a page of this app's full address, to paste into an email or a text. */
+function CopyLink({ path }: { path: string }) {
+  const [copied, setCopied] = useState(false);
+  if (typeof navigator === "undefined" || !navigator.clipboard) return null;
+  return (
+    <button
+      className="link"
+      onClick={() => {
+        void navigator.clipboard.writeText(`${window.location.origin}${path}`).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        });
+      }}
+    >
+      {copied ? "Copied!" : "Copy"}
+    </button>
   );
 }
 
