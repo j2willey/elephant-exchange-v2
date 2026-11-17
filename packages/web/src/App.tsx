@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, Route, Routes, useNavigate, useSearchParams } from "react-router";
 import { isReturnPath, type MyGame, type MyOrg, type RosterMode } from "./api.js";
 import { useApi } from "./ApiContext.js";
+import { DemoGame } from "./Demo.js";
 import { GamePage } from "./GamePage.js";
 import { GameSettings } from "./GameSettings.js";
 import { MyOrgs, OrgPage } from "./Orgs.js";
@@ -49,6 +50,7 @@ function Home() {
   return (
     <div className="stack">
       <NewGame />
+      <DemoGame />
       <MyGames />
       <MyOrgs />
       <section className="card">
