@@ -140,6 +140,11 @@ export interface ApiOptions {
   storage?: DeviceStorage;
   /** This device's clock (ms since 1970), which may be wrong; Date.now when left out. */
   now?: () => number;
+  /**
+   * The made-up Player this is, on the demo page's sample phone (Demo.tsx): the Host's own browser, acting as that
+   * Player of a demo Game the Host runs. It counts as signed in, as that Player.
+   */
+  demoPlayer?: string;
 }
 
 export type DeviceStorage = Pick<Storage, "getItem" | "setItem">;
@@ -170,6 +175,16 @@ function browserStorage(): DeviceStorage {
 
 /** Talks to the server. Screens use this, never fetch directly, so tests can hand in a browser with a cookie jar. */
 export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, init), options: ApiOptions = {}) {
+  const { demoPlayer } = options;
+  if (demoPlayer !== undefined) {
+    // The demo page's sample phone: every request says which made-up Player it is; the server checks it may be.
+    const plain = fetchFn;
+    fetchFn = (input, init) => {
+      const headers = new Headers(init?.headers);
+      headers.set("x-demo-player", demoPlayer);
+      return plain(input, { ...init, headers });
+    };
+  }
   const storage = options.storage ?? browserStorage();
   const starsKey = (gameId: string) => `stars:${gameId}`;
   const now = options.now ?? (() => Date.now());
@@ -197,6 +212,7 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
 
     /** Who is signed in on this browser, if anyone. */
     async session(): Promise<Session | undefined> {
+      if (demoPlayer !== undefined) return { email: "", feedbackOk: false, admin: false };
       const res = await fetchFn("/api/session");
       if (res.status === 401) return undefined;
       if (!res.ok) throw new Error(`session check failed: ${res.status}`);

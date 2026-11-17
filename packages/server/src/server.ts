@@ -66,6 +66,10 @@ import {
 export type { Mailer } from "./auth.js";
 
 const SESSION_COOKIE = "session";
+/** Names the made-up Player a demo page's sample phone is (see the middleware on /api/games/:id/*). */
+const DEMO_PLAYER_HEADER = "x-demo-player";
+/** The stand-in "email" a made-up Player acts under: not an address, so nothing is ever sent to it. */
+const DEMO_ACTOR = "demo-player:";
 
 export interface ServerOptions {
   /** SQLite file path, or ":memory:" for tests. */
@@ -244,7 +248,10 @@ export function createServer({
       return "unknown"; // no socket, as in app.request() tests
     }
   }
-  const signedInAs = (c: Context) => auth.sessionEmail(getCookie(c, SESSION_COOKIE));
+  /** Requests from a demo Game's sample phone, and the made-up Player's stand-in email each one acts as. */
+  const demoActors = new WeakMap<Context, string>();
+  /** Who is asking: the signed-in person, or the made-up Player a demo page's sample phone is. */
+  const signedInAs = (c: Context) => demoActors.get(c) ?? auth.sessionEmail(getCookie(c, SESSION_COOKIE));
   const roleIn = (gameId: string, email: string) =>
     db.select().from(gameHosts).where(and(eq(gameHosts.gameId, gameId), eq(gameHosts.email, email))).get()?.role;
   /** Rebuilt Games, so a Game's log is replayed only once per server start. `seq` counts its logged events. */
@@ -304,6 +311,10 @@ export function createServer({
 
   /** The Player this person signed up as, if they did and are still on the Roster. */
   function playerOf(gameId: string, email: string, game: LoadedGame): string | undefined {
+    if (email.startsWith(DEMO_ACTOR)) {
+      const playerId = email.slice(DEMO_ACTOR.length);
+      return roster(game.state).some((p) => p.id === playerId) ? playerId : undefined;
+    }
     const row = db
       .select({ playerId: gamePlayers.playerId })
       .from(gamePlayers)
@@ -353,6 +364,23 @@ export function createServer({
   let io: SocketServer | undefined;
 
   const app = new Hono();
+
+  // The demo page's sample phone (Demo.tsx) is one of a demo Game's made-up Players. It runs in the Host's own
+  // browser, so it carries the Host's sign-in, and names the Player in a header. Only in a demo Game, only for
+  // its Hosts and only for a Player on its Roster: the phone then acts as that Player, never as a Host.
+  app.use("/api/games/:id/*", async (c, next) => {
+    const playerId = c.req.header(DEMO_PLAYER_HEADER);
+    if (playerId === undefined) return next();
+    const id = c.req.param("id")!;
+    const email = auth.sessionEmail(getCookie(c, SESSION_COOKIE));
+    const row = db.select({ demo: games.demo }).from(games).where(eq(games.id, id)).get();
+    const game = row?.demo ? load(id) : undefined;
+    if (!email || !game || !roleIn(id, email) || !roster(game.state).some((p) => p.id === playerId)) {
+      return c.json({ error: "Only a demo Game's Host can see it as one of its Players" }, 403);
+    }
+    demoActors.set(c, DEMO_ACTOR + playerId);
+    return next();
+  });
 
   // For Docker's HEALTHCHECK and uptime monitors: up only if the database answers.
   app.get("/api/health", (c) => {

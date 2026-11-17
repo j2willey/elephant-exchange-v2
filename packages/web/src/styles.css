@@ -782,6 +782,84 @@ label.check input {
   margin: 0;
 }
 
+/* The demo page (Demo.tsx): the Host console or the scoreboard on the left, a sample phone on the right. */
+.page:has(.demo) {
+  max-width: 96rem;
+}
+
+/* Inside the demo page's frames, the brand heading is already on the page around them. */
+[data-embedded] .brand {
+  display: none;
+}
+
+.demo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 24px;
+  align-items: start;
+}
+
+.demo-main,
+.demo-phone {
+  display: grid;
+  gap: 8px;
+}
+
+.demo-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.demo-tabs button {
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-bottom: 0;
+}
+
+.demo-tabs button[aria-selected="true"] {
+  background: var(--brand);
+  color: var(--brand-ink);
+  border-color: var(--brand);
+}
+
+.demo-main iframe {
+  width: 100%;
+  height: calc(100vh - 220px);
+  min-height: 560px;
+  border: 1px solid var(--line);
+  border-radius: 0 var(--radius) var(--radius) var(--radius);
+  background: var(--page);
+}
+
+.demo-main iframe[hidden] {
+  display: none;
+}
+
+/* A phone-sized frame: 360 × 740, about a real phone's screen. */
+.demo-phone iframe {
+  width: 380px;
+  height: 760px;
+  border: 10px solid #1d1d1f;
+  border-radius: 36px;
+  background: var(--page);
+}
+
+.demo-phone label {
+  font-weight: 600;
+}
+
+/* On a narrower screen the phone goes under the console. */
+@media (max-width: 1000px) {
+  .demo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .demo-phone {
+    justify-items: center;
+  }
+}
+
 /* The admin page is for a laptop: wide enough for its tables. */
 .page:has(.admin) {
   max-width: 72rem;

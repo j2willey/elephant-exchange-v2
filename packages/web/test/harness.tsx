@@ -50,8 +50,8 @@ export async function startServer(options: { draw?: DrawFn; adminEmails?: string
   };
   const origin = `http://localhost:${port}`;
   /** A browser already signed in as this person (by the same emailed-link steps the screens use). */
-  const signedIn = async (email: string) => {
-    const api = browser(origin);
+  const signedIn = async (email: string, { demoPlayer }: { demoPlayer?: string } = {}) => {
+    const api = browser(origin, demoPlayer === undefined ? {} : { demoPlayer });
     await api.requestLink(email);
     const token = new URLSearchParams(linkFor(email).split("?")[1]).get("token")!;
     if (!(await api.redeemLink(token))) throw new Error(`could not sign in ${email}`);
@@ -112,7 +112,7 @@ async function toMultipart(form: FormData): Promise<{ body: Uint8Array; type: st
  * One person's browser: requests go to the server and cookies are kept between them, as a browser would.
  * Rendering the app again with the same browser is like reloading the page; its Stars are kept too.
  */
-export function browser(origin: string, { clockWrongBy = 0 }: { clockWrongBy?: number } = {}): Api {
+export function browser(origin: string, { clockWrongBy = 0, demoPlayer }: { clockWrongBy?: number; demoPlayer?: string } = {}): Api {
   const jar = new Map<string, string>();
   const fetchWithCookies: typeof fetch = async (input, init) => {
     const headers = new Headers(init?.headers);
@@ -138,7 +138,13 @@ export function browser(origin: string, { clockWrongBy = 0 }: { clockWrongBy?: n
   // Each browser has its own device storage, as two phones would.
   const kept = new Map<string, string>();
   const storage = { getItem: (key: string) => kept.get(key) ?? null, setItem: (key: string, value: string) => void kept.set(key, value) };
-  return createApi(fetchWithCookies, { socketOrigin: origin, transports: ["websocket"], storage, now: () => clock.ms + clockWrongBy * 1000 });
+  return createApi(fetchWithCookies, {
+    socketOrigin: origin,
+    transports: ["websocket"],
+    storage,
+    now: () => clock.ms + clockWrongBy * 1000,
+    ...(demoPlayer === undefined ? {} : { demoPlayer }),
+  });
 }
 
 /** Opens the app at this path in this browser. */
