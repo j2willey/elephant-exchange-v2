@@ -72,7 +72,7 @@ When developing, sign-in links are printed to the server log instead of being em
 | `PHOTOS_DIR` | Where Post Photos are stored | `photos` |
 | `THEMES_DIR` | Where Theme logos and backgrounds are stored | `themes` |
 | `WEB_ROOT` | The built web app to serve (production only; in development Vite serves it) | unset |
-| `TRUST_PROXY` | `1` behind a reverse proxy such as Caddy, so its `X-Forwarded-For` is believed | unset |
+| `TRUST_PROXY` | `1` behind a reverse proxy (on the droplet, ww-edge's Caddy), so its `X-Forwarded-For` is believed | unset |
 | `RESEND_API_KEY`, `MAIL_FROM` | Email sign-in links through Resend, from an address on a verified domain | unset: links go to the log |
 
 In Docker, the data settings point into the `/data` volume.
@@ -88,16 +88,11 @@ docker compose logs -f app        # sign-in links appear here until email is set
 
 The container shuts down cleanly on `docker stop`, leaving the database complete in its one file. Docker checks `/api/health` every 30 seconds and marks the container unhealthy if the app or its database stops answering.
 
-### With HTTPS, as on the droplet
+### On the droplet, behind ww-edge
 
-`compose.prod.yaml` puts [Caddy](https://caddyserver.com) in front: it gets and renews the certificate, redirects http to https, and is the only way in to the app. Settings live in `.env` (see `.env.example`): the domain, and the Resend key and sender address for emailing sign-in links.
+The droplet runs several apps behind one front door, [ww-edge](https://github.com/j2willey/ww-edge) (private): a Caddy on ports 80 and 443 that routes each request by hostname to a container on the shared Docker network `edge`. Cloudflare sits in front of it (proxied, SSL mode Full) and holds the public certificate.
 
-```sh
-cp .env.example .env              # then fill it in
-docker compose -f compose.yaml -f compose.prod.yaml up -d --build
-```
-
-To try it on a laptop, use `DOMAIN=localhost` (Caddy makes its own local certificate). Pick other ports if 80 and 443 are taken: `HTTP_PORT=8080 HTTPS_PORT=8443`, then `SMOKE_URL=https://localhost:8443 npm run smoke`.
+`compose.prod.yaml` joins the app to `edge` as the container `elephant-exchange`, publishes no port, and trusts ww-edge's `X-Forwarded-For`. The HTTPS headers and the upload size limit live in ww-edge's `caddy/sites/elephant-exchange.caddy`. Settings live in `.env` (see `.env.example`): which compose files to use, the domain, and the Resend key and sender address for emailing sign-in links.
 
 ### Backups
 
@@ -113,11 +108,16 @@ docker compose start app
 
 ### Deploying to the droplet
 
-1. Point the domain's DNS A record at the droplet (Caddy needs it to get a certificate).
-2. In Resend, verify the domain and create an API key.
-3. On the droplet: install Docker, clone this repo, `cp .env.example .env` and fill it in, then `docker compose -f compose.yaml -f compose.prod.yaml up -d --build`.
-4. Add the cron line from the top of `scripts/backup.sh`, and copy `./backups` off the droplet now and then.
-5. Run the smoke test against it: `SMOKE_URL=https://<domain> SMOKE_LOGS="ssh <droplet> 'cd <repo> && docker compose logs app --no-log-prefix'" npm run smoke` (it reads sign-in links from the log, so run it before setting the Resend key, or check the inbox by hand).
+Once:
+
+1. In Cloudflare (DNS for `elephantexchange.app`): an A record for `@` and a CNAME `www` → `elephantexchange.app`, both proxied; SSL/TLS mode **Full**.
+2. In Resend, verify the domain (its DNS records go in Cloudflare, not proxied) and create an API key.
+3. In ww-edge: `caddy/sites/elephant-exchange.caddy` is already there; on the droplet, `cd ~/ww/ww-edge && git pull` and reload Caddy (`rcaddy`).
+4. On the droplet: `git clone https://github.com/j2willey/elephant-exchange-v2 ~/ww/elephant-exchange-v2`, then `cp .env.example .env`, fill it in, and `docker compose up -d --build`.
+5. `mkdir -p backups`, then add the cron line from the top of `scripts/backup.sh`, and copy `./backups` off the droplet now and then.
+6. Run the smoke test against it: `SMOKE_URL=https://elephantexchange.app SMOKE_LOGS="ssh conductor 'cd ww/elephant-exchange-v2 && docker compose logs app --no-log-prefix'" npm run smoke` (it reads sign-in links from the log, so run it before setting the Resend key, or check the inbox by hand).
+
+To update: `git pull && docker compose up -d --build`.
 
 ## Smoke test
 

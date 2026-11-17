@@ -79,7 +79,7 @@ export interface ServerOptions {
   /** Limits on emailing sign-in links; any left out take their defaults. */
   limits?: Partial<LinkLimits>;
   /**
-   * True when a reverse proxy (Caddy on the droplet) sits in front and sets X-Forwarded-For. Only then is
+   * True when a reverse proxy (ww-edge's Caddy on the droplet) sits in front and sets X-Forwarded-For. Only then is
    * that header believed: otherwise a client could forge it to dodge the per-IP limit.
    */
   trustProxy?: boolean;

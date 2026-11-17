@@ -13,8 +13,6 @@ export default defineConfig({
   reporter: "list",
   use: {
     baseURL,
-    // Caddy's certificate for "localhost" comes from its own local CA, which the test browser doesn't know.
-    ignoreHTTPSErrors: baseURL.startsWith("https://localhost"),
     ...devices["Pixel 7"], // phone-sized: it's a phone-first app
     trace: "retain-on-failure",
   },

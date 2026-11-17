@@ -1,34 +1,26 @@
-# On the droplet, Caddy fronts the app over HTTPS and the app itself is reachable only by Caddy:
-#   docker compose -f compose.yaml -f compose.prod.yaml up -d --build
-# Settings come from .env (copy .env.example).
+# On the droplet the app sits behind ww-edge, the droplet's front door (a separate repo: one Caddy on 80/443 that
+# routes by hostname to containers on the shared `edge` network). The app publishes no port; ww-edge reaches it as
+# elephant-exchange:3000, and its site file (caddy/sites/elephant-exchange.caddy there) holds the HTTPS headers.
+# Settings come from .env (copy .env.example; its COMPOSE_FILE line adds this file, so plain `docker compose` works):
+#   docker compose up -d --build
 services:
   app:
+    container_name: elephant-exchange
     ports: !reset []
     expose:
       - "3000"
     environment:
       BASE_URL: https://${DOMAIN:?set DOMAIN in .env}
+      # ww-edge's Caddy sets X-Forwarded-For to the address it saw.
       TRUST_PROXY: "1"
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       MAIL_FROM: ${MAIL_FROM:-}
+    # The droplet is shared with other apps (2 GB in all).
+    mem_limit: 384m
+    networks: [edge]
 
-  caddy:
-    image: caddy:2.11.4-alpine
-    restart: unless-stopped
-    depends_on:
-      app:
-        condition: service_healthy
-    ports:
-      - "${HTTP_PORT:-80}:80"
-      - "${HTTPS_PORT:-443}:443"
-      - "${HTTPS_PORT:-443}:443/udp"
-    environment:
-      DOMAIN: ${DOMAIN}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data # certificates: keep, or Let's Encrypt's rate limits bite on rebuilds
-      - caddy_config:/config
-
-volumes:
-  caddy_data:
-  caddy_config:
+networks:
+  edge:
+    external: true
+    # Overridable only so a test can run it against a throwaway network.
+    name: ${EDGE_NETWORK:-edge}

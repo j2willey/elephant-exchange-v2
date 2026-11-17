@@ -2,8 +2,8 @@
 # Backs up the running app: a safe copy of the database, plus the Photos and Theme images,
 # kept in the data volume and copied out to ./backups on this machine. The newest 14 are kept in each.
 # Run from anywhere in the repo on the droplet; nightly from cron, for example:
-#   15 3 * * * /opt/elephant-exchange/scripts/backup.sh >> /opt/elephant-exchange/backups/backup.log 2>&1
-# To get copies off the droplet, from your laptop:  rsync -a droplet:/opt/elephant-exchange/backups/ ~/elephant-backups/
+#   15 3 * * * $HOME/ww/elephant-exchange-v2/scripts/backup.sh >> $HOME/ww/elephant-exchange-v2/backups/backup.log 2>&1
+# To get copies off the droplet, from your laptop:  rsync -a conductor:ww/elephant-exchange-v2/backups/ ~/elephant-backups/
 set -euo pipefail
 cd "$(dirname "$0")/.."
 keep=14
