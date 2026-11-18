@@ -81,6 +81,7 @@ When developing, sign-in links are printed to the server log instead of being em
 | `TRUST_PROXY` | `1` behind a reverse proxy (on the droplet, ww-edge's Caddy), so its `X-Forwarded-For` is believed | unset |
 | `ADMIN_EMAILS` | Who may use the admin page, `/admin` (comma-separated): who has signed in, every Game, deleting a Game or the smoke test's `@example.com` leftovers. To anyone else it isn't there | unset: nobody |
 | `RESEND_API_KEY`, `MAIL_FROM` | Email sign-in links through Resend, from an address on a verified domain | unset: links go to the log |
+| `SIGNIN_LINKS_PER_DAY` | Sign-in links emailed per day, site-wide; match it to the Resend plan | 100 (Resend's free plan) |
 
 In Docker, the data settings point into the `/data` volume.
 

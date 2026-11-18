@@ -29,7 +29,7 @@ How each part copes:
 - **What we'd see:** a guest is told "too many sign-in links" or that the email couldn't be sent. Every party on the site is hit at once.
 - **The change:**
   - Upgrade Resend to the paid plan (at the time of writing, about $20 a month for 50,000 emails a month, with no daily cap; check current pricing).
-  - Raise `perDay` to match (one setting).
+  - Raise `SIGNIN_LINKS_PER_DAY` in the droplet's `.env` to match, then `docker compose up -d`.
   - Keep the per-address and per-IP limits as they are.
 - **How long:** 15 minutes, plus a deploy.
 - **What users notice:** nothing, if it's done before the launch post.
@@ -84,7 +84,7 @@ Several servers is the expensive step, and the app is far from needing it. It wo
 
 ## Before the launch post
 
-- [ ] Resend paid plan, and raise `perDay` (limit 1).
+- [ ] Resend paid plan, and raise `SIGNIN_LINKS_PER_DAY` (limit 1).
 - [ ] Check the droplet's headroom (`free -h`, `df -h`, `docker stats`) and raise EE's `mem_limit` if there's room (limit 2).
 - [ ] An uptime monitor on `/api/health`, and rsync `backups/` off the droplet (limit 3).
 - [ ] No deploys on party evenings (Fri/Sat from 4 pm Pacific) in December. Tabs already open keep running the old code until they're reloaded.

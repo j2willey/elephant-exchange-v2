@@ -24,6 +24,8 @@ const server = createServer({
   ...(env["WEB_ROOT"] ? { webRoot: env["WEB_ROOT"] } : {}),
   // Who may use the admin pages: comma-separated emails. Unset, nobody can.
   adminEmails: (env["ADMIN_EMAILS"] ?? "").split(","),
+  // Sign-in links emailed per day, site-wide: match it to the Resend plan (the free plan allows 100).
+  ...(env["SIGNIN_LINKS_PER_DAY"] ? { limits: { perDay: Number(env["SIGNIN_LINKS_PER_DAY"]) } } : {}),
 });
 const { port, close } = await server.listen(Number(env["PORT"] ?? 3001));
 console.log(`Elephant Exchange server listening on port ${port}`);
