@@ -1883,3 +1883,65 @@ a.button {
 .small {
   font-size: 0.8rem;
 }
+
+/* Asking how it went: big stars to tap; filled up to the one chosen. */
+.stars {
+  display: flex;
+  gap: 4px;
+}
+
+.stars .star {
+  min-height: 44px;
+  padding: 0 6px;
+  font-size: 2rem;
+  line-height: 1;
+  color: var(--line);
+  background: none;
+  border: 0;
+}
+
+.stars .star.on {
+  color: var(--brand);
+}
+
+.inline-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.inline-choices legend {
+  width: 100%;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.feedback-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.feedback-list li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.feedback-list p {
+  margin: 0 0 4px;
+}
+
+.feedback-list blockquote {
+  margin: 4px 0 0;
+  padding-left: 10px;
+  border-left: 3px solid var(--line);
+}
+
+.stat-tiles dd.smaller {
+  font-size: 1.1rem;
+}

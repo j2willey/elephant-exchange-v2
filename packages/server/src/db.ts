@@ -300,6 +300,42 @@ export const refVisits = sqliteTable(
   (t) => [primaryKey({ columns: [t.day, t.ref] })],
 );
 
+/**
+ * What Hosts and guests said (docs/stats-plan.md, Phase 3): a Host's rating of a finished Game, a guest's thumbs up
+ * or down, or a suggestion from the home screen. Kept like the statistics: never cleared by a delete, and the person
+ * only as a keyed hash of their email. One answer per person per Game, which they may change.
+ */
+export const feedback = sqliteTable(
+  "feedback",
+  {
+    id: text("id").primaryKey(),
+    kind: text("kind", { enum: ["host", "guest", "suggestion"] }).notNull(),
+    /** The Game it's about; null for a suggestion. */
+    gameId: text("game_id"),
+    personKey: text("person_key").notNull(),
+    /** A Host's 1–5 stars. */
+    rating: integer("rating"),
+    /** A Host's "Would you use it again?" */
+    again: text("again", { enum: ["yes", "maybe", "no"] }),
+    /** A guest's thumbs. */
+    thumbs: text("thumbs", { enum: ["up", "down"] }),
+    comment: text("comment"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [
+    uniqueIndex("feedback_once").on(t.kind, t.gameId, t.personKey),
+    check("feedback_kind", sql`${t.kind} IN ('host', 'guest', 'suggestion')`),
+    check("feedback_rating", sql`${t.rating} IS NULL OR ${t.rating} BETWEEN 1 AND 5`),
+  ],
+);
+
+/** Follow-up emails asking a Host how their Game went: one per Game, ever. */
+export const feedbackEmails = sqliteTable("feedback_emails", {
+  gameId: text("game_id").primaryKey(),
+  sentAt: integer("sent_at", { mode: "timestamp_ms" }).notNull(),
+});
+
 /** Opens the database, bringing its tables up to date with any migrations it hasn't had yet. */
 export function openDb(path: string) {
   const sqlite = new Database(path);

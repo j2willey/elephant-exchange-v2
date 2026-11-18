@@ -74,6 +74,14 @@ export const visitBody = z.object({ ref: z.string().max(64) });
 export const excludeBody = z.object({ excluded: z.boolean() });
 /** The features the browser reports itself (the server sees the rest); anything else sent is refused. */
 export const featureBody = z.object({ feature: z.enum(["rosterPaste"]) });
+/** A Host's answer (stars, and maybe again and a comment) or a guest's (thumbs, and maybe a comment). */
+export const answerBody = z.object({
+  rating: z.number().int().min(1).max(5).optional(),
+  again: z.enum(["yes", "maybe", "no"]).optional(),
+  thumbs: z.enum(["up", "down"]).optional(),
+  comment: z.string().max(1000).optional(),
+});
+export const suggestionBody = z.object({ comment: z.string().trim().min(1).max(2000) });
 export const feedbackBody = z.object({ ok: z.boolean() });
 export const linkRedemption = z.object({ token: z.string().min(1).max(100) });
 export const cohostBody = z.object({ email });

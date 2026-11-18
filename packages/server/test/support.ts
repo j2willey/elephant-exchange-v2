@@ -20,12 +20,17 @@ export function scriptedDraw(order: string[]): DrawFn {
 /** Stands in for the email service: keeps every sign-in link instead of sending it. */
 export function capturingMailer() {
   const sent: { email: string; url: string }[] = [];
+  /** Follow-up emails asking a Host how their Game went. */
+  const asked: { email: string; gameName: string; url: string }[] = [];
   const mailer: Mailer = {
     async sendSignInLink(email, url) {
       sent.push({ email, url });
     },
+    async sendFeedbackRequest(email, gameName, url) {
+      asked.push({ email, gameName, url });
+    },
   };
-  return { sent, mailer };
+  return { sent, asked, mailer };
 }
 
 type App = { request: (path: string, init?: RequestInit) => Response | Promise<Response> };

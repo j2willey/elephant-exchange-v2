@@ -93,6 +93,33 @@ export interface AdminPerson {
 }
 
 /** The usage statistics (ADR-0005), as the admin's Stats page shows them. */
+/** Whether this person is asked how a Game went (as its Host, or as a guest), and what they said. */
+export interface FeedbackAsk {
+  asked: boolean;
+  as: "host" | "guest";
+  given: { rating: number | null; again: "yes" | "maybe" | "no" | null; thumbs: "up" | "down" | null; comment: string | null } | null;
+}
+export type FeedbackAnswer = { rating?: number; again?: "yes" | "maybe" | "no"; thumbs?: "up" | "down"; comment?: string };
+
+/** What Hosts and guests said, for the admin. */
+export interface FeedbackSummary {
+  averageRating: number | null;
+  ratings: number;
+  again: { yes: number; maybe: number; no: number };
+  thumbs: { up: number; down: number };
+  suggestions: number;
+  items: {
+    kind: "host" | "guest" | "suggestion";
+    game: string | null;
+    from: string | null;
+    rating: number | null;
+    again: "yes" | "maybe" | "no" | null;
+    thumbs: "up" | "down" | null;
+    comment: string | null;
+    at: string;
+  }[];
+}
+
 export interface StatsInsights {
   funnel: { step: "signedIn" | "created" | "started" | "finished" | "voted"; people: number }[];
   engagement: { averagePlayers: number | null; signedInShare: number | null; averagePeakScreens: number | null };
@@ -141,6 +168,7 @@ export interface StatsSummary {
     players: number;
     picks: number;
     steals: number;
+    rating: number | null;
     demo: boolean;
     test: boolean;
     excluded: boolean;
@@ -347,6 +375,28 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
     /** Leaves a Game out of the statistics (a trial run), or puts it back. */
     async adminExcludeFromStats(gameId: string, excluded: boolean): Promise<boolean> {
       return (await postJson(`/api/admin/stats/games/${encodeURIComponent(gameId)}`, { excluded })).ok;
+    },
+
+    /** Whether the signed-in person is asked how this Game went; null when signed out. */
+    async feedbackFor(gameId: string): Promise<FeedbackAsk | null> {
+      const res = await fetchFn(`/api/games/${encodeURIComponent(gameId)}/feedback`);
+      if (!res.ok) return null;
+      return (await res.json()) as FeedbackAsk;
+    },
+
+    async giveFeedback(gameId: string, answer: FeedbackAnswer): Promise<boolean> {
+      return (await postJson(`/api/games/${encodeURIComponent(gameId)}/feedback`, answer)).ok;
+    },
+
+    async suggest(comment: string): Promise<boolean> {
+      return (await postJson("/api/feedback/suggestions", { comment })).ok;
+    },
+
+    async adminFeedback(): Promise<FeedbackSummary | "notFound"> {
+      const res = await fetchFn("/api/admin/feedback");
+      if (res.status === 404) return "notFound";
+      if (!res.ok) throw new Error(`loading the feedback failed: ${res.status}`);
+      return (await res.json()) as FeedbackSummary;
     },
 
     /** Tells the statistics a Game used a feature only the browser sees, such as pasting the roster. */

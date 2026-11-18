@@ -30,6 +30,7 @@ import { Server as SocketServer } from "socket.io";
 import type { z } from "zod";
 import { createAuth, DEFAULT_LIMITS, logMailer, SESSION_LIFETIME_MS, type LinkLimits, type Mailer } from "./auth.js";
 import { cleanRef, createStats } from "./stats.js";
+import { createFeedback } from "./feedback.js";
 import {
   isThemeImage,
   PHOTO_KEEP_DAYS,
@@ -56,6 +57,8 @@ import {
   visitBody,
   excludeBody,
   featureBody,
+  answerBody,
+  suggestionBody,
   moderationBody,
   orgBody,
   orgEdit,
@@ -249,6 +252,7 @@ export function createServer({
   const linkLimits = { ...DEFAULT_LIMITS, ...limits };
   const auth = createAuth(db, now, linkLimits);
   const stats = createStats(db, now);
+  const said = createFeedback(db, now, stats.keyOf);
 
   function clientIp(c: Context): string {
     if (trustProxy) {
@@ -440,6 +444,55 @@ export function createServer({
     if (!load(id)) return c.json({ error: "Game not found" }, 404);
     if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts" }, 403);
     stats.noteFeature(id, body.data.feature);
+    return c.body(null, 204);
+  });
+
+  /**
+   * Whether the signed-in person is asked how a Game went, and what they said. A Host or Co-host is asked once the
+   * Game is over; a guest once it's over and the vote isn't under way. Never in a demo, never before the end.
+   */
+  function feedbackFor(id: string, email: string) {
+    const game = load(id)!;
+    const as = roleIn(id, email) ? ("host" as const) : ("guest" as const);
+    const over = phase(game.state) === "ended" && !game.demo;
+    const asked = over && (as === "host" || game.vote.status !== "open");
+    return { asked, as, given: said.mine(id, email, as) };
+  }
+
+  app.get("/api/games/:id/feedback", (c) => {
+    const id = c.req.param("id");
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    if (!load(id)) return c.json({ error: "Game not found" }, 404);
+    const { asked, as, given } = feedbackFor(id, email);
+    return c.json({ asked, as, given: given && { rating: given.rating, again: given.again, thumbs: given.thumbs, comment: given.comment } });
+  });
+
+  app.post("/api/games/:id/feedback", async (c) => {
+    const id = c.req.param("id");
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const body = await parseBody(c, answerBody);
+    if (!body.ok) return body.res;
+    if (!load(id)) return c.json({ error: "Game not found" }, 404);
+    const { asked, as } = feedbackFor(id, email);
+    if (!asked) return c.json({ error: "Not until the Game is over" }, 409);
+    const { rating, again, thumbs, comment } = body.data;
+    // A Host gives stars; a guest gives thumbs.
+    if (as === "host" ? rating === undefined || thumbs !== undefined : thumbs === undefined || rating !== undefined || again !== undefined) {
+      return c.json({ error: as === "host" ? "Give 1 to 5 stars" : "Give a thumbs up or down" }, 400);
+    }
+    said.give(id, email, as, { ...(rating ? { rating } : {}), ...(again ? { again } : {}), ...(thumbs ? { thumbs } : {}), ...(comment ? { comment } : {}) });
+    return c.body(null, 204);
+  });
+
+  /** An idea from anyone signed in, from the home screen. */
+  app.post("/api/feedback/suggestions", async (c) => {
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const body = await parseBody(c, suggestionBody);
+    if (!body.ok) return body.res;
+    said.suggest(email, body.data.comment);
     return c.body(null, 204);
   });
 
@@ -1159,8 +1212,11 @@ export function createServer({
   /** The usage statistics (ADR-0005), brought up to date first. */
   app.get("/api/admin/stats", (c) => {
     stats.refresh();
-    return c.json(stats.summary({ signInEmailCap: linkLimits.perDay, photoBytes: photos.bytes() }));
+    return c.json(stats.summary({ signInEmailCap: linkLimits.perDay, photoBytes: photos.bytes(), ratings: said.hostRatings() }));
   });
+
+  /** What Hosts and guests said, newest first, with the averages. */
+  app.get("/api/admin/feedback", (c) => c.json(said.summary()));
 
   /** Leaves a Game out of the statistics (Jim's trial runs), or puts it back. */
   app.post("/api/admin/stats/games/:id", async (c) => {
@@ -1278,7 +1334,10 @@ export function createServer({
   /** Serves HTTP and live updates on one port (0 picks a free one). Screens only listen; moves go over HTTP. */
   function listen(port: number): Promise<{ port: number; close: () => Promise<void> }> {
     sweep();
-    const sweeping = setInterval(() => sweep(), 60 * 60_000);
+    const sweeping = setInterval(() => {
+      sweep();
+      void followUps();
+    }, 60 * 60_000);
     sweeping.unref(); // never what keeps the process alive
     return new Promise((resolve) => {
       const http = serve({ fetch: app.fetch, port }, (info: AddressInfo) => {
@@ -1311,5 +1370,26 @@ export function createServer({
     });
   }
 
-  return { app, listen, sweep };
+  /**
+   * Emails each Host who said it's OK, a day after their Game ended, to ask how it went: once per Game, and only
+   * within a share of the day's email allowance, so sign-in links always come first. Returns how many were sent.
+   */
+  async function followUps(): Promise<number> {
+    if (!mailer.sendFeedbackRequest) return 0;
+    let sent = 0;
+    for (const { gameId, name, email } of said.dueForFollowUp(linkLimits.perDay)) {
+      try {
+        await mailer.sendFeedbackRequest(email, name, `${baseUrl}/games/${gameId}`);
+        said.followedUp(gameId);
+        stats.countToday("feedbackEmails");
+        sent++;
+      } catch (err) {
+        console.error("Couldn't send a feedback request", err);
+        break; // most likely the email allowance: try again in an hour
+      }
+    }
+    return sent;
+  }
+
+  return { app, listen, sweep, followUps };
 }

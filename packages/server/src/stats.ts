@@ -95,6 +95,7 @@ export interface StatsSummary {
     players: number;
     picks: number;
     steals: number;
+    rating: number | null;
     demo: boolean;
     test: boolean;
     excluded: boolean;
@@ -299,7 +300,16 @@ export function createStats(db: Db, now: () => Date) {
     return db.update(gameStats).set({ excluded }).where(eq(gameStats.gameId, gameId)).run().changes > 0;
   }
 
-  function summary({ signInEmailCap, photoBytes }: { signInEmailCap: number; photoBytes: number }): StatsSummary {
+  function summary({
+    signInEmailCap,
+    photoBytes,
+    ratings = new Map(),
+  }: {
+    signInEmailCap: number;
+    photoBytes: number;
+    /** Each Game's Host rating (1–5), from the feedback. */
+    ratings?: ReadonlyMap<string, number>;
+  }): StatsSummary {
     const emailOf = new Map(db.select({ email: users.email }).from(users).all().map((u) => [keyOf(u.email), u.email]));
     const minutes = (ms: number) => Math.round(ms / 6000) / 10;
     const average = (xs: number[]) => (xs.length ? minutes(xs.reduce((a, b) => a + b, 0) / xs.length) : null);
@@ -423,6 +433,7 @@ export function createStats(db: Db, now: () => Date) {
           players: g.players,
           picks: g.picks,
           steals: g.steals,
+          rating: ratings.get(g.gameId) ?? null,
           demo: g.demo,
           test: g.test,
           excluded: g.excluded,
@@ -434,6 +445,7 @@ export function createStats(db: Db, now: () => Date) {
   }
 
   return {
+    keyOf,
     snapshotGame,
     recordPerson,
     recordOrg,

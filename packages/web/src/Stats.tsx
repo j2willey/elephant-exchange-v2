@@ -177,6 +177,7 @@ export function StatsPage() {
                 <th>Length</th>
                 <th>Players</th>
                 <th>Steals</th>
+                <th>Rating</th>
                 <th>Counted</th>
                 <th>Exclude</th>
               </tr>
@@ -195,6 +196,7 @@ export function StatsPage() {
                   <td>{mins(g.minutes)}</td>
                   <td>{g.players}</td>
                   <td>{g.steals}</td>
+                  <td>{g.rating === null ? "—" : `${g.rating} ★`}</td>
                   <td>{g.counted ? "Yes" : "—"}</td>
                   <td>
                     {!g.demo && !g.test && (

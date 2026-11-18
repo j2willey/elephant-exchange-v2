@@ -8,6 +8,7 @@ import { GamePage } from "./GamePage.js";
 import { GameSettings } from "./GameSettings.js";
 import { ConfirmDelete } from "./ConfirmDelete.js";
 import { StatsPage } from "./Stats.js";
+import { FeedbackPage, SuggestBox } from "./Feedback.js";
 import { Landing, Playbook, TipJar, TipNoteDialog } from "./Landing.js";
 import { MyOrgs, OrgPage } from "./Orgs.js";
 import { SignInForm } from "./SignIn.js";
@@ -37,6 +38,7 @@ export function AppRoutes() {
         <Route path="/orgs/:orgId" element={<OrgPage />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/admin/stats" element={<StatsPage />} />
+        <Route path="/admin/feedback" element={<FeedbackPage />} />
       </Routes>
     </main>
   );
@@ -69,6 +71,7 @@ function Home() {
       <MyGames />
       <MyOrgs />
       <TipJar />
+      <SuggestBox />
       <section className="card">
         <p>Signed in as {session.email}</p>
         <label className="check">

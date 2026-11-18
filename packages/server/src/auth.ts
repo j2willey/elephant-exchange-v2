@@ -5,12 +5,17 @@ import { users, sessions, signInLinks, type Db } from "./db.js";
 /** Sends sign-in links. Resend in production; tests capture the links instead. */
 export interface Mailer {
   sendSignInLink(email: string, url: string): Promise<void>;
+  /** Asks a Host, who said it's OK, how their Game went; without it, nobody is asked by email. */
+  sendFeedbackRequest?(email: string, gameName: string, url: string): Promise<void>;
 }
 
 /** Until there's a domain to send from, links are written to the server log. */
 export const logMailer: Mailer = {
   async sendSignInLink(email, url) {
     console.log(`Sign-in link for ${email}: ${url}`);
+  },
+  async sendFeedbackRequest(email, gameName, url) {
+    console.log(`Feedback request for ${email} about ${gameName}: ${url}`);
   },
 };
 

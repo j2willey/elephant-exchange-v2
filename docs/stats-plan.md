@@ -25,11 +25,11 @@ On the same Stats page (`/admin/stats`), over played Games unless it says otherw
 
 What's recorded for it: undos, skips, frozen Gifts, vote use and self sign-up are read from each Game's log; the most screens at once is noted as they connect; features the log doesn't show are noted as they're used (roster paste is reported by the browser); sign-in emails are counted a day at a time, since the links themselves are cleared after a day. An undone steal doesn't count as a steal.
 
-## Phase 3: asking Hosts and guests what they think
+## Phase 3: asking Hosts and guests what they think (built)
 
-- **The Host, after End Game:** a small "How did it go?" card on the console: 1–5 stars, "Would you use it again?", an optional comment, and the existing "OK to contact me" box. Asked once per Game, never mid-game.
-- **Guests, after the vote:** on their phones, a one-tap 👍 or 👎 with an optional comment. Never shown while the Game is under way.
-- **A follow-up email** a day or two later, only to Hosts who ticked "OK to contact me", with a link to the same short form. It uses the sign-in email allowance, so it's sent sparingly.
-- **A "Suggest something" box** on the Host's home page, for ideas at any time.
-- **An admin Feedback page:** the answers, newest first, with each Game's rating beside its row in the Stats, and an average rating over time.
-- **Ground rules:** one ask per Game per person, nothing on the scoreboard, no email unless they opted in, and comments kept with the person's hashed key, not their address, once they're no longer a user.
+- **The Host, after End Game:** a "How did it go?" card on the console (laptop and phone): 1–5 stars, "Would you use it again?" (yes, maybe, no) and an optional comment. Asked once per Game; they may change their answer.
+- **Guests, once it's over and the vote isn't under way:** on their phones, 👍 or 👎, then an optional comment. Only for guests who are signed in, never mid-game, never in a demo.
+- **A follow-up email** a day after the Game ends (up to a week after), only to a Host who ticked "OK to contact me" and hasn't answered yet; once per Game, ever. It links back to the Game, where the card is waiting. Follow-ups never use more than half the day's email allowance (counting sign-in links), at most 10 an hour, so sign-ins come first.
+- **"Suggest something"** on the Host's home page, for ideas at any time.
+- **The admin's Feedback page** (`/admin/feedback`): the average Host rating, "would use again" and guest thumbs, the number of suggestions, then every answer, newest first. Each Game's rating also shows in the Stats page's Games table.
+- **Kept like the statistics:** nothing is cleared when a Game is deleted, and people are stored only as a keyed hash of their email (shown by email on the admin pages while they're still users). Test accounts' answers are left out of the figures.

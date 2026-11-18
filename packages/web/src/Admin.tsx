@@ -69,7 +69,7 @@ export function AdminPage() {
       <section className="card">
         <h2>Admin</h2>
         <p>
-          <Link to="/admin/stats">📊 Stats</Link>
+          <Link to="/admin/stats">📊 Stats</Link> · <Link to="/admin/feedback">💬 Feedback</Link>
         </p>
         <p className="muted">
           {plural(people.filter((p) => !isTestAccount(p.email)).length, "person", "people")} signed in ·{" "}

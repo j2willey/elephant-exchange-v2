@@ -12,6 +12,7 @@ import { useLiveGame } from "./useLiveGame.js";
 import { RosterPaste } from "./RosterPaste.js";
 import { ScreenSwitch } from "./WatchScreen.js";
 import { VotePanel } from "./Vote.js";
+import { FeedbackCard } from "./Feedback.js";
 
 export function GamePage() {
   const api = useApi();
@@ -188,6 +189,7 @@ export function GamePage() {
       )}
 
       {game.phase === "ended" && <VotePanel game={game} accept={accept} />}
+      {game.phase === "ended" && <FeedbackCard game={game} />}
 
       {game.gifts.length > 0 && (
         <Gifts
@@ -258,6 +260,7 @@ function GuestView({
         {tab === "gifts" && (
           <>
             {game.phase === "ended" && <VotePanel game={game} accept={accept} />}
+            {game.phase === "ended" && <FeedbackCard game={game} />}
             {joinOffered && (
               <button className="secondary" onClick={() => setTab("you")}>
                 Playing? Join the Game
