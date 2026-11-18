@@ -32,7 +32,8 @@ cd "$1"
 tag=$2 keep=$3
 # Migrations can't be undone: back up before the new image starts.
 # Its docker compose exec reads stdin, which here is this very script: give it none, or it eats the rest.
-./scripts/backup.sh </dev/null
+# On a new server nothing runs yet, so there's nothing to back up.
+if [[ $(docker compose ps -q app </dev/null) ]]; then ./scripts/backup.sh </dev/null; else echo "No app running yet: no backup to take"; mkdir -p backups; fi
 git pull -q --ff-only
 if grep -q '^TAG=' .env; then sed -i "s/^TAG=.*/TAG=$tag/" .env; else printf '\nTAG=%s\n' "$tag" >> .env; fi
 chmod 600 .env
@@ -55,3 +56,7 @@ docker images elephant-exchange --format '{{.CreatedAt}}\t{{.Tag}}' | sort -r \
 [[ $status == healthy ]] || { echo "deploy: not healthy; roll back (README: Rolling back)" >&2; exit 1; }
 echo "Deployed $tag. Reload any open tabs (Ctrl+Shift+R) to get the new screens."
 REMOTE
+
+echo "== Copying the backups off $host"
+RSYNC_RSH="ssh ${ssh_opts[*]}" DEPLOY_HOST="$host" DEPLOY_DIR="$dir" ./scripts/pull-backups.sh \
+  || echo "deploy: copying the backups failed; run ./scripts/pull-backups.sh" >&2

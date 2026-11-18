@@ -56,13 +56,14 @@ How each part copes:
 ### 3. One machine means one point of failure
 
 - **Today:**
-  - A nightly backup on the droplet, plus a backup before every deploy (`scripts/deploy.sh`).
-  - Copies off the droplet only when someone rsyncs them.
-- **What we'd see:** if the droplet dies, the site is down until it's rebuilt. We'd lose everything since the last off-droplet copy.
+  - A nightly backup on the droplet (once its cron line is in), plus a backup before every deploy.
+  - `scripts/deploy.sh` now copies `backups/` to Omarchy (`~/elephant-backups`) after every deploy; `scripts/pull-backups.sh` does the same by hand.
+  - `scripts/restore.sh` restores a backup (database, Photos and Theme images), taking a backup of what's there first. Rehearsed locally 2026-11-18.
+- **What we'd see:** if the droplet dies, the site is down until it's rebuilt (see "Moving to a new server" below). We'd lose everything since the last off-droplet copy.
 - **The change (do now, it's cheap):**
-  - Rsync `backups/` to Omarchy after each deploy and weekly in December.
-  - Add a free uptime monitor (an UptimeRobot-style check of `/api/health`) that texts on an outage.
-  - Write a restore-to-a-new-droplet runbook and rehearse it once, about an hour.
+  - Weekly `./scripts/pull-backups.sh` through December, and after any busy party night.
+  - Turn on DigitalOcean's droplet backups (a fifth or so of the droplet's price; check current pricing). It's a whole-droplet copy kept off the machine with no work from us, so a lost droplet is a restore, not a rebuild.
+  - Add a free uptime monitor (UptimeRobot or similar, checking `https://elephantexchange.app/api/health` every 5 minutes) that emails or texts on an outage.
 - **Later:** Litestream, streaming SQLite to object storage. Conductor plans the same (#36). That cuts the worst-case loss from a day to seconds.
 
 ### 4. Games kept in memory
@@ -80,13 +81,59 @@ Several servers is the expensive step, and the app is far from needing it. It wo
 - **The in-memory Games:** either route each Game to one server (sticky by Game id) or stop caching them.
 - **Photos and Theme images** in object storage (DigitalOcean Spaces), not on local disk.
 
-**How long:** one to two weeks. **What users notice:** nothing, if it's cut over on a quiet weekday. A cheaper middle step comes first: a much bigger single droplet. That likely covers 1,000 Organizations, since the load is mostly idle phones.
+- **The statistics and feedback** (ADR-0005) need care in a move like this:
+  - the peak "screens watching at once" is counted per server process, so with several servers it would undercount until it reads the count from the Redis adapter;
+  - the feedback follow-up emails are sent from a timer in every process, so they'd go out twice unless one server is made the only sender (or a row is claimed before sending);
+  - the queries are Drizzle's and mostly portable, but the follow-ups find ended Games by a text match on the event log (`like '%"type":"GameEnded"%'`), which should become a real column first.
+
+**How long:** two to three weeks (more tables than when this was first written). **What users notice:** nothing, if it's cut over on a quiet weekday. A cheaper middle step comes first: a much bigger single droplet. That likely covers 1,000 Organizations, since the load is mostly idle phones.
+
+## Keeping the data (reviewed 2026-11-18, after the statistics and feedback)
+
+The goal: whatever we change, whatever server it runs on, no Game, Photo, statistic or piece of feedback is lost.
+
+**What lives where:**
+
+| What | Where | Backed up by |
+|---|---|---|
+| Games (their event logs), Players, Gifts, posts, votes | the SQLite file `/data/elephant.db` | `backup.sh` (the whole file) |
+| Hosts, Organizations, sessions, the tip-note checkbox | the same file | the same |
+| Statistics: `game_stats`, `people_stats`, `org_stats`, `ref_visits`, `game_features`, `daily_counts` | the same file | the same |
+| Feedback and the follow-up log: `feedback`, `feedback_emails` | the same file | the same |
+| **The statistics key** (`app_keys`): the secret that turns an email into the hash the statistics count people by | the same file | the same |
+| Photos and Theme images | `/data/photos`, `/data/themes` | `backup.sh` (latest copy) |
+| Settings and secrets: `RESEND_API_KEY`, `ADMIN_EMAILS`, `SIGNIN_LINKS_PER_DAY`, `DOMAIN`, `MAIL_FROM` | the droplet's `.env` | **nothing**: keep a copy in the password manager |
+| The HTTPS front door | ww-edge's `caddy/sites/elephant-exchange.caddy` | the ww-edge repo |
+
+Because everything but `.env` is one file plus two folders, one backup carries all of it to a new server. Three things to get right:
+
+- **Never let the statistics key change.** If `app_keys` were lost or a fresh database started, people already counted would be counted again as new (unique people, returning Hosts and the funnel would all jump). Restore the old database rather than start empty, and in a move to Postgres, copy `app_keys` with the rest.
+- **The deleted stays deleted, the counted stays counted.** The statistics tables are deliberately kept when Games and Organizations are deleted. A restore from an older backup brings back Games deleted since; that's expected, and the Host can delete them again.
+- **Restore with the script, not by hand.** SQLite runs in WAL mode: copying a database over the old one while its `-wal` file is still there can replay the old writes onto it. `scripts/restore.sh` removes them first.
+
+### Moving to a new server (bigger droplet, own droplet, or after losing one)
+
+About an hour, most of it waiting. Do it on a weekday morning, never a party night.
+
+1. On the old server, if it's up: `./scripts/backup.sh`, then from Omarchy `./scripts/pull-backups.sh`. Stop the app (`docker compose stop app`) so nothing is written after the backup.
+2. On the new server: Docker, ww-edge (or a plain Caddy), the `edge` network, `git clone` this repo to `~/ww/elephant-exchange-v2`, and its `.env` from the password manager (`chmod 600`).
+3. From Omarchy: `DEPLOY_HOST=<new> ./scripts/deploy.sh` ships the image and starts it on an empty database (no backup is taken, since nothing was running).
+4. Copy the backup up: `rsync -a ~/elephant-backups/ <new>:ww/elephant-exchange-v2/backups/`.
+5. On the new server: `./scripts/restore.sh backups/elephant-<newest>.db`.
+6. Check `/admin/stats` shows the same totals as before, and open a Game with Photos.
+7. Point Cloudflare's A record at the new server (proxied, so it switches in a minute or so). Add the cron line from `backup.sh`.
+8. Keep the old server, stopped, for a week before destroying it.
+
+What users notice: a minute or two of "can't connect" during step 7; phones reconnect by themselves. A party in progress during a move would lose moves made after step 1, which is why it's never done on a party night.
 
 ## Before the launch post
 
 - [ ] Resend paid plan, and raise `SIGNIN_LINKS_PER_DAY` (limit 1).
 - [ ] Check the droplet's headroom (`free -h`, `df -h`, `docker stats`) and raise EE's `mem_limit` if there's room (limit 2).
-- [ ] An uptime monitor on `/api/health`, and rsync `backups/` off the droplet (limit 3).
+- [ ] An uptime monitor on `/api/health` (limit 3).
+- [x] Copy `backups/` off the droplet on every deploy, and a restore script (limit 3).
+- [ ] Check the droplet's nightly backup cron line is in (`crontab -l`), and turn on DigitalOcean droplet backups (limit 3).
+- [ ] A copy of the droplet's `.env` in the password manager.
 - [ ] No deploys on party evenings (Fri/Sat from 4 pm Pacific) in December. Tabs already open keep running the old code until they're reloaded.
 
 ## Watch list for December

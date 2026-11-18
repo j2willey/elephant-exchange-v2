@@ -107,13 +107,15 @@ The droplet runs several apps behind one front door, [ww-edge](https://github.co
 
 `scripts/backup.sh` copies the database while the app runs (SQLite's online backup, so nothing is caught half-written), keeps the newest 14 in the data volume, and copies each out to `./backups` on the host, along with the Photos and Theme images. On the droplet, run it nightly from cron (the script's header has the line), and pull `./backups` to another machine now and then with `rsync`, since a backup on the same droplet won't survive losing it.
 
-To restore one:
+From Omarchy, `./scripts/pull-backups.sh` copies them to `~/elephant-backups` (databases accumulate there; Photos mirror the droplet). `scripts/deploy.sh` runs it after every deploy.
+
+To restore one (the database, Photos and Theme images), on the droplet:
 
 ```sh
-docker compose stop app
-docker compose cp backups/elephant-2026-12-13T0315Z.db app:/data/elephant.db
-docker compose start app
+./scripts/restore.sh backups/elephant-2026-12-13T0315Z.db
 ```
+
+It backs up what's there first, stops the app, removes SQLite's `-wal` and `-shm` files (so the old database's last writes aren't replayed onto the restored one), copies the backup in and starts the app again. Moving to a new server is in `docs/scale-plan.md` ("Moving to a new server").
 
 ### Deploying to the droplet
 
