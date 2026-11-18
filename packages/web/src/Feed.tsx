@@ -108,6 +108,7 @@ const postErrors = {
   paused: "The Host has paused posting.",
   notPhoto: "That doesn't look like a photo we can use. Try another?",
   tooBig: "That Photo is too big to send. Try another?",
+  unshrinkable: "This photo couldn't be made smaller on this phone. Try taking a screenshot of it and posting that.",
   failed: "That didn't post. Please try again.",
 };
 
@@ -133,12 +134,19 @@ export function Composer({ game, onPosted, offerSignIn }: { game: GameView; onPo
   async function submit(e: FormEvent) {
     e.preventDefault();
     setSending(true);
+    // Shrunk on the phone, never sent full size (see shrinkPhoto).
+    const shrunk = photo ? await shrinkPhoto(photo).catch(() => null) : undefined;
+    if (shrunk === null) {
+      setSending(false);
+      setError(postErrors.unshrinkable);
+      return;
+    }
     const result = await api
       .post(game.id, {
         text: text.trim(),
         ...(asks ? { name: name.trim() } : {}),
         ...(giftId ? { giftId } : {}),
-        ...(photo ? { photo: await shrinkPhoto(photo) } : {}),
+        ...(shrunk ? { photo: shrunk } : {}),
       })
       .catch(() => "failed" as const);
     setSending(false);

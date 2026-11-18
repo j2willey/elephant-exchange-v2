@@ -96,6 +96,17 @@ describe("Photos in Posts", () => {
 
     expect(await within(form).findByRole("alert")).toHaveTextContent(/doesn't look like a photo/i);
   });
+
+  it("won't send a full-size photo this phone couldn't shrink, and says what to do instead", async () => {
+    const { id, signedIn, user, form } = await underway();
+    await user.type(within(form).getByLabelText(/your name/i), "Gus");
+    // The test browser can't decode images, as some phone's browser might not: 3 MB stays 3 MB.
+    await user.upload(within(form).getByLabelText(/add a photo/i), new File([new Uint8Array(3_000_000)], "IMG_0002.HEIC", { type: "image/heic" }));
+    await user.click(within(form).getByRole("button", { name: /^post$/i }));
+
+    expect(await within(form).findByRole("alert")).toHaveTextContent(/couldn't be made smaller on this phone.*screenshot/i);
+    expect(await (await signedIn("host@example.com")).posts(id)).toEqual([]);
+  });
 });
 
 describe("The album", () => {

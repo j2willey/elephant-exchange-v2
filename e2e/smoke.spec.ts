@@ -76,15 +76,21 @@ test("a Host runs a Game while a guest follows along on their phone", async ({ b
   await guest.getByRole("button", { name: /^post$/i }).click();
   await expect(host.getByRole("feed").getByText("Nice socks!")).toBeVisible();
 
-  // A camera photo, stored sideways with an orientation tag and GPS: the phone shrinks it and the server
-  // keeps an upright copy without the EXIF, which the Host sees live.
+  // A camera photo, stored sideways with an orientation tag and GPS: the phone turns it upright and shrinks it
+  // (at most 1280 px, under 200 KB) before sending, and the server keeps a copy without the EXIF, which the Host
+  // sees live.
   await guest.getByRole("tab", { name: /^post/i }).click();
   await guest.getByLabel(/add a photo/i).setInputFiles("e2e/fixtures/sideways-camera-photo.jpg");
   await guest.getByLabel(/what's happening/i).fill("Group photo");
-  await guest.getByRole("button", { name: /^post$/i }).click();
+  const [upload] = await Promise.all([
+    guest.waitForRequest((r) => r.method() === "POST" && /\/posts$/.test(r.url())),
+    guest.getByRole("button", { name: /^post$/i }).click(),
+  ]);
+  await upload.response();
+  expect((await upload.sizes()).requestBodySize).toBeLessThan(200_000 + 2_000); // the photo, plus the form's few fields
   const photo = host.getByRole("feed").getByRole("img", { name: /photo from cat/i });
   await expect(photo).toBeVisible();
-  await expect.poll(() => photo.evaluate((img: HTMLImageElement) => [img.naturalWidth, img.naturalHeight])).toEqual([1200, 1600]);
+  await expect.poll(() => photo.evaluate((img: HTMLImageElement) => [img.naturalWidth, img.naturalHeight])).toEqual([960, 1280]);
 
   // The Host can keep them all, from the Game's settings.
   await host.getByRole("link", { name: /settings/i }).click();
