@@ -4,6 +4,7 @@ import type { Command } from "@elephant/rules";
 import type { CommandResult, GameView, Post, SharedGame, Viewer } from "./api.js";
 import { useApi } from "./ApiContext.js";
 import { Countdown } from "./Countdown.js";
+import { LaptopConsole } from "./LaptopConsole.js";
 import { Composer, Feed, PostPhoto, useFeed } from "./Feed.js";
 import { SignInForm, useSignedIn } from "./SignIn.js";
 import { ThemeLogo, useTheme } from "./theme.js";
@@ -17,6 +18,7 @@ export function GamePage() {
   const [error, setError] = useState<string | null>(null);
   const stars = useStars(id);
   const [posts, reloadFeed] = useFeed(id, feedChanges);
+  const wide = useWideScreen();
   useTheme(game && game !== "loading" ? game.theme : undefined);
 
   if (game === "loading") return <p className="muted">Loading…</p>;
@@ -101,6 +103,26 @@ export function GamePage() {
   // Someone who doesn't run the Game is on their phone: one panel at a time, picked from a tab bar.
   if (!runs) {
     return <GuestView game={game} accept={accept} posts={posts} reloadFeed={reloadFeed} stars={stars} joinOffered={joinOffered} players={players} />;
+  }
+
+  // A Host on a laptop gets v1's two-column console; on a phone, the single column below.
+  if (wide) {
+    return (
+      <LaptopConsole
+        game={game}
+        send={send}
+        error={error}
+        accept={accept}
+        posts={posts}
+        reloadFeed={reloadFeed}
+        resetTimer={async (playerId) => {
+          const next = await api.resetTimer(game.id, playerId);
+          if (next) accept(next);
+        }}
+        joinPanel={game.me ? <p className="you">You're playing as {nameOf(game.me.playerId)}</p> : joinOffered && <JoinPanel gameId={game.id} onJoined={accept} />}
+        finalRoundPanel={game.phase === "playing" && game.active.length === 0 && game.gifts.length > 0 && <FinalRoundPanel game={game} send={send} />}
+      />
+    );
   }
 
   return (
@@ -421,6 +443,20 @@ function FinalRoundPanel({ game, send }: { game: GameView; send: (c: Command) =>
       </form>
     </section>
   );
+}
+
+/** Whether the screen is laptop-wide (the two-column Host console); follows the window as it's resized. */
+const WIDE = "(min-width: 1000px)";
+function useWideScreen(): boolean {
+  const [wide, setWide] = useState(() => (typeof window.matchMedia === "function" ? window.matchMedia(WIDE).matches : false));
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia(WIDE);
+    const changed = () => setWide(query.matches);
+    query.addEventListener?.("change", changed);
+    return () => query.removeEventListener?.("change", changed);
+  }, []);
+  return wide;
 }
 
 /** Copies a page of this app's full address, to paste into an email or a text. */

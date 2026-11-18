@@ -163,7 +163,7 @@ function Posting({ game }: { game: GameView }) {
 }
 
 /** The Host may end the Game at any moment (the room booking may run out), but never by one stray tap. */
-function EndGame({ game, onEnded }: { game: GameView; onEnded: (game: SharedGame) => void }) {
+export function EndGame({ game, onEnded, label = "End the Game" }: { game: GameView; onEnded: (game: SharedGame) => void; label?: string }) {
   const api = useApi();
   const navigate = useNavigate();
   const [asking, setAsking] = useState(false);
@@ -183,7 +183,7 @@ function EndGame({ game, onEnded }: { game: GameView; onEnded: (game: SharedGame
     <section className="card">
       {!asking ? (
         <button className="link danger" onClick={() => setAsking(true)}>
-          End the Game
+          {label}
         </button>
       ) : (
         <>

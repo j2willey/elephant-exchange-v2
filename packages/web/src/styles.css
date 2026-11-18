@@ -921,3 +921,220 @@ label.check input {
   min-height: 0;
   padding: 0;
 }
+
+/* ---- The Host console on a laptop (LaptopConsole.tsx): v1's layout ---- */
+.page:has(.laptop) {
+  max-width: 90rem;
+}
+
+.laptop {
+  display: grid;
+  gap: 16px;
+  padding-bottom: 88px; /* room for the footer */
+}
+
+.lc-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 16px 24px;
+  text-align: center;
+  color: var(--brand-ink);
+  background: var(--brand);
+  border-radius: var(--radius);
+}
+
+.lc-banner h2 {
+  margin: 0;
+  font-size: 1.75rem;
+}
+
+.lc-banner p {
+  margin: 4px 0 0;
+  opacity: 0.9;
+}
+
+.lc-banner .theme-logo {
+  max-height: 56px;
+}
+
+.lc-menu {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  padding: 10px 16px;
+  font-weight: 600;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.lc-menu button {
+  min-height: 40px;
+  padding: 6px 14px;
+}
+
+.lc-menu-right {
+  display: flex;
+  gap: 20px;
+  margin-left: auto;
+}
+
+.lc-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.lc-right {
+  display: grid;
+  gap: 16px;
+}
+
+.lc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lc-head button {
+  min-height: 40px;
+  padding: 6px 14px;
+}
+
+.lc-note {
+  font-weight: 600;
+  color: var(--warning);
+}
+
+.lc-players,
+.lc-gifts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lc-players li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 12px;
+  font-size: 1.15rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.lc-players li.lc-up {
+  padding: 12px;
+  background: color-mix(in srgb, var(--brand) 9%, var(--surface));
+  border-left: 5px solid var(--brand);
+}
+
+.lc-name {
+  flex: 1;
+  font-weight: 600;
+}
+
+.lc-turn,
+.lc-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.lc-turn .countdown {
+  margin-right: 6px;
+  font-size: 1.6rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.lc-act {
+  min-width: 56px;
+  min-height: 56px;
+  padding: 0;
+  font-size: 1.6rem;
+}
+
+.lc-act.lc-wide {
+  padding: 0 14px;
+  font-size: 1rem;
+}
+
+.lc-gifts li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 4px 16px;
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.lc-gifts li button {
+  grid-column: 1 / -1;
+  justify-self: end;
+  min-height: 40px;
+  padding: 6px 16px;
+}
+
+.lc-gift-name strong {
+  font-size: 1.1rem;
+}
+
+.lc-gift-name .badge {
+  margin-left: 8px;
+}
+
+.lc-steals {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.lc-foot {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 10px 24px;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+}
+
+/* End Game sits in the footer bare, not as a card. */
+.lc-foot .card {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.lc-legend {
+  margin-left: auto;
+}
+
+.lc-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 45%);
+}
+
+.lc-dialog {
+  width: min(32rem, 100%);
+  justify-items: stretch;
+}
+
+.lc-dialog img {
+  justify-self: center;
+}
