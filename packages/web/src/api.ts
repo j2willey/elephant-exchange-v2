@@ -472,6 +472,18 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
       if (res.status !== 204) throw new Error(`adding a Co-host failed: ${res.status}`);
     },
 
+    /** The Game's Co-hosts' emails (the Host isn't among them). */
+    async cohosts(gameId: string): Promise<string[]> {
+      const res = await fetchFn(`/api/games/${encodeURIComponent(gameId)}/cohosts`);
+      if (!res.ok) throw new Error(`loading the Co-hosts failed: ${res.status}`);
+      return ((await res.json()) as { cohosts: string[] }).cohosts;
+    },
+
+    async removeCohost(gameId: string, email: string): Promise<void> {
+      const res = await fetchFn(`/api/games/${encodeURIComponent(gameId)}/cohosts/${encodeURIComponent(email)}`, { method: "DELETE" });
+      if (res.status !== 204) throw new Error(`removing a Co-host failed: ${res.status}`);
+    },
+
     /**
      * Calls onGame with the whole Game now, and again after every change, until the returned function is called.
      * After a phone sleeps, Socket.IO reconnects by itself and the server sends the whole Game again.

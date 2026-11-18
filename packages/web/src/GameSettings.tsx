@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import type { GameView, Moderation, RosterMode, SharedGame } from "./api.js";
 import { useApi } from "./ApiContext.js";
@@ -40,6 +40,7 @@ export function GameSettings() {
       <GameOptions game={game} onSaved={accept} />
       <Posting game={game} />
       <GameLook game={game} />
+      <Cohosts game={game} />
       {game.phase !== "ended" && <EndGame game={game} onEnded={accept} />}
     </div>
   );
@@ -158,6 +159,108 @@ function Posting({ game }: { game: GameView }) {
         </a>{" "}
         <span className="muted hint">(a .zip). Photos are deleted 60 days after the Game's last move, so keep a copy.</span>
       </p>
+    </section>
+  );
+}
+
+/**
+ * Co-hosts can do everything the Host can at the party (run turns, the vote, the big screen, settings), except
+ * appoint Co-hosts or delete the Game. The Host adds them by email; nothing is sent: they sign in with that email
+ * and find the Game on their home screen.
+ */
+function Cohosts({ game }: { game: GameView }) {
+  const api = useApi();
+  const [list, setList] = useState<string[] | null>(null);
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const isHost = game.role === "host";
+
+  useEffect(() => {
+    let current = true;
+    api.cohosts(game.id).then(
+      (l) => current && setList(l),
+      () => current && setList([]),
+    );
+    return () => {
+      current = false;
+    };
+  }, [api, game.id]);
+
+  async function add(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    try {
+      await api.addCohost(game.id, email.trim());
+      setList(await api.cohosts(game.id));
+      setEmail("");
+    } catch {
+      setError("That didn't work. Check the email and try again.");
+    }
+  }
+
+  async function remove(who: string) {
+    setError(null);
+    try {
+      await api.removeCohost(game.id, who);
+      setList(await api.cohosts(game.id));
+    } catch {
+      setError("That didn't work. Please try again.");
+    }
+  }
+
+  return (
+    <section className="card stack" aria-label="Co-hosts">
+      <h2>Co-hosts</h2>
+      <p className="muted hint">
+        Someone to run the party with you, or instead of you if you'd like to play. A Co-host can do everything at the
+        party that you can, but can't add Co-hosts or delete the Game.
+      </p>
+      {list === null ? (
+        <p className="muted">Loading…</p>
+      ) : list.length === 0 ? (
+        <p className="muted">None yet.</p>
+      ) : (
+        <ul className="cohost-list" aria-label="Co-hosts of this Game">
+          {list.map((who) => (
+            <li key={who}>
+              <span>{who}</span>
+              {isHost && (
+                <button type="button" className="link danger" aria-label={`Remove ${who}`} onClick={() => void remove(who)}>
+                  Remove
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {isHost && (
+        <form className="stack" onSubmit={add}>
+          <label htmlFor="cohost-email">Add a Co-host by email</label>
+          <div className="inline">
+            <input
+              id="cohost-email"
+              type="email"
+              required
+              autoComplete="off"
+              aria-describedby="cohost-hint"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <button type="submit" className="secondary">
+              Add
+            </button>
+          </div>
+          <p id="cohost-hint" className="muted hint">
+            No email is sent. Tell them to sign in at {window.location.host} with this address; the Game will be on their
+            home screen.
+          </p>
+        </form>
+      )}
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
     </section>
   );
 }

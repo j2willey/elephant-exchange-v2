@@ -115,4 +115,24 @@ describe("Who may run a Game", () => {
     expect((await app.request(`/api/games/${id}/cohosts`, post({ email: "cat@example.com" }))).status).toBe(401);
     expect((await app.request(`/api/games/${id}/cohosts`, post({ email: "cat@example.com" }, bob))).status).toBe(403);
   });
+
+  it("lists a Game's Co-hosts, and lets only the Host remove one", async () => {
+    const { app, sent } = setup();
+    const { id, cookie: host } = await hostGame(app, sent);
+    await app.request(`/api/games/${id}/cohosts`, post({ email: "bob@example.com" }, host));
+    await app.request(`/api/games/${id}/cohosts`, post({ email: "cat@example.com" }, host));
+    const bob = await signIn(app, sent, "bob@example.com");
+    const list = async (cookie: string) => (await (await app.request(`/api/games/${id}/cohosts`, { headers: { cookie } })).json()).cohosts;
+
+    expect(await list(bob)).toEqual(["bob@example.com", "cat@example.com"]);
+    expect((await app.request(`/api/games/${id}/cohosts/cat%40example.com`, { method: "DELETE", headers: { cookie: bob } })).status).toBe(403);
+    // The Host's own row can't be removed this way.
+    const self = await app.request(`/api/games/${id}/cohosts/host%40example.com`, { method: "DELETE", headers: { cookie: host } });
+    expect(self.status).toBe(204);
+    expect((await app.request(`/api/games/${id}/cohosts/Cat%40Example.com`, { method: "DELETE", headers: { cookie: host } })).status).toBe(204);
+    expect(await list(host)).toEqual(["bob@example.com"]);
+
+    const stranger = await signIn(app, sent, "dan@example.com");
+    expect((await app.request(`/api/games/${id}/cohosts`, { headers: { cookie: stranger } })).status).toBe(403);
+  });
 });

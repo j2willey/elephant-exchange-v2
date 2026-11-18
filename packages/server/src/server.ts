@@ -611,6 +611,36 @@ export function createServer({
     return c.body(null, 204);
   });
 
+  /** Who co-hosts this Game, for the Host and the Co-hosts themselves. */
+  app.get("/api/games/:id/cohosts", (c) => {
+    const id = c.req.param("id");
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    if (!load(id)) return c.json({ error: "Game not found" }, 404);
+    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts" }, 403);
+    const rows = db
+      .select({ email: gameHosts.email })
+      .from(gameHosts)
+      .where(and(eq(gameHosts.gameId, id), eq(gameHosts.role, "cohost")))
+      .orderBy(asc(gameHosts.email))
+      .all();
+    return c.json({ cohosts: rows.map((r) => r.email) });
+  });
+
+  /** The Host takes someone off the Game's Co-hosts. The Host can't be removed this way. */
+  app.delete("/api/games/:id/cohosts/:email", (c) => {
+    const id = c.req.param("id");
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    if (!load(id)) return c.json({ error: "Game not found" }, 404);
+    if (roleIn(id, email) !== "host") return c.json({ error: "Only the Host can remove Co-hosts" }, 403);
+    const who = c.req.param("email").trim().toLowerCase();
+    db.delete(gameHosts)
+      .where(and(eq(gameHosts.gameId, id), eq(gameHosts.email, who), eq(gameHosts.role, "cohost")))
+      .run();
+    return c.body(null, 204);
+  });
+
   /** The Host deletes their own Game, with everything in it (not a Co-host: it's the Host's Game). */
   app.delete("/api/games/:id", (c) => {
     const id = c.req.param("id");
