@@ -6,6 +6,7 @@ import { AdminPage } from "./Admin.js";
 import { DemoGame, DemoPage } from "./Demo.js";
 import { GamePage } from "./GamePage.js";
 import { GameSettings } from "./GameSettings.js";
+import { Landing, Playbook } from "./Landing.js";
 import { MyOrgs, OrgPage } from "./Orgs.js";
 import { SignInForm } from "./SignIn.js";
 import { WatchScreen } from "./WatchScreen.js";
@@ -19,6 +20,7 @@ export function AppRoutes() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/sign-in" element={<RedeemLink />} />
+        <Route path="/playbook" element={<Playbook />} />
         <Route path="/games/:id" element={<GamePage />} />
         <Route path="/games/:id/screen" element={<WatchScreen />} />
         <Route path="/games/:id/demo" element={<DemoPage />} />
@@ -43,7 +45,7 @@ function Home() {
   }, [api]);
 
   if (session === "loading") return <p className="muted">Loading…</p>;
-  if (!session) return <SignInForm />;
+  if (!session) return <Landing />;
 
   async function signOut() {
     await api.signOut();
@@ -70,6 +72,7 @@ function Home() {
           />
           OK to contact me to ask how it went
         </label>
+        <Link to="/playbook">📖 Host's Playbook</Link>
         {session.admin && <Link to="/admin">Admin</Link>}
         <button className="secondary" onClick={signOut}>
           Sign out

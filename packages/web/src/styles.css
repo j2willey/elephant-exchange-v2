@@ -1617,3 +1617,97 @@ label.check input {
 .edit-gift {
   margin: 8px 0;
 }
+
+/* A link that does what a button does, styled as one. */
+a.button {
+  display: inline-block;
+  min-height: 48px;
+  padding: 12px 16px;
+  font-weight: 600;
+  color: var(--brand-ink);
+  text-decoration: none;
+  background: var(--brand);
+  border-radius: 8px;
+}
+
+/* The landing page: one column on a phone; on a laptop the three reasons side by side, and the ways in beside each other. */
+.page:has(.landing) {
+  max-width: 64rem;
+}
+
+.page:has(.playbook) {
+  max-width: 44rem;
+}
+
+.landing-lede {
+  margin: 0 0 8px;
+  font-size: 1.35rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.landing-hero .muted {
+  margin: 0;
+}
+
+.landing-points,
+.landing-ways {
+  display: grid;
+  gap: 16px;
+}
+
+.landing-points h3,
+.playbook h3 {
+  margin: 0 0 8px;
+}
+
+.landing-points p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+@media (min-width: 48rem) {
+  .landing-points {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .landing-ways {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
+
+.landing-playbook {
+  margin: 0;
+  text-align: center;
+}
+
+.playbook header h2 {
+  margin: 0 0 4px;
+}
+
+.playbook header p {
+  margin: 0;
+}
+
+.playbook p {
+  line-height: 1.6;
+}
+
+.playbook .back {
+  justify-self: start;
+}
+
+.playbook .tip {
+  padding: 12px 16px;
+  line-height: 1.5;
+  background: color-mix(in srgb, var(--brand) 8%, transparent);
+  border-left: 4px solid var(--brand);
+  border-radius: 4px;
+}
+
+.landing-points .card,
+.playbook .card {
+  align-content: start;
+  gap: 8px;
+}
