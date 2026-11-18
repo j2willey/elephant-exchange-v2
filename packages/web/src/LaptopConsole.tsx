@@ -45,7 +45,10 @@ export function LaptopConsole({
   const [opening, setOpening] = useState<Player | null>(null);
   const [editing, setEditing] = useState<Gift | null>(null);
   const [inviting, setInviting] = useState(false);
+  const [shown, setShown] = useState<"participants" | "gifts">("participants");
   const playing = game.phase === "playing" || game.phase === "finalRound";
+  // Once every Turn is done the end is near: End Game joins the menu bar too, for a Host who never noticed the foot.
+  const nearTheEnd = game.phase === "finalRound" || (game.phase === "playing" && game.active.length === 0 && game.gifts.length > 0);
   // A steal in progress ends once that Player is no longer up (their turn was taken, undone or skipped).
   const stealing = stealer !== null && game.active.includes(stealer) ? stealer : null;
   const nameOf = (id: string | null) => game.players.find((p) => p.id === id)?.name ?? "?";
@@ -55,6 +58,58 @@ export function LaptopConsole({
     setStealer(null);
     await send(gift.holderId === null ? { type: "TakeReturnedGift", playerId: stealing, giftId: gift.id } : { type: "Steal", playerId: stealing, giftId: gift.id });
   }
+
+  const playerList =
+    game.players.length === 0 ? (
+      <p className="muted">No participants yet.</p>
+    ) : (
+      <ul className="lc-players">
+        {inPlayOrder(game).map((p) => (
+          <ParticipantRow
+            key={p.id}
+            game={game}
+            player={p}
+            stealing={stealing === p.id}
+            onOpen={() => setOpening(p)}
+            onSteal={() => setStealer(p.id)}
+            onCancelSteal={() => setStealer(null)}
+            send={send}
+            resetTimer={() => resetTimer(p.id)}
+          />
+        ))}
+      </ul>
+    );
+  const giftList =
+    game.gifts.length === 0 ? (
+      <p className="muted">No gifts opened yet.</p>
+    ) : (
+      <ul className="lc-gifts">
+        {game.gifts.map((g) => {
+          const takeable = stealing !== null && g.holderId !== stealing && !g.frozen;
+          return (
+            <li key={g.id} aria-label={g.name}>
+              <span className="lc-gift-name">
+                <strong>{g.name}</strong>
+                {g.frozen && <span className="badge">Frozen</span>}
+                <button className="link" aria-label={`Edit ${g.name}`} title="Edit" onClick={() => setEditing(g)}>
+                  ✏️
+                </button>
+                {g.description && <span className="gift-desc">{g.description}</span>}
+              </span>
+              <span className="muted">{g.holderId === null ? "On the table" : <>Held by <strong>{nameOf(g.holderId)}</strong></>}</span>
+              <span className="lc-steals">
+                {g.steals}/{game.settings.maxSteals} steals
+              </span>
+              {takeable && (
+                <button onClick={() => void steal(g)} aria-label={`Select gift ${g.name}`}>
+                  Select gift
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    );
 
   return (
     <div className="laptop">
@@ -77,6 +132,7 @@ export function LaptopConsole({
         <button className="secondary" onClick={() => setInviting(true)}>
           🔗 Invite
         </button>
+        {nearTheEnd && <EndGame game={game} onEnded={accept} label="🛑 End Game" />}
         <span className="lc-menu-right">
           {game.demo && window.self === window.top && <Link to={`/games/${game.id}/demo`}>🖥 Demo view</Link>}
           <Link to={`/games/${game.id}/settings`}>⚙ Settings</Link>
@@ -90,51 +146,54 @@ export function LaptopConsole({
       )}
 
       <div className="lc-columns">
-        <section className="card" aria-label="Participants">
-          <div className="lc-head">
-            <h2>Participants</h2>
-            {playing && (
-              <button className="secondary" onClick={() => void send({ type: "Undo" })}>
-                ↩ Undo last pick
-              </button>
-            )}
-          </div>
-          {game.phase === "finalRound" && (
-            <p className="lc-note">
-              Final Round · {game.leftoverGifts} unopened {game.leftoverGifts === 1 ? "gift" : "gifts"} left
-            </p>
-          )}
-          {game.phase !== "ended" && <AddParticipant onAdd={(name) => send({ type: "AddPlayer", playerId: crypto.randomUUID(), name })} />}
-          {game.phase === "setup" && <RosterPaste roster={game.players.map((p) => p.name)} onAdd={(name) => send({ type: "AddPlayer", playerId: crypto.randomUUID(), name })} />}
-          {game.phase === "setup" && (
-            <>
-              <button disabled={game.players.length < 2} onClick={() => void send({ type: "StartGame" })}>
-                Start game
-              </button>
-              {game.players.length < 2 && <p className="muted hint">Add at least 2 players to start.</p>}
-            </>
-          )}
-          {game.players.length === 0 ? (
-            <p className="muted">No participants yet.</p>
-          ) : (
-            <ul className="lc-players">
-              {inPlayOrder(game).map((p) => (
-                <ParticipantRow
-                  key={p.id}
-                  game={game}
-                  player={p}
-                  stealing={stealing === p.id}
-                  onOpen={() => setOpening(p)}
-                  onSteal={() => setStealer(p.id)}
-                  onCancelSteal={() => setStealer(null)}
-                  send={send}
-                  resetTimer={() => resetTimer(p.id)}
-                />
+        {game.phase === "ended" ? (
+          // Once it's over, Participants and the Gift Tracker say the same thing both ways round: one panel, two tabs.
+          <section className="card" aria-label="Who has what">
+            <div role="tablist" aria-label="Who has what" className="lc-tabs">
+              {(
+                [
+                  ["participants", "Participants"],
+                  ["gifts", "Gifts"],
+                ] as const
+              ).map(([id, label]) => (
+                <button key={id} id={`lc-tab-${id}`} role="tab" className="toggle" aria-selected={shown === id} aria-controls="lc-tabpanel" onClick={() => setShown(id)}>
+                  {label}
+                </button>
               ))}
-            </ul>
-          )}
-          {joinPanel}
-        </section>
+            </div>
+            <div role="tabpanel" id="lc-tabpanel" aria-labelledby={`lc-tab-${shown}`}>
+              {shown === "participants" ? playerList : giftList}
+            </div>
+          </section>
+        ) : (
+          <section className="card" aria-label="Participants">
+            <div className="lc-head">
+              <h2>Participants</h2>
+              {playing && (
+                <button className="secondary" onClick={() => void send({ type: "Undo" })}>
+                  ↩ Undo last pick
+                </button>
+              )}
+            </div>
+            {game.phase === "finalRound" && (
+              <p className="lc-note">
+                Final Round · {game.leftoverGifts} unopened {game.leftoverGifts === 1 ? "gift" : "gifts"} left
+              </p>
+            )}
+            <AddParticipant onAdd={(name) => send({ type: "AddPlayer", playerId: crypto.randomUUID(), name })} />
+            {game.phase === "setup" && <RosterPaste roster={game.players.map((p) => p.name)} onAdd={(name) => send({ type: "AddPlayer", playerId: crypto.randomUUID(), name })} />}
+            {game.phase === "setup" && (
+              <>
+                <button disabled={game.players.length < 2} onClick={() => void send({ type: "StartGame" })}>
+                  Start game
+                </button>
+                {game.players.length < 2 && <p className="muted hint">Add at least 2 players to start.</p>}
+              </>
+            )}
+            {playerList}
+            {joinPanel}
+          </section>
+        )}
 
         <div className="lc-right">
           {finalRoundPanel}
@@ -147,40 +206,13 @@ export function LaptopConsole({
               <VotePanel game={game} accept={accept} />
             </>
           )}
-          <section className="card" aria-label="Gift Tracker">
-            <h2>Gift Tracker</h2>
-            {stealing && <p className="lc-note">Pick the Gift {nameOf(stealing)} takes.</p>}
-            {game.gifts.length === 0 ? (
-              <p className="muted">No gifts opened yet.</p>
-            ) : (
-              <ul className="lc-gifts">
-                {game.gifts.map((g) => {
-                  const takeable = stealing !== null && g.holderId !== stealing && !g.frozen;
-                  return (
-                    <li key={g.id} aria-label={g.name}>
-                      <span className="lc-gift-name">
-                        <strong>{g.name}</strong>
-                        {g.frozen && <span className="badge">Frozen</span>}
-                        <button className="link" aria-label={`Edit ${g.name}`} title="Edit" onClick={() => setEditing(g)}>
-                          ✏️
-                        </button>
-                        {g.description && <span className="gift-desc">{g.description}</span>}
-                      </span>
-                      <span className="muted">{g.holderId === null ? "On the table" : <>Held by <strong>{nameOf(g.holderId)}</strong></>}</span>
-                      <span className="lc-steals">
-                        {g.steals}/{game.settings.maxSteals} steals
-                      </span>
-                      {takeable && (
-                        <button onClick={() => void steal(g)} aria-label={`Select gift ${g.name}`}>
-                          Select gift
-                        </button>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
+          {game.phase !== "ended" && (
+            <section className="card" aria-label="Gift Tracker">
+              <h2>Gift Tracker</h2>
+              {stealing && <p className="lc-note">Pick the Gift {nameOf(stealing)} takes.</p>}
+              {giftList}
+            </section>
+          )}
           <Feed game={game} posts={posts} reload={reloadFeed} offerSignIn={false} composer={false} />
         </div>
       </div>

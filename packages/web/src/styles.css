@@ -1711,3 +1711,31 @@ a.button {
   align-content: start;
   gap: 8px;
 }
+
+/* End Game in the menu bar, as it sits at the foot: a plain button, not a card. */
+.lc-menu .card {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+/* Once the Game is over: Participants or Gifts, one panel, two tabs. */
+.lc-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.lc-tabs .toggle {
+  min-height: 40px;
+  padding: 6px 14px;
+  color: var(--brand-text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.lc-tabs .toggle[aria-selected="true"] {
+  color: var(--brand-ink);
+  background: var(--brand);
+  border-color: var(--brand);
+}

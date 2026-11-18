@@ -71,12 +71,14 @@ describe("Describing a Gift from the laptop console", () => {
     await host.command(id, { type: "EndGame" });
     openApp(host, `/games/${id}`);
 
-    await user.click(within(await within(await tracker()).findByRole("listitem", { name: "Espreso" })).getByRole("button", { name: /edit/i }));
+    // Once it's over, the Gifts are a tab beside the Participants.
+    await user.click(await screen.findByRole("tab", { name: /gifts/i }));
+    await user.click(within(within(screen.getByRole("tabpanel")).getByRole("listitem", { name: "Espreso" })).getByRole("button", { name: /edit/i }));
     const dialog = await screen.findByRole("dialog", { name: /edit/i });
     await user.type(within(dialog).getByLabelText(/what's inside/i), "s");
     await user.click(within(dialog).getByRole("button", { name: /save/i }));
 
-    expect(await within(await tracker()).findByRole("listitem", { name: "Espresos" })).toBeInTheDocument();
+    expect(await within(screen.getByRole("tabpanel")).findByRole("listitem", { name: "Espresos" })).toBeInTheDocument();
   });
 });
 

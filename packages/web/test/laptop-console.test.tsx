@@ -116,6 +116,62 @@ describe("The Host console on a laptop", () => {
   });
 });
 
+describe("The end of the Game on a laptop", () => {
+  /** Ann and Bob have each opened a Gift (Socks, Mug), so every Turn is done. */
+  async function everyTurnDone() {
+    const game = await hosting(["Ann", "Bob"]);
+    const { host, id } = game;
+    await host.command(id, { type: "StartGame" });
+    await host.command(id, { type: "OpenGift", playerId: "ann", giftId: "socks", name: "Socks" });
+    await host.command(id, { type: "OpenGift", playerId: "bob", giftId: "mug", name: "Mug" });
+    return game;
+  }
+  const menu = () => screen.findByRole("navigation", { name: /console/i });
+
+  it("keeps End Game out of the menu bar while Turns are still going", async () => {
+    const { host, id } = await hosting(["Ann", "Bob"]);
+    await host.command(id, { type: "StartGame" });
+    openApp(host, `/games/${id}`);
+    await row("Ann");
+
+    expect(within(await menu()).queryByRole("button", { name: /end game/i })).not.toBeInTheDocument();
+  });
+
+  it("puts End Game in the menu bar too once every Turn is done, and through the Final Round", async () => {
+    const { host, id, user } = await everyTurnDone();
+    openApp(host, `/games/${id}`);
+
+    expect(await within(await menu()).findByRole("button", { name: /end game/i })).toBeInTheDocument();
+    expect(within(screen.getByRole("contentinfo")).getByRole("button", { name: /end game/i })).toBeInTheDocument();
+
+    await host.command(id, { type: "StartFinalRound", finalists: 1, leftoverGifts: 0 });
+    await screen.findByText(/final round ·/i);
+    await user.click(within(await menu()).getByRole("button", { name: /end game/i }));
+    await user.click(within(await menu()).getByRole("button", { name: /yes, end it now/i }));
+
+    expect(await screen.findByRole("heading", { name: /game over/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /end game/i })).not.toBeInTheDocument();
+  });
+
+  it("shows Participants and Gifts as two tabs of one panel once it's over, beside the vote", async () => {
+    const { host, id, user } = await everyTurnDone();
+    await host.command(id, { type: "EndGame" });
+    openApp(host, `/games/${id}`);
+    await screen.findByRole("heading", { name: /game over/i });
+
+    const tabs = screen.getByRole("tablist", { name: /who has what/i });
+    expect(within(tabs).getByRole("tab", { name: /participants/i })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tabpanel")).toHaveTextContent(/ann.*socks.*bob.*mug/i);
+    expect(screen.queryByRole("region", { name: /gift tracker/i })).not.toBeInTheDocument();
+
+    await user.click(within(tabs).getByRole("tab", { name: /gifts/i }));
+    const gifts = screen.getByRole("tabpanel");
+    expect(within(gifts).getByRole("listitem", { name: "Mug" })).toHaveTextContent(/held by bob/i);
+    expect(within(gifts).getByRole("button", { name: /edit mug/i })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: /worst gift vote/i })).toBeInTheDocument();
+  });
+});
+
 describe("The Host console on a phone", () => {
   it("stays the single column it is", async () => {
     screenWidth(false);
