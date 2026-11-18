@@ -1,6 +1,6 @@
 import { File as NodeFile } from "node:buffer";
 import { StrictMode } from "react";
-import { fireEvent, render, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, expect } from "vitest";
 import type { DrawFn } from "@elephant/rules";
@@ -10,7 +10,13 @@ import { ApiProvider } from "../src/ApiContext.js";
 import { AppRoutes } from "../src/App.js";
 
 const running: (() => Promise<void>)[] = [];
+/** Requests the test browsers have sent and not yet had answered. */
+const inFlight = new Set<Promise<unknown>>();
 afterEach(async () => {
+  // Take the screens down, and let what they already asked for finish, before the server stops: a request
+  // cut off mid-answer fails (ECONNRESET) after its test has passed, and fails the run.
+  cleanup();
+  while (inFlight.size) await Promise.allSettled([...inFlight]);
   for (const close of running.splice(0)) await close();
   clock.reset();
 });
@@ -114,7 +120,13 @@ async function toMultipart(form: FormData): Promise<{ body: Uint8Array; type: st
  */
 export function browser(origin: string, { clockWrongBy = 0, demoPlayer }: { clockWrongBy?: number; demoPlayer?: string } = {}): Api {
   const jar = new Map<string, string>();
-  const fetchWithCookies: typeof fetch = async (input, init) => {
+  const fetchWithCookies: typeof fetch = (input, init) => {
+    const request = send(input, init);
+    inFlight.add(request);
+    void request.finally(() => inFlight.delete(request)).catch(() => {});
+    return request;
+  };
+  const send: typeof fetch = async (input, init) => {
     const headers = new Headers(init?.headers);
     if (jar.size) headers.set("cookie", [...jar].map(([k, v]) => `${k}=${v}`).join("; "));
     const body = init?.body;
