@@ -187,7 +187,14 @@ export function GamePage() {
 
       {game.phase === "ended" && <VotePanel game={game} accept={accept} />}
 
-      {game.gifts.length > 0 && <Gifts game={game} stars={stars} posts={posts} />}
+      {game.gifts.length > 0 && (
+        <Gifts
+          game={game}
+          stars={stars}
+          posts={posts}
+          onEdit={runs ? (giftId, { name, description }) => send({ type: "DescribeGift", giftId, name, description }) : undefined}
+        />
+      )}
 
       <Feed game={game} posts={posts} reload={reloadFeed} offerSignIn={!joinOffered} />
 
@@ -606,9 +613,20 @@ interface Stars {
 
 /**
  * The Gifts in the order they were opened; with `stars`, Starred ones come first and each has a Star button.
- * With `posts`, each Gift shows the Posts about it.
+ * With `posts`, each Gift shows the Posts about it. With `onEdit` (for the Host), each Gift can be corrected in place.
  */
-export function Gifts({ game, stars, posts = [] }: { game: Pick<GameView, "gifts" | "players">; stars?: Stars; posts?: Post[] }) {
+export function Gifts({
+  game,
+  stars,
+  posts = [],
+  onEdit,
+}: {
+  game: Pick<GameView, "gifts" | "players">;
+  stars?: Stars;
+  posts?: Post[];
+  onEdit?: ((giftId: string, gift: { name: string; description: string }) => Promise<void>) | undefined;
+}) {
+  const [editing, setEditing] = useState<string | null>(null);
   const holderName = (id: string | null) => (id === null ? "on the table" : (game.players.find((p) => p.id === id)?.name ?? "?"));
   const isStarred = (giftId: string) => stars?.starred.has(giftId) ?? false;
   const shown = [...game.gifts.filter((g) => isStarred(g.id)), ...game.gifts.filter((g) => !isStarred(g.id))];
@@ -625,6 +643,22 @@ export function Gifts({ game, stars, posts = [] }: { game: Pick<GameView, "gifts
             )}
             <span className="gift-name">
               <strong>{g.name}</strong> — {holderName(g.holderId)}
+              {onEdit && editing !== g.id && (
+                <button className="link" aria-label={`Edit ${g.name}`} onClick={() => setEditing(g.id)}>
+                  Edit
+                </button>
+              )}
+              {g.description && editing !== g.id && <span className="gift-desc">{g.description}</span>}
+              {onEdit && editing === g.id && (
+                <EditGift
+                  gift={g}
+                  onCancel={() => setEditing(null)}
+                  onSave={async (change) => {
+                    setEditing(null);
+                    await onEdit(g.id, change);
+                  }}
+                />
+              )}
               {posts
                 .filter((p) => p.giftId === g.id && p.status === "visible")
                 .map((p) => (
@@ -643,6 +677,44 @@ export function Gifts({ game, stars, posts = [] }: { game: Pick<GameView, "gifts
         ))}
       </ul>
     </section>
+  );
+}
+
+/** The Host's correction to a Gift's name, or the details they add, inline on the phone. */
+function EditGift({
+  gift,
+  onSave,
+  onCancel,
+}: {
+  gift: { id: string; name: string; description: string };
+  onSave: (gift: { name: string; description: string }) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState(gift.name);
+  const [description, setDescription] = useState(gift.description);
+  return (
+    <form
+      className="stack edit-gift"
+      aria-label={`Edit ${gift.name}`}
+      onKeyDown={(e) => e.key === "Escape" && onCancel()}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (name.trim()) void onSave({ name: name.trim(), description: description.trim() });
+      }}
+    >
+      <label htmlFor={`gift-name-${gift.id}`}>What's inside?</label>
+      <input id={`gift-name-${gift.id}`} autoFocus autoComplete="off" maxLength={100} value={name} onChange={(e) => setName(e.target.value)} />
+      <label htmlFor={`gift-desc-${gift.id}`}>Details (optional)</label>
+      <input id={`gift-desc-${gift.id}`} autoComplete="off" maxLength={300} value={description} onChange={(e) => setDescription(e.target.value)} />
+      <div className="inline">
+        <button type="button" className="secondary" onClick={onCancel}>
+          Cancel
+        </button>
+        <button type="submit" disabled={!name.trim()}>
+          Save
+        </button>
+      </div>
+    </form>
   );
 }
 

@@ -36,6 +36,21 @@ describe("Commands over HTTP", () => {
     expect(await (await app.request(`/api/games/${id}`)).json()).toMatchObject({ active: ["bob"] });
   });
 
+  it("takes a Gift's description when it's opened, and a correction to it at any time, even after the Game ends", async () => {
+    const { app, id, send } = await setup(scriptedDraw(["ann", "bob"]));
+    await send({ type: "AddPlayer", playerId: "ann", name: "Ann" });
+    await send({ type: "AddPlayer", playerId: "bob", name: "Bob" });
+    await send({ type: "StartGame" });
+    await send({ type: "OpenGift", playerId: "ann", giftId: "g1", name: "Espresso machine", description: "Breville, barely used" });
+    expect(await (await app.request(`/api/games/${id}`)).json()).toMatchObject({ gifts: [{ name: "Espresso machine", description: "Breville, barely used" }] });
+
+    await send({ type: "EndGame" });
+    const res = await send({ type: "DescribeGift", giftId: "g1", name: "Espresso maker", description: "  " });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ gifts: [{ name: "Espresso maker", description: "" }] });
+  });
+
   it("refuses a move the rules don't allow with 409 and the rule's code, changing nothing", async () => {
     const { app, id, send } = await setup(scriptedDraw(["ann", "bob"]));
     await send({ type: "AddPlayer", playerId: "ann", name: "Ann" });

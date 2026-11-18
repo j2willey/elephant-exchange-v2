@@ -5,6 +5,8 @@ import type { Command, GameSettings } from "@elephant/rules";
 
 const id = z.string().min(1).max(64);
 const name = z.string().trim().min(1).max(100);
+/** A Gift's detail beyond its name; blank means none. */
+const description = z.string().trim().max(300);
 const activeSlots = z.int().min(1).max(10);
 const maxSteals = z.int().min(0).max(20);
 
@@ -74,7 +76,7 @@ export const cohostBody = z.object({ email });
 export const command = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("AddPlayer"), playerId: id, name }),
   z.strictObject({ type: z.literal("StartGame") }),
-  z.strictObject({ type: z.literal("OpenGift"), playerId: id, giftId: id, name }),
+  z.strictObject({ type: z.literal("OpenGift"), playerId: id, giftId: id, name, description: description.exactOptional() }),
   z.strictObject({ type: z.literal("Steal"), playerId: id, giftId: id }),
   z.strictObject({
     type: z.literal("ChangeSettings"),
@@ -87,6 +89,7 @@ export const command = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("KeepGift"), playerId: id }),
   z.strictObject({ type: z.literal("TakeReturnedGift"), playerId: id, giftId: id }),
   z.strictObject({ type: z.literal("EndGame") }),
+  z.strictObject({ type: z.literal("DescribeGift"), giftId: id, name, description }),
 ]) satisfies z.ZodType<Command>;
 
 export const voteStatusBody = z.object({

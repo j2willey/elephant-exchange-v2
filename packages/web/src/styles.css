@@ -1576,3 +1576,44 @@ label.check input {
     min-height: 0;
   }
 }
+
+/* A Gift's details, under its name wherever Gifts are listed. */
+.gift-desc {
+  display: block;
+  color: var(--muted);
+  font-size: 0.9em;
+  font-weight: 400;
+}
+
+.board-name {
+  display: grid;
+  min-width: 0;
+}
+
+.board-name .gift-desc {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.7em;
+}
+
+.catalog-card .gift-desc {
+  font-size: 0.8em;
+}
+
+/* The Gift Tracker's pencil sits beside the name, not on a row of its own like Select gift. */
+.lc-gifts li .lc-gift-name button {
+  min-height: 32px;
+  margin-left: 6px;
+  padding: 2px 6px;
+  vertical-align: middle;
+  text-decoration: none;
+}
+
+.gifts .gift-name > .link {
+  margin-left: 8px;
+}
+
+.edit-gift {
+  margin: 8px 0;
+}

@@ -14,7 +14,7 @@ export type DrawFn = (candidates: PlayerId[]) => PlayerId;
 export type Command =
   | { type: "AddPlayer"; playerId: PlayerId; name: string }
   | { type: "StartGame" }
-  | { type: "OpenGift"; playerId: PlayerId; giftId: GiftId; name: string }
+  | { type: "OpenGift"; playerId: PlayerId; giftId: GiftId; name: string; description?: string }
   | { type: "Steal"; playerId: PlayerId; giftId: GiftId }
   | { type: "ChangeSettings"; settings: Partial<GameSettings> }
   | { type: "Skip"; playerId: PlayerId }
@@ -23,14 +23,16 @@ export type Command =
   | { type: "StartFinalRound"; finalists: number; leftoverGifts: number }
   | { type: "KeepGift"; playerId: PlayerId }
   | { type: "TakeReturnedGift"; playerId: PlayerId; giftId: GiftId }
-  | { type: "EndGame" };
+  | { type: "EndGame" }
+  /** Corrects what an opened Gift is called or adds detail; allowed at any time, even after the Game ends. */
+  | { type: "DescribeGift"; giftId: GiftId; name: string; description: string };
 
 /** What actually happened; these are what the Game's log stores. */
 export type Event =
   | { type: "PlayerAdded"; playerId: PlayerId; name: string }
   | { type: "GameStarted" }
   | { type: "PlayerDrawn"; playerId: PlayerId }
-  | { type: "GiftOpened"; playerId: PlayerId; giftId: GiftId; name: string }
+  | { type: "GiftOpened"; playerId: PlayerId; giftId: GiftId; name: string; description?: string }
   | { type: "GiftStolen"; playerId: PlayerId; giftId: GiftId; fromPlayerId: PlayerId }
   | { type: "SettingsChanged"; settings: Partial<GameSettings> }
   | { type: "PlayerSkipped"; playerId: PlayerId }
@@ -39,7 +41,8 @@ export type Event =
   | { type: "FinalRoundStarted"; finalists: PlayerId[]; leftoverGifts: number }
   | { type: "GiftKept"; playerId: PlayerId }
   | { type: "ReturnedGiftTaken"; playerId: PlayerId; giftId: GiftId }
-  | { type: "GameEnded" };
+  | { type: "GameEnded" }
+  | { type: "GiftDescribed"; giftId: GiftId; name: string; description: string };
 
 export type RuleErrorCode = "NotActive" | "AlreadyPlayed" | "GiftOnTable" | "NotReturned" | "NoLeftoverGifts" | "TurnsInProgress" | "NothingToKeep" | "GameOver" | "NothingToUndo" | "GiftNotOpened" | "GiftFrozen" | "NoTakeBacks";
 
@@ -56,6 +59,8 @@ interface Player {
 interface Gift {
   id: GiftId;
   name: string;
+  /** Detail beyond the name ("Breville, barely used"); empty when there is none. */
+  description: string;
   /** Null only for a Returned Gift, back on the table during the Final Round. */
   holderId: PlayerId | null;
   steals: number;
@@ -91,6 +96,10 @@ export function newGame(settings: GameSettings): GameState {
 }
 
 export function decide(state: GameState, command: Command, draw: DrawFn): Event[] | RuleError {
+  if (command.type === "DescribeGift") {
+    if (!state.gifts.some((g) => g.id === command.giftId)) return { code: "GiftNotOpened", message: `No opened Gift ${command.giftId}` };
+    return [{ type: "GiftDescribed", giftId: command.giftId, name: command.name, description: command.description }];
+  }
   if (state.phase === "ended") return { code: "GameOver", message: "The Game has ended" };
   const isPick =
     command.type === "OpenGift" ||
@@ -111,7 +120,15 @@ export function decide(state: GameState, command: Command, draw: DrawFn): Event[
       }
       return withDraws(
         state,
-        [{ type: "GiftOpened", playerId: command.playerId, giftId: command.giftId, name: command.name }],
+        [
+          {
+            type: "GiftOpened",
+            playerId: command.playerId,
+            giftId: command.giftId,
+            name: command.name,
+            ...(command.description ? { description: command.description } : {}),
+          },
+        ],
         draw,
       );
     case "Steal": {
@@ -180,7 +197,8 @@ export function evolve(state: GameState, event: Event): GameState {
     event.type === "GiftOpened" ||
     event.type === "GiftStolen" ||
     event.type === "ReturnedGiftTaken" ||
-    event.type === "PlayerDrawn";
+    event.type === "PlayerDrawn" ||
+    event.type === "GiftDescribed";
   return keepsUndo ? next : { ...next, beforeLastPick: null };
 }
 
@@ -210,7 +228,7 @@ function apply(state: GameState, event: Event): GameState {
         beforeLastPick: { ...state, beforeLastPick: null },
         active: state.active.filter((id) => id !== event.playerId),
         takenFrom: without(state.takenFrom, event.playerId),
-        gifts: [...state.gifts, { id: event.giftId, name: event.name, holderId: event.playerId, steals: 0 }],
+        gifts: [...state.gifts, { id: event.giftId, name: event.name, description: event.description ?? "", holderId: event.playerId, steals: 0 }],
         leftoverGifts: state.phase === "finalRound" ? state.leftoverGifts - 1 : state.leftoverGifts,
         picks: state.picks + 1,
       });
@@ -241,6 +259,12 @@ function apply(state: GameState, event: Event): GameState {
         gifts: state.gifts.map((g) => (g.id === event.giftId ? { ...g, holderId: event.playerId } : g)),
         picks: state.picks + 1,
       });
+    case "GiftDescribed": {
+      const describe = (g: Gift): Gift => (g.id === event.giftId ? { ...g, name: event.name, description: event.description } : g);
+      // An Undo after a correction keeps the correction.
+      const before = state.beforeLastPick && { ...state.beforeLastPick, gifts: state.beforeLastPick.gifts.map(describe) };
+      return { ...state, gifts: state.gifts.map(describe), beforeLastPick: before };
+    }
     case "GameEnded":
       return { ...state, phase: "ended", active: [], onDeck: [] };
     case "GiftKept":
@@ -356,6 +380,6 @@ export function roster(state: GameState): { id: PlayerId; name: string }[] {
 }
 
 /** Opened Gifts in the order opened. A null holder is a Returned Gift. */
-export function gifts(state: GameState): { id: GiftId; name: string; holderId: PlayerId | null; steals: number; frozen: boolean }[] {
-  return state.gifts.map((g) => ({ id: g.id, name: g.name, holderId: g.holderId, steals: g.steals, frozen: isFrozen(state, g.id) }));
+export function gifts(state: GameState): { id: GiftId; name: string; description: string; holderId: PlayerId | null; steals: number; frozen: boolean }[] {
+  return state.gifts.map((g) => ({ id: g.id, name: g.name, description: g.description, holderId: g.holderId, steals: g.steals, frozen: isFrozen(state, g.id) }));
 }

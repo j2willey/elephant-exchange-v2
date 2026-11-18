@@ -65,7 +65,7 @@ Choosing the next Player to call up, at random, from the Players not yet called.
 _Avoid_: Draw number, ticket, pick order
 
 **Gift**:
-A wrapped or opened present in the Game; each opened Gift is held by exactly one Player, except a Returned Gift during the Final Round.
+A wrapped or opened present in the Game; each opened Gift is held by exactly one Player, except a Returned Gift during the Final Round. An opened Gift has a name and may have details ("Breville, barely used"); the Host can correct either at any time, which is not a Pick and is never undone.
 
 **Leftover Gift**:
 An unopened Gift still on the table once every Player holds a Gift; the Host counts them only when the Final Round begins.

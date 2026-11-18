@@ -42,6 +42,7 @@ export function LaptopConsole({
 }) {
   const [stealer, setStealer] = useState<string | null>(null);
   const [opening, setOpening] = useState<Player | null>(null);
+  const [editing, setEditing] = useState<Gift | null>(null);
   const [inviting, setInviting] = useState(false);
   const playing = game.phase === "playing" || game.phase === "finalRound";
   // A steal in progress ends once that Player is no longer up (their turn was taken, undone or skipped).
@@ -158,6 +159,10 @@ export function LaptopConsole({
                       <span className="lc-gift-name">
                         <strong>{g.name}</strong>
                         {g.frozen && <span className="badge">Frozen</span>}
+                        <button className="link" aria-label={`Edit ${g.name}`} title="Edit" onClick={() => setEditing(g)}>
+                          ✏️
+                        </button>
+                        {g.description && <span className="gift-desc">{g.description}</span>}
                       </span>
                       <span className="muted">{g.holderId === null ? "On the table" : <>Held by <strong>{nameOf(g.holderId)}</strong></>}</span>
                       <span className="lc-steals">
@@ -180,17 +185,32 @@ export function LaptopConsole({
 
       <footer className="lc-foot">
         {game.phase !== "ended" && <EndGame game={game} onEnded={accept} label="🛑 End Game" />}
-        <span className="lc-legend muted">🎁 Open · 😈 Steal · ⤵ Skip · 🕒 Reset timer · ↩ Undo</span>
+        <span className="lc-legend muted">🎁 Open · 😈 Steal · ⤵ Skip · 🕒 Reset timer · ↩ Undo · ✏️ Edit gift</span>
       </footer>
 
       {opening && (
-        <OpenGiftDialog
-          name={opening.name}
+        <GiftDialog
+          title={`🎁 Opening a gift for ${opening.name}`}
+          label={`Open a gift for ${opening.name}`}
           onCancel={() => setOpening(null)}
-          onSave={async (giftName) => {
+          onSave={async ({ name, description }) => {
             const playerId = opening.id;
             setOpening(null);
-            await send({ type: "OpenGift", playerId, giftId: crypto.randomUUID(), name: giftName });
+            await send({ type: "OpenGift", playerId, giftId: crypto.randomUUID(), name, ...(description ? { description } : {}) });
+          }}
+        />
+      )}
+      {editing && (
+        <GiftDialog
+          title="✏️ Edit gift"
+          label={`Edit ${editing.name}`}
+          context={editing.holderId === null ? "On the table" : `Held by ${nameOf(editing.holderId)}`}
+          gift={editing}
+          onCancel={() => setEditing(null)}
+          onSave={async ({ name, description }) => {
+            const giftId = editing.id;
+            setEditing(null);
+            await send({ type: "DescribeGift", giftId, name, description });
           }}
         />
       )}
@@ -311,30 +331,49 @@ function AddParticipant({ onAdd }: { onAdd: (name: string) => Promise<void> }) {
   );
 }
 
-function OpenGiftDialog({ name, onSave, onCancel }: { name: string; onSave: (gift: string) => Promise<void>; onCancel: () => void }) {
-  const [gift, setGift] = useState("");
+/** What's inside a Gift and any details, as in v1: for a Gift being opened, or to correct one already opened. */
+function GiftDialog({
+  title,
+  label,
+  context,
+  gift,
+  onSave,
+  onCancel,
+}: {
+  title: string;
+  label: string;
+  context?: string;
+  gift?: { name: string; description: string };
+  onSave: (gift: { name: string; description: string }) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState(gift?.name ?? "");
+  const [description, setDescription] = useState(gift?.description ?? "");
   return (
     <div className="lc-overlay" onClick={onCancel}>
       <form
         role="dialog"
         aria-modal="true"
-        aria-label={`Open a gift for ${name}`}
+        aria-label={label}
         className="card lc-dialog"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => e.key === "Escape" && onCancel()}
         onSubmit={(e) => {
           e.preventDefault();
-          if (gift.trim()) void onSave(gift.trim());
+          if (name.trim()) void onSave({ name: name.trim(), description: description.trim() });
         }}
       >
-        <h2>🎁 Opening a gift for {name}</h2>
+        <h2>{title}</h2>
+        {context && <p className="muted">{context}</p>}
         <label htmlFor="lc-gift">What's inside?</label>
-        <input id="lc-gift" autoFocus autoComplete="off" maxLength={100} placeholder="e.g. Bluetooth speaker" value={gift} onChange={(e) => setGift(e.target.value)} />
+        <input id="lc-gift" autoFocus autoComplete="off" maxLength={100} placeholder="e.g. Bluetooth speaker" value={name} onChange={(e) => setName(e.target.value)} />
+        <label htmlFor="lc-gift-desc">Details (optional)</label>
+        <input id="lc-gift-desc" autoComplete="off" maxLength={300} placeholder="e.g. waterproof, with a strap" value={description} onChange={(e) => setDescription(e.target.value)} />
         <div className="inline">
           <button type="button" className="secondary" onClick={onCancel}>
             Cancel
           </button>
-          <button type="submit" disabled={!gift.trim()}>
+          <button type="submit" disabled={!name.trim()}>
             Save
           </button>
         </div>

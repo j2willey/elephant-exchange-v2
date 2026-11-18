@@ -165,6 +165,7 @@ function Catalog({ game, posts }: { game: GameView; posts: Post[] }) {
                 </span>
               )}
               <strong>{g.name}</strong>
+              {g.description && <span className="gift-desc">{g.description}</span>}
               <span className="catalog-meta">
                 <span>{holderName(g.holderId)}</span>
                 <StealChip gift={g} maxSteals={game.settings.maxSteals} />
@@ -208,7 +209,10 @@ function GiftBoard({ game, posts }: { game: GameView; posts: Post[] }) {
               <li key={g.id} aria-label={g.name} className={g.frozen ? "board-row frozen" : "board-row"}>
                 <span className="board-gift">
                   {photo ? <PostPhoto post={photo} className="board-photo" /> : photos && <span className="board-photo" aria-hidden="true" />}
-                  <strong>{g.name}</strong>
+                  <span className="board-name">
+                    <strong>{g.name}</strong>
+                    {g.description && <span className="gift-desc">{g.description}</span>}
+                  </span>
                 </span>
                 <span className="board-holder">{holderName(g.holderId)}</span>
                 <span>

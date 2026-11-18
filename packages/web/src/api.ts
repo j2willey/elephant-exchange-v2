@@ -21,7 +21,7 @@ export interface GameView {
   players: { id: string; name: string }[];
   active: string[];
   onDeck: string[];
-  gifts: { id: string; name: string; holderId: string | null; steals: number; frozen: boolean }[];
+  gifts: { id: string; name: string; description: string; holderId: string | null; steals: number; frozen: boolean }[];
   /** Unopened Gifts still on the table in the Final Round. */
   leftoverGifts: number;
   /** What the big screen shows, as the Host switches it: the Gift board, the rules, the join code, or the catalog. */

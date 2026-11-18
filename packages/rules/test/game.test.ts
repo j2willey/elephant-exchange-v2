@@ -702,8 +702,55 @@ describe("Gifts on view", () => {
     );
 
     expect(gifts(state)).toEqual([
-      { id: "g1", name: "Socks", holderId: "bob", steals: 1, frozen: true },
-      { id: "g2", name: "Mug", holderId: "ann", steals: 0, frozen: false },
+      { id: "g1", name: "Socks", description: "", holderId: "bob", steals: 1, frozen: true },
+      { id: "g2", name: "Mug", description: "", holderId: "ann", steals: 0, frozen: false },
     ]);
+  });
+});
+
+describe("Describing a Gift", () => {
+  const opened: Command[] = [
+    ...addPlayers("ann", "bob", "cat"),
+    { type: "StartGame" },
+    { type: "OpenGift", playerId: "ann", giftId: "g1", name: "Chia Pet", description: "the 1998 edition" },
+  ];
+  const draw = () => scriptedDraw(["ann", "bob", "cat"]);
+
+  it("takes an optional description when the Gift is opened", () => {
+    const state = play({ activeSlots: 1, maxSteals: 3 }, opened, draw());
+    expect(gifts(state)[0]).toMatchObject({ name: "Chia Pet", description: "the 1998 edition" });
+
+    const plain = play({ activeSlots: 1, maxSteals: 3 }, [...opened.slice(0, -1), { type: "OpenGift", playerId: "ann", giftId: "g1", name: "Socks" }], draw());
+    expect(gifts(plain)[0]).toMatchObject({ name: "Socks", description: "" });
+  });
+
+  it("corrects a Gift's name and description without touching who holds it or its Steals", () => {
+    const state = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [...opened, { type: "Steal", playerId: "bob", giftId: "g1" }, { type: "DescribeGift", giftId: "g1", name: "Chia Grinch", description: "" }],
+      draw(),
+    );
+    expect(gifts(state)[0]).toMatchObject({ name: "Chia Grinch", description: "", holderId: "bob", steals: 1 });
+    expect(activePlayers(state)).toEqual(["ann"]); // Ann, the Victim, is still up
+  });
+
+  it("leaves the last Pick undoable, and an Undo keeps the correction", () => {
+    const d = draw();
+    const state = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [...opened, { type: "Steal", playerId: "bob", giftId: "g1" }, { type: "DescribeGift", giftId: "g1", name: "Chia Grinch", description: "" }, { type: "Undo" }],
+      d,
+    );
+    expect(gifts(state)[0]).toMatchObject({ name: "Chia Grinch", holderId: "ann", steals: 0 });
+  });
+
+  it("works after the Game has ended, for the Worst Gift Vote", () => {
+    const state = play({ activeSlots: 1, maxSteals: 3 }, [...opened, { type: "EndGame" }, { type: "DescribeGift", giftId: "g1", name: "Chia Grinch", description: "" }], draw());
+    expect(gifts(state)[0]).toMatchObject({ name: "Chia Grinch" });
+  });
+
+  it("refuses a Gift that hasn't been opened", () => {
+    const state = play({ activeSlots: 1, maxSteals: 3 }, opened, draw());
+    expect(decide(state, { type: "DescribeGift", giftId: "g9", name: "Mug", description: "" }, draw())).toMatchObject({ code: "GiftNotOpened" });
   });
 });
