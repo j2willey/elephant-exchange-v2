@@ -1639,15 +1639,101 @@ a.button {
   max-width: 44rem;
 }
 
-.landing-lede {
-  margin: 0 0 8px;
-  font-size: 1.35rem;
-  font-weight: 600;
-  line-height: 1.35;
+/* The front page's opening: the tagline big, then a line on what it does, the ways in, and the scoreboard. */
+.landing-hero {
+  display: grid;
+  gap: 14px;
+  padding: 8px 0 4px;
+  text-align: center;
 }
 
-.landing-hero .muted {
+.landing-tagline {
   margin: 0;
+  font-size: clamp(1.6rem, 4.5vw, 2.4rem);
+  font-weight: 800;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.landing-lede {
+  max-width: 42rem;
+  margin: 0 auto;
+  font-size: 1.1rem;
+  line-height: 1.5;
+  color: var(--muted);
+  text-wrap: pretty;
+}
+
+.landing-ctas {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.landing-ctas .button {
+  min-width: 11rem;
+  text-align: center;
+}
+
+a.button.secondary-button {
+  color: var(--brand-text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.landing-party-link {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.landing-shot {
+  margin: 8px 0 0;
+}
+
+.landing-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 12%);
+}
+
+.landing-shot figcaption {
+  margin-top: 6px;
+  font-size: 0.85rem;
+}
+
+.landing-section-title {
+  margin: 8px 0 12px;
+  text-align: center;
+}
+
+.landing-problem ul,
+.landing-steps {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 1.25rem;
+  line-height: 1.5;
+}
+
+.landing-problem p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.landing-again {
+  text-align: center;
+}
+
+.landing-again p {
+  margin: 0;
+}
+
+.landing-privacy {
+  text-align: center;
 }
 
 .landing-points,
@@ -1668,7 +1754,7 @@ a.button {
 
 @media (min-width: 48rem) {
   .landing-points {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .landing-ways {

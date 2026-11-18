@@ -16,10 +16,10 @@ export const MAX_DEMO_PLAYERS = demoNames.length;
  * A Game to show the app off with: the usual settings and as many made-up Players as asked for, so the Host can
  * press Start straight away. Guests can still join on their phones, and gifts are typed in as in any Game.
  */
-export function DemoGame() {
+export function DemoGame({ startOpen = false }: { startOpen?: boolean }) {
   const api = useApi();
   const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(startOpen);
   const [players, setPlayers] = useState("8");
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);

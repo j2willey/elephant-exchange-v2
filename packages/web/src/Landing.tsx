@@ -1,58 +1,133 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
+import scoreboard from "./assets/scoreboard.webp";
 import { SignInForm } from "./SignIn.js";
 
-/** What a signed-out visitor sees at the app's home: what it's for, v1's three reasons, and the ways in. */
-export function Landing() {
+/**
+ * The front page: what Elephant Exchange is, the problem it solves, how it helps and how it works, with the ways
+ * in at the top and again at the end. A signed-out visitor sees it at /; anyone can open it at /about, where a
+ * signed-in Host is pointed back to their Games instead of asked to sign in.
+ */
+export function Landing({ signedIn = false }: { signedIn?: boolean }) {
+  const ways = (
+    <div className="landing-ctas">
+      <Link to="/try" className="button">
+        ▶ Try the demo
+      </Link>
+      {signedIn ? (
+        <Link to="/" className="button secondary-button">
+          Your Games →
+        </Link>
+      ) : (
+        <a href="#host" className="button secondary-button">
+          Host a Game
+        </a>
+      )}
+    </div>
+  );
+
   return (
     <div className="stack landing">
-      <section className="card landing-hero" aria-label="What it is">
+      <section className="landing-hero" aria-label="What it is">
+        <p className="landing-tagline">The White Elephant gift swap that keeps the whole room in the game.</p>
         <p className="landing-lede">
-          Run a big White Elephant gift swap from your phone, with the room following along on the TV and their own
-          phones.
+          Run your party's gift exchange from a laptop or a phone. Every opened gift, who has it and how many times it's
+          been stolen goes up on the TV, and everyone follows along on their own phone.
         </p>
+        {ways}
+        <p className="landing-party-link">
+          Going to a party? <a href="#join">Enter your code</a>
+        </p>
+        <figure className="landing-shot">
+          <img src={scoreboard} width={1280} height={720} alt="The scoreboard on the party's TV: who's up now and on deck, every gift with its holder and steals, the latest posts, and a QR code for guests" />
+          <figcaption className="muted">The scoreboard on the party's TV.</figcaption>
+        </figure>
+      </section>
+
+      <section className="card landing-problem" aria-label="Sound familiar?">
+        <h2>Sound familiar?</h2>
+        <p>Fifty people, a pile of wrapped gifts and a rule everyone remembers differently. Two hours later you're on turn thirty.</p>
+        <ul>
+          <li>Every turn, someone wanders the room asking who has what before they decide whether to steal.</li>
+          <li>From the back, nobody can see what that gift card was for, or what was in the box that just got opened.</li>
+          <li>Was that one stolen twice or three times? Cue the argument.</li>
+          <li>By the end, half the room has drifted off to the snacks.</li>
+        </ul>
+      </section>
+
+      <section aria-label="How it helps">
+        <h2 className="landing-section-title">How Elephant Exchange helps</h2>
+        <div className="landing-points">
+          <section className="card">
+            <h3>⚡ Turns take seconds</h3>
+            <p>
+              Every opened gift is on the TV with its holder and how many steals it has left. People decide from their
+              seats, and the next name is already on deck.
+            </p>
+          </section>
+          <section className="card">
+            <h3>📸 The whole room stays in it</h3>
+            <p>
+              Guests post photos and comments from their phones into the party's own feed, star the gifts they're after,
+              and vote for the Worst Gift at the end.
+            </p>
+          </section>
+          <section className="card">
+            <h3>⚖️ The rules keep themselves</h3>
+            <p>
+              Steal limits, frozen gifts, no take-backs and a final round for the first few players, all kept for you. No
+              more debates.
+            </p>
+          </section>
+          <section className="card">
+            <h3>📱 Nothing to install</h3>
+            <p>
+              It runs in the browser. Guests scan the QR code on the TV; you run it from a laptop or your phone. Free.
+            </p>
+          </section>
+        </div>
+      </section>
+
+      <section className="card" aria-label="How it works">
+        <h2>How it works</h2>
+        <ol className="landing-steps">
+          <li>
+            <strong>Create a Game</strong> and paste in your guest list, or let guests sign themselves up on their phones.
+          </li>
+          <li>
+            <strong>Put the scoreboard on the TV.</strong> Guests scan its QR code to follow along and post.
+          </li>
+          <li>
+            <strong>Call names, open gifts and make steals</strong> from your console. The room sees it all, live.
+          </li>
+        </ol>
         <p className="muted">
-          Built for office parties and family reunions of 20, 50 or more, where the usual game turns into shouting
-          across the room and drags on for hours. Free, with nothing to install.
+          Made for office holiday parties, family reunions, troops and clubs: 20, 50 or more people.{" "}
+          <Link to="/playbook">Read the Host's Playbook</Link> for running a smooth one.
         </p>
       </section>
 
-      <div className="landing-points">
-        <section className="card">
-          <h3>⚡ Speed up the game</h3>
-          <p>
-            The TV shows every Gift, who holds it and how many Steals it has left. Nobody walks the room to see what's
-            out there, and turns take seconds, not minutes.
-          </p>
-        </section>
-        <section className="card">
-          <h3>👀 Keep everyone in it</h3>
-          <p>
-            People at the back can't see a gift card from across the room. Guests post close-up Photos from their
-            phones, star the Gifts they're after, and vote on the Worst Gift at the end.
-          </p>
-        </section>
-        <section className="card">
-          <h3>⚖️ The rules, kept for you</h3>
-          <p>
-            The Steal limit and No Take-Backs are enforced for you, and a Gift shows as Frozen once it can't be stolen.
-            No more arguing over whether a gift is still in play.
-          </p>
-        </section>
-      </div>
+      <section className="card landing-again" aria-label="Try it">
+        <h2>See it in two minutes</h2>
+        <p>The demo sets up a whole party with made-up guests, ready to start. Open gifts, steal, and watch the TV keep up.</p>
+        {ways}
+      </section>
 
       <div className="landing-ways">
-        <SignInForm heading="Host a Game" />
-        <OpenGame />
+        {signedIn ? null : (
+          <div id="host">
+            <SignInForm heading="Host a Game" />
+          </div>
+        )}
+        <div id="join">
+          <OpenGame />
+        </div>
       </div>
 
-      <p className="landing-playbook">
-        📖 Hosting for the first time? Read the <Link to="/playbook">Host's Playbook</Link>.
-      </p>
       <TipJar />
       <p className="muted hint landing-privacy">
-        We count how the app is used (how many Games, how long they run) to keep it working well. We never sell or
-        share anything about you.
+        We count how the app is used (how many Games, how long they run) to keep it working well. We never sell or share
+        anything about you.
       </p>
     </div>
   );

@@ -31,6 +31,8 @@ export function AppRoutes() {
         <Route path="/" element={<Home />} />
         <Route path="/sign-in" element={<RedeemLink />} />
         <Route path="/playbook" element={<Playbook />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/try" element={<TryDemo />} />
         <Route path="/games/:id" element={<GamePage />} />
         <Route path="/games/:id/screen" element={<WatchScreen />} />
         <Route path="/games/:id/demo" element={<DemoPage />} />
@@ -41,6 +43,57 @@ export function AppRoutes() {
         <Route path="/admin/feedback" element={<FeedbackPage />} />
       </Routes>
     </main>
+  );
+}
+
+/** The front page for anyone, signed in or not (a signed-out visitor also gets it at /). */
+function About() {
+  const api = useApi();
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  useEffect(() => {
+    let current = true;
+    api.session().then((s) => current && setSignedIn(Boolean(s)));
+    return () => {
+      current = false;
+    };
+  }, [api]);
+  if (signedIn === null) return <p className="muted">Loading…</p>;
+  return <Landing signedIn={signedIn} />;
+}
+
+/**
+ * "Try the demo", from the front page: a demo Game belongs to someone, so a visitor signs in first and comes back
+ * here, where the demo's one question (how many players) is waiting.
+ */
+function TryDemo() {
+  const api = useApi();
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  useEffect(() => {
+    let current = true;
+    api.session().then((s) => current && setSignedIn(Boolean(s)));
+    return () => {
+      current = false;
+    };
+  }, [api]);
+  if (signedIn === null) return <p className="muted">Loading…</p>;
+  if (signedIn) {
+    return (
+      <div className="stack">
+        <DemoGame startOpen />
+      </div>
+    );
+  }
+  return (
+    <div className="stack">
+      <section className="card">
+        <h2>Try the demo</h2>
+        <p className="muted">
+          The demo is a practice party of your own, with made-up guests. Sign in with your email first: we'll send a
+          link, and the demo opens as soon as you follow it. No password, nothing to install.
+        </p>
+      </section>
+      <SignInForm heading="Sign in to try the demo" next="/try" />
+    </div>
   );
 }
 
@@ -87,6 +140,7 @@ function Home() {
           OK to contact me to ask how it went
         </label>
         <Link to="/playbook">📖 Host's Playbook</Link>
+        <Link to="/about">About Elephant Exchange</Link>
         {session.admin && <Link to="/admin">Admin</Link>}
         <button className="secondary" onClick={signOut}>
           Sign out

@@ -4,17 +4,31 @@ import { describe, expect, it } from "vitest";
 import { browser, openApp, startServer } from "./harness.js";
 
 describe("The landing page", () => {
-  it("tells a visitor what the app is for, with sign-in to host a Game and the Host's Playbook", async () => {
+  it("tells a visitor what the app is, the problem it solves and how, with the demo, sign-in and the Playbook", async () => {
     const { origin } = await startServer();
     openApp(browser(origin));
 
     const hero = await screen.findByRole("region", { name: /what it is/i });
-    expect(hero).toHaveTextContent(/white elephant/i);
-    expect(screen.getByRole("heading", { name: /speed up the game/i })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /keep everyone in it/i })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /the rules, kept for you/i })).toBeInTheDocument();
+    expect(hero).toHaveTextContent(/white elephant gift swap/i);
+    expect(within(hero).getByRole("img", { name: /scoreboard on the party's tv/i })).toBeInTheDocument();
+    expect(within(hero).getByRole("link", { name: /try the demo/i })).toHaveAttribute("href", "/try");
+    expect(within(hero).getByRole("link", { name: /host a game/i })).toHaveAttribute("href", "#host");
+    expect(screen.getByRole("region", { name: /sound familiar/i })).toHaveTextContent(/wanders the room/i);
+    for (const point of [/turns take seconds/i, /the whole room stays in it/i, /the rules keep themselves/i, /nothing to install/i]) {
+      expect(screen.getByRole("heading", { name: point })).toBeInTheDocument();
+    }
+    expect(screen.getByRole("region", { name: /how it works/i })).toHaveTextContent(/create a game.*scoreboard on the tv.*call names/i);
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /host's playbook/i })).toHaveAttribute("href", "/playbook");
+  });
+
+  it("is there for a signed-in Host too, at /about, pointing them back to their Games", async () => {
+    const { signedIn } = await startServer();
+    openApp(await signedIn("host@example.com"), "/about");
+
+    const hero = await screen.findByRole("region", { name: /what it is/i });
+    expect(within(hero).getByRole("link", { name: /your games/i })).toHaveAttribute("href", "/");
+    expect(screen.queryByLabelText(/email/i)).not.toBeInTheDocument();
   });
 
   for (const [what, typed] of [
@@ -89,5 +103,21 @@ describe("The tip jar", () => {
     await screen.findByText(/acme holiday party/i);
 
     expect(screen.queryByRole("region", { name: /a note from jim/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("Trying the demo from the front page", () => {
+  it("asks a visitor to sign in first, and brings them back to it", async () => {
+    const { origin } = await startServer();
+    openApp(browser(origin), "/try");
+
+    expect(await screen.findByRole("heading", { name: /sign in to try the demo/i })).toBeInTheDocument();
+  });
+
+  it("goes straight to the demo's one question for someone signed in", async () => {
+    const { signedIn } = await startServer();
+    openApp(await signedIn("host@example.com"), "/try");
+
+    expect(await screen.findByLabelText(/how many players/i)).toBeInTheDocument();
   });
 });
