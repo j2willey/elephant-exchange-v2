@@ -181,7 +181,7 @@ export function LaptopConsole({
               </p>
             )}
             <AddParticipant onAdd={(name) => send({ type: "AddPlayer", playerId: crypto.randomUUID(), name })} />
-            {game.phase === "setup" && <RosterPaste roster={game.players.map((p) => p.name)} onAdd={(name) => send({ type: "AddPlayer", playerId: crypto.randomUUID(), name })} />}
+            {game.phase === "setup" && <RosterPaste gameId={game.id} roster={game.players.map((p) => p.name)} onAdd={(name) => send({ type: "AddPlayer", playerId: crypto.randomUUID(), name })} />}
             {game.phase === "setup" && (
               <>
                 <button disabled={game.players.length < 2} onClick={() => void send({ type: "StartGame" })}>

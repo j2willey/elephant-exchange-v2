@@ -85,6 +85,13 @@
       "when": 1795022471567,
       "tag": "0011_usage_stats",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1795023111360,
+      "tag": "0012_usage_insights",
+      "breakpoints": true
     }
   ]
 }

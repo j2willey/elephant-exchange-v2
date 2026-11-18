@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useApi } from "./ApiContext.js";
 
 /**
  * Names from a pasted list, one per line, as it comes from an email or a spreadsheet: list numbers and bullets
@@ -28,7 +29,8 @@ export function namesFrom(text: string, roster: string[]): { names: string[]; sk
 }
 
 /** v1's roster box: the Host pastes the whole guest list before the start instead of typing each name. */
-export function RosterPaste({ roster, onAdd }: { roster: string[]; onAdd: (name: string) => Promise<void> }) {
+export function RosterPaste({ gameId, roster, onAdd }: { gameId: string; roster: string[]; onAdd: (name: string) => Promise<void> }) {
+  const api = useApi();
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -39,6 +41,7 @@ export function RosterPaste({ roster, onAdd }: { roster: string[]; onAdd: (name:
     setBusy(true);
     // One at a time, in the list's order: the roster shows them as listed.
     for (const name of names) await onAdd(name);
+    api.noteFeature(gameId, "rosterPaste"); // for the statistics: the log shows only the names added
     setBusy(false);
     setText("");
     setOpen(false);

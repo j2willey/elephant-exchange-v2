@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import sharp from "sharp";
 
@@ -55,6 +55,14 @@ export function photoStore(dir: string) {
     },
     remove: (gameId: string, postId: string) => rmSync(file(gameId, postId), { force: true }),
     removeGame: (gameId: string) => rmSync(join(dir, gameId), { recursive: true, force: true }),
+    /** All the Photos kept, in bytes. */
+    bytes: () => {
+      let total = 0;
+      for (const entry of readdirSync(dir, { recursive: true, withFileTypes: true })) {
+        if (entry.isFile()) total += statSync(join(entry.parentPath, entry.name)).size;
+      }
+      return total;
+    },
   };
 }
 

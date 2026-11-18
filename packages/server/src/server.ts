@@ -55,6 +55,7 @@ import {
   linkRequest,
   visitBody,
   excludeBody,
+  featureBody,
   moderationBody,
   orgBody,
   orgEdit,
@@ -245,7 +246,8 @@ export function createServer({
   const db = openDb(dbPath);
   const photos = photoStore(photosDir ?? mkdtempSync(join(tmpdir(), "elephant-photos-")));
   const themeImages = themeStore(themesDir ?? mkdtempSync(join(tmpdir(), "elephant-themes-")));
-  const auth = createAuth(db, now, { ...DEFAULT_LIMITS, ...limits });
+  const linkLimits = { ...DEFAULT_LIMITS, ...limits };
+  const auth = createAuth(db, now, linkLimits);
   const stats = createStats(db, now);
 
   function clientIp(c: Context): string {
@@ -424,7 +426,21 @@ export function createServer({
       console.error("Couldn't send a sign-in link", err);
       return c.json({ error: "We couldn't send the email just now; please try again in a minute" }, 503);
     }
+    stats.countToday("signInEmails");
     return c.body(null, 202);
+  });
+
+  /** A feature only the browser sees (such as pasting the roster), used in a Game by its Host or a Co-host. */
+  app.post("/api/games/:id/features", async (c) => {
+    const id = c.req.param("id");
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const body = await parseBody(c, featureBody);
+    if (!body.ok) return body.res;
+    if (!load(id)) return c.json({ error: "Game not found" }, 404);
+    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts" }, 403);
+    stats.noteFeature(id, body.data.feature);
+    return c.body(null, 204);
   });
 
   /** A browser that arrived from a ?ref= link (it says so once per source): for the statistics. */
@@ -881,6 +897,7 @@ export function createServer({
         .set(kind === "logo" ? { themeLogo: changed.version } : { themeBackground: changed.version })
         .where(eq(games.id, id))
         .run();
+      if (method === "put") stats.noteFeature(id, "ownLook");
       return c.json(publish(id, { ...game, theme: { ...game.theme, own: { ...game.theme.own, [kind]: changed.version } } }).theme);
     });
   }
@@ -936,6 +953,7 @@ export function createServer({
     const set = { ...(color !== undefined ? { themeColor: color } : {}), ...(page !== undefined ? { themePage: page } : {}) };
     if (Object.keys(set).length > 0) db.update(games).set(set).where(eq(games.id, id)).run();
     const own = { ...game.theme.own, ...(color !== undefined ? { color } : {}), ...(page !== undefined ? { page } : {}) };
+    if (color !== undefined || page !== undefined) stats.noteFeature(id, "ownLook");
     return c.json(publish(id, { ...game, theme: { ...game.theme, own } }).theme);
   });
 
@@ -984,6 +1002,7 @@ export function createServer({
     if (!game) return c.json({ error: "Game not found" }, 404);
     if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can switch the big screen" }, 403);
     db.update(games).set({ screenMode: body.data.mode }).where(eq(games.id, id)).run();
+    stats.noteFeature(id, `screen:${body.data.mode}`);
     publish(id, { ...game, screen: body.data.mode });
     return c.body(null, 204);
   });
@@ -1140,7 +1159,7 @@ export function createServer({
   /** The usage statistics (ADR-0005), brought up to date first. */
   app.get("/api/admin/stats", (c) => {
     stats.refresh();
-    return c.json(stats.summary());
+    return c.json(stats.summary({ signInEmailCap: linkLimits.perDay, photoBytes: photos.bytes() }));
   });
 
   /** Leaves a Game out of the statistics (Jim's trial runs), or puts it back. */
@@ -1285,6 +1304,7 @@ export function createServer({
       sockets.on("connection", (socket) => {
         const gameId = socket.handshake.auth["gameId"] as string;
         void socket.join(gameId);
+        stats.notePeakScreens(gameId, sockets.sockets.adapter.rooms.get(gameId)?.size ?? 1);
         socket.emit("game", view(gameId, load(gameId)!, now()));
         socket.emit("posts"); // the Feed may have changed while this screen was asleep
       });

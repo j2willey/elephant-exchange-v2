@@ -72,6 +72,8 @@ const email = z.string().trim().toLowerCase().pipe(z.email().max(254));
 export const linkRequest = z.object({ email, next: returnPath.optional(), feedbackOk: z.boolean().default(false), ref: z.string().max(64).optional() });
 export const visitBody = z.object({ ref: z.string().max(64) });
 export const excludeBody = z.object({ excluded: z.boolean() });
+/** The features the browser reports itself (the server sees the rest); anything else sent is refused. */
+export const featureBody = z.object({ feature: z.enum(["rosterPaste"]) });
 export const feedbackBody = z.object({ ok: z.boolean() });
 export const linkRedemption = z.object({ token: z.string().min(1).max(100) });
 export const cohostBody = z.object({ email });

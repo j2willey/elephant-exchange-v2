@@ -13,18 +13,17 @@ Planned 2026-11-18, ahead of the public launch (about 2026-11-24). How the stati
 
 **Links to share:** `https://elephantexchange.app/?ref=linkedin`, `?ref=facebook`, `?ref=email`, and so on. Any plain word works.
 
-## Phase 2: insights, after launch
+## Phase 2: insights (built)
 
-The counts these need are already recorded per Game (steals, Final Round, Posts, Photos, votes, Co-hosts). What's left is reading and showing them.
+On the same Stats page (`/admin/stats`), over played Games unless it says otherwise:
 
-- **Funnel:** signed in → created a Game → started → finished → ran the vote. It shows where Hosts give up.
-- **Party size and engagement:** Players per Game, the share on their own phones, and the most phones connected at once (needs a small counter in the live-update code).
-- **Gameplay:** steals per Game, frozen Gifts, Final Round and vote use, average turn time, undos and skips (a high count points at a confusing screen).
-- **Features used:** Posts, Photos, Organization Themes, Co-hosts, roster paste, self sign-up, scoreboard modes.
-- **Returning Hosts:** who runs a second Game.
-- **When Games happen:** by day of week and hour, for the scale plan and the no-deploy windows.
-- **Running costs:** sign-in emails per day against the cap, and photo storage used.
-- **Charts:** Games per week, and the funnel.
+- **Where Hosts drop off:** signed in → created a Game → started one → finished one → ran the vote, with the share of those who signed in.
+- **Played Games per week** (the last 12), and **when Games start** by day of the week and hour, in the viewer's time zone.
+- **Parties and play:** Players per Game, the share on their own phones, the most screens watching at once (phones, the scoreboard and the console), steals and frozen Gifts per Game, seconds per Pick (breaks left out), Final Round and vote use, undos and skips per Game, and returning Hosts.
+- **Features used:** Posts, Photos, an Organization's look, a Game's own look, Co-hosts, self sign-up, roster paste, scoreboard modes.
+- **Running costs:** sign-in emails today and on the busiest of the last 14 days, against the daily cap (with a warning at 80%), and the space Photos take.
+
+What's recorded for it: undos, skips, frozen Gifts, vote use and self sign-up are read from each Game's log; the most screens at once is noted as they connect; features the log doesn't show are noted as they're used (roster paste is reported by the browser); sign-in emails are counted a day at a time, since the links themselves are cleared after a day. An undone steal doesn't count as a steal.
 
 ## Phase 3: asking Hosts and guests what they think
 

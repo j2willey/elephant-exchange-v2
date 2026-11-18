@@ -93,7 +93,26 @@ export interface AdminPerson {
 }
 
 /** The usage statistics (ADR-0005), as the admin's Stats page shows them. */
+export interface StatsInsights {
+  funnel: { step: "signedIn" | "created" | "started" | "finished" | "voted"; people: number }[];
+  engagement: { averagePlayers: number | null; signedInShare: number | null; averagePeakScreens: number | null };
+  gameplay: {
+    averageSteals: number | null;
+    averageFrozenGifts: number | null;
+    finalRoundShare: number | null;
+    voteShare: number | null;
+    averageSecondsPerPick: number | null;
+    undosPerGame: number | null;
+    skipsPerGame: number | null;
+  };
+  features: { feature: string; games: number }[];
+  returningHosts: { returning: number; hosts: number };
+  startTimes: string[];
+  costs: { signInEmails: { day: string; count: number }[]; signInEmailCap: number; photoBytes: number };
+}
+
 export interface StatsSummary {
+  insights: StatsInsights;
   totals: {
     hosts: number;
     hostsWhoCreated: number;
@@ -328,6 +347,11 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
     /** Leaves a Game out of the statistics (a trial run), or puts it back. */
     async adminExcludeFromStats(gameId: string, excluded: boolean): Promise<boolean> {
       return (await postJson(`/api/admin/stats/games/${encodeURIComponent(gameId)}`, { excluded })).ok;
+    },
+
+    /** Tells the statistics a Game used a feature only the browser sees, such as pasting the roster. */
+    noteFeature(gameId: string, feature: "rosterPaste") {
+      void postJson(`/api/games/${encodeURIComponent(gameId)}/features`, { feature }).catch(() => {});
     },
 
     /**

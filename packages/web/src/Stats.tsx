@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import type { StatsSummary } from "./api.js";
 import { useApi } from "./ApiContext.js";
+import { Insights } from "./Insights.js";
 
 const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—");
-const mins = (m: number | null) => (m === null ? "—" : m < 90 ? `${Math.round(m)} min` : `${(m / 60).toFixed(1)} h`);
+const mins = (m: number | null) => (m === null ? "—" : m < 1 ? "under 1 min" : m < 90 ? `${Math.round(m)} min` : `${(m / 60).toFixed(1)} h`);
 
 /**
  * The usage statistics (ADR-0005), for the admin: how many Hosts, Organizations, Games and people, how long Games
@@ -69,6 +70,8 @@ export function StatsPage() {
           ))}
         </dl>
       </section>
+
+      <Insights insights={stats.insights} />
 
       <section className="card">
         <h2>Where people came from</h2>

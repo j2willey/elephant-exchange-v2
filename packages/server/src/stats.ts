@@ -1,7 +1,9 @@
 import { createHmac, randomBytes } from "node:crypto";
-import { and, asc, count, eq, isNotNull, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, isNotNull, sql } from "drizzle-orm";
 import {
   appKeys,
+  dailyCounts,
+  gameFeatures,
   gameEvents,
   gameHosts,
   gamePlayers,
@@ -33,6 +35,30 @@ export function cleanRef(ref: unknown): string | null {
 
 const PICKS = new Set(["GiftOpened", "GiftStolen", "ReturnedGiftTaken", "GiftKept"]);
 
+export interface Insights {
+  /** People at each step, Hosts of real Games only after the first. */
+  funnel: { step: "signedIn" | "created" | "started" | "finished" | "voted"; people: number }[];
+  /** Over played Games. */
+  engagement: { averagePlayers: number | null; signedInShare: number | null; averagePeakScreens: number | null };
+  gameplay: {
+    averageSteals: number | null;
+    averageFrozenGifts: number | null;
+    finalRoundShare: number | null;
+    voteShare: number | null;
+    /** Play time per Pick, breaks left out. */
+    averageSecondsPerPick: number | null;
+    undosPerGame: number | null;
+    skipsPerGame: number | null;
+  };
+  /** How many played Games used each feature. */
+  features: { feature: string; games: number }[];
+  /** Hosts who ran a second played Game, and all Hosts. */
+  returningHosts: { returning: number; hosts: number };
+  /** When each played Game's first Pick was, for the page to group by the viewer's own week, weekday and hour. */
+  startTimes: string[];
+  costs: { signInEmails: { day: string; count: number }[]; signInEmailCap: number; photoBytes: number };
+}
+
 export interface StatsSummary {
   totals: {
     /** People who hosted at least one played Game. */
@@ -56,6 +82,7 @@ export interface StatsSummary {
   hosts: { email: string | null; games: number; averageMinutes: number | null }[];
   organizations: { name: string; deleted: boolean; games: number }[];
   sources: { ref: string; visits: number; signUps: number }[];
+  insights: Insights;
   games: {
     id: string;
     name: string;
@@ -104,7 +131,10 @@ export function createStats(db: Db, now: () => Date) {
       .where(eq(gameEvents.gameId, gameId))
       .orderBy(asc(gameEvents.seq))
       .all()
-      .map((e) => ({ type: (JSON.parse(e.event) as { type: string }).type, at: e.at.getTime() }));
+      .map((e) => {
+        const event = JSON.parse(e.event) as { type: string; giftId?: string };
+        return { type: event.type, giftId: event.giftId, at: e.at.getTime() };
+      });
 
     let players = 0;
     let picks = 0;
@@ -112,7 +142,23 @@ export function createStats(db: Db, now: () => Date) {
     let finalRound = false;
     let firstPickAt: number | null = null;
     let endedAt: number | null = null;
-    for (const { type, at } of log) {
+    let undos = 0;
+    let skips = 0;
+    const stealsOf = new Map<string, number>();
+    const madePicks: { type: string; giftId: string | undefined }[] = [];
+    for (const { type, at, giftId } of log) {
+      if (type === "PickUndone") {
+        undos++;
+        // Undo takes back the last Pick: a steal it undoes was never a steal.
+        const undone = madePicks.pop();
+        if (undone?.type === "GiftStolen") {
+          steals--;
+          if (undone.giftId) stealsOf.set(undone.giftId, stealsOf.get(undone.giftId)! - 1);
+        }
+      }
+      if (PICKS.has(type)) madePicks.push({ type, giftId });
+      if (type === "PlayerSkipped") skips++;
+      if (type === "GiftStolen" && giftId) stealsOf.set(giftId, (stealsOf.get(giftId) ?? 0) + 1);
       if (type === "PlayerAdded") players++;
       if (type === "PlayerRemoved") players--;
       if (PICKS.has(type)) {
@@ -142,6 +188,7 @@ export function createStats(db: Db, now: () => Date) {
       .where(and(eq(gameHosts.gameId, gameId), eq(gameHosts.role, "cohost")))
       .get()!.n;
     const before = db.select().from(gameStats).where(eq(gameStats.gameId, gameId)).get();
+    const { maxSteals = 0 } = JSON.parse(game.settings) as { maxSteals?: number };
     const at = now();
     const row = {
       name: game.name,
@@ -164,6 +211,11 @@ export function createStats(db: Db, now: () => Date) {
       photos: Math.max(photoCount, before?.photos ?? 0),
       votes: counted(votes),
       cohosts,
+      undos,
+      skips,
+      frozenGifts: maxSteals > 0 ? [...stealsOf.values()].filter((n) => n >= maxSteals).length : 0,
+      voteUsed: game.voteStatus !== "none",
+      selfSignup: game.rosterMode === "self",
       updatedAt: at,
       ...(deleting ? { deletedAt: at } : {}),
     };
@@ -206,6 +258,29 @@ export function createStats(db: Db, now: () => Date) {
       .run();
   }
 
+  /** As many screens are watching a Game live as ever have at once, or more. */
+  function notePeakScreens(gameId: string, screens: number) {
+    if (!db.select({ id: gameStats.gameId }).from(gameStats).where(eq(gameStats.gameId, gameId)).get()) snapshotGame(gameId);
+    db.update(gameStats)
+      .set({ peakScreens: sql`max(${gameStats.peakScreens}, ${screens})` })
+      .where(eq(gameStats.gameId, gameId))
+      .run();
+  }
+
+  /** A Game used a feature its log doesn't show. */
+  function noteFeature(gameId: string, feature: string) {
+    db.insert(gameFeatures).values({ gameId, feature }).onConflictDoNothing().run();
+  }
+
+  /** Adds one to today's count of `name`. */
+  function countToday(name: string) {
+    const day = now().toISOString().slice(0, 10);
+    db.insert(dailyCounts)
+      .values({ day, name, count: 1 })
+      .onConflictDoUpdate({ target: [dailyCounts.day, dailyCounts.name], set: { count: sql`${dailyCounts.count} + 1` } })
+      .run();
+  }
+
   /** Brings every row up to date from what's there now: also the backfill for what came before the statistics. */
   function refresh() {
     for (const { id } of db.select({ id: games.id }).from(games).all()) snapshotGame(id);
@@ -224,7 +299,7 @@ export function createStats(db: Db, now: () => Date) {
     return db.update(gameStats).set({ excluded }).where(eq(gameStats.gameId, gameId)).run().changes > 0;
   }
 
-  function summary(): StatsSummary {
+  function summary({ signInEmailCap, photoBytes }: { signInEmailCap: number; photoBytes: number }): StatsSummary {
     const emailOf = new Map(db.select({ email: users.email }).from(users).all().map((u) => [keyOf(u.email), u.email]));
     const minutes = (ms: number) => Math.round(ms / 6000) / 10;
     const average = (xs: number[]) => (xs.length ? minutes(xs.reduce((a, b) => a + b, 0) / xs.length) : null);
@@ -251,7 +326,63 @@ export function createStats(db: Db, now: () => Date) {
       .all();
     const refs = new Set([...visits.map((v) => v.ref), ...people.flatMap((p) => (p.ref ? [p.ref] : []))]);
 
+    const share = (n: number, of: number) => (of ? Math.round((n / of) * 1000) / 10 : null);
+    const mean = (xs: number[]) => (xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10 : null);
+    const hostsWhere = (test: (s: (typeof real)[number]) => boolean) => new Set(real.filter(test).map((s) => s.g.hostKey)).size;
+    const used = new Map<string, Set<string>>();
+    for (const f of db.select().from(gameFeatures).all()) used.set(f.feature, (used.get(f.feature) ?? new Set()).add(f.gameId));
+    const countedWith = (test: (s: (typeof counted)[number]) => boolean) => counted.filter(test).length;
+    const usedIn = (feature: string) => countedWith((s) => used.get(feature)?.has(s.g.gameId) ?? false);
+    const fortnightAgo = new Date(now().getTime() - 13 * 24 * 60 * 60_000).toISOString().slice(0, 10);
+    const emails = db
+      .select({ day: dailyCounts.day, count: dailyCounts.count })
+      .from(dailyCounts)
+      .where(and(eq(dailyCounts.name, "signInEmails"), gte(dailyCounts.day, fortnightAgo)))
+      .orderBy(desc(dailyCounts.day))
+      .all();
+
+    const insights: Insights = {
+      funnel: [
+        { step: "signedIn", people: people.length },
+        { step: "created", people: hostsWhere(() => true) },
+        { step: "started", people: hostsWhere((s) => s.g.firstPickAt !== null) },
+        { step: "finished", people: hostsWhere((s) => s.g.endedAt !== null && s.g.firstPickAt !== null) },
+        { step: "voted", people: hostsWhere((s) => s.g.voteUsed) },
+      ],
+      engagement: {
+        averagePlayers: mean(counted.map((s) => s.g.players)),
+        signedInShare: share(
+          counted.reduce((n, s) => n + s.g.signedInPlayers, 0),
+          counted.reduce((n, s) => n + s.g.players, 0),
+        ),
+        averagePeakScreens: mean(counted.filter((s) => s.g.peakScreens > 0).map((s) => s.g.peakScreens)),
+      },
+      gameplay: {
+        averageSteals: mean(counted.map((s) => s.g.steals)),
+        averageFrozenGifts: mean(counted.map((s) => s.g.frozenGifts)),
+        finalRoundShare: share(countedWith((s) => s.g.finalRound), counted.length),
+        voteShare: share(countedWith((s) => s.g.voteUsed), counted.length),
+        averageSecondsPerPick: mean(counted.filter((s) => s.g.picks > 0).map((s) => Math.round(s.g.activeMs / s.g.picks / 1000))),
+        undosPerGame: mean(counted.map((s) => s.g.undos)),
+        skipsPerGame: mean(counted.map((s) => s.g.skips)),
+      },
+      features: [
+        { feature: "posts", games: countedWith((s) => s.g.posts > 0) },
+        { feature: "photos", games: countedWith((s) => s.g.photos > 0) },
+        { feature: "orgTheme", games: countedWith((s) => s.g.orgId !== null) },
+        { feature: "ownLook", games: usedIn("ownLook") },
+        { feature: "cohosts", games: countedWith((s) => s.g.cohosts > 0) },
+        { feature: "selfSignup", games: countedWith((s) => s.g.selfSignup) },
+        { feature: "rosterPaste", games: usedIn("rosterPaste") },
+        { feature: "screenModes", games: countedWith((s) => ["rules", "qr", "catalog"].some((m) => used.get(`screen:${m}`)?.has(s.g.gameId))) },
+      ],
+      returningHosts: { returning: [...byHost.values()].filter((mine) => mine.length >= 2).length, hosts: byHost.size },
+      startTimes: counted.map((s) => s.g.firstPickAt!.toISOString()),
+      costs: { signInEmails: emails, signInEmailCap, photoBytes },
+    };
+
     return {
+      insights,
       totals: {
         hosts: byHost.size,
         hostsWhoCreated: new Set(real.map((s) => s.g.hostKey)).size,
@@ -302,5 +433,17 @@ export function createStats(db: Db, now: () => Date) {
     };
   }
 
-  return { snapshotGame, recordPerson, recordOrg, orgDeleted, recordVisit, refresh, setExcluded, summary };
+  return {
+    snapshotGame,
+    recordPerson,
+    recordOrg,
+    orgDeleted,
+    recordVisit,
+    notePeakScreens,
+    noteFeature,
+    countToday,
+    refresh,
+    setExcluded,
+    summary,
+  };
 }

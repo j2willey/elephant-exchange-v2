@@ -61,7 +61,7 @@ export function GamePage() {
         </ol>
       )}
       {runs && game.phase !== "ended" && <AddPlayer onAdd={(name) => send({ type: "AddPlayer", playerId: crypto.randomUUID(), name })} />}
-      {runs && game.phase === "setup" && <RosterPaste roster={game.players.map((p) => p.name)} onAdd={(name) => send({ type: "AddPlayer", playerId: crypto.randomUUID(), name })} />}
+      {runs && game.phase === "setup" && <RosterPaste gameId={game.id} roster={game.players.map((p) => p.name)} onAdd={(name) => send({ type: "AddPlayer", playerId: crypto.randomUUID(), name })} />}
       {runs && game.phase === "setup" && (
         <>
           <button disabled={game.players.length < 2} onClick={() => send({ type: "StartGame" })}>

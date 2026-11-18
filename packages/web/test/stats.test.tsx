@@ -40,6 +40,12 @@ describe("The admin's Stats page", () => {
     const figure = (label: RegExp) => within(totals).getByText(label).closest("div")!;
     expect(figure(/^games played$/i)).toHaveTextContent("1");
     expect(figure(/^hosts$/i)).toHaveTextContent("1");
+    // Phase 2: the funnel, and how the Game played.
+    const funnel = screen.getByRole("list", { name: /funnel/i });
+    expect(within(funnel).getByRole("listitem", { name: /^started one: 1/i })).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: /parties and play/i })).getByText(/players per game/i).closest("div")).toHaveTextContent("4");
+    expect(screen.getByRole("list", { name: /played games per week/i })).toBeInTheDocument();
+
     const row = within(screen.getByRole("table", { name: /games in the statistics/i })).getByRole("row", { name: "Office party" });
     expect(row).toHaveTextContent(/ann@example.org.*yes/i);
 
@@ -52,5 +58,31 @@ describe("The admin's Stats page", () => {
     const server = await startServer({ adminEmails: ["boss@example.org"] });
     openApp(await server.signedIn("ann@example.org"), "/admin/stats");
     expect(await screen.findByText(/there's nothing here/i)).toBeInTheDocument();
+  });
+});
+
+describe("Features only the browser sees", () => {
+  it("counts a roster pasted on the Host's console", async () => {
+    const server = await startServer({ draw: drawInOrder, adminEmails: ["boss@example.org"] });
+    const ann = await server.signedIn("ann@example.org");
+    const id = await ann.createGame({ activeSlots: 1, maxSteals: 3 }, "Pasted party");
+    const user = userEvent.setup();
+    openApp(ann, `/games/${id}`);
+
+    await user.click(await screen.findByRole("button", { name: /paste a list/i }));
+    await user.click(screen.getByLabelText(/names, one per line/i));
+    await user.paste("Ann\nBob\nCat\nDan");
+    await user.click(screen.getByRole("button", { name: /add 4 players/i }));
+    await screen.findByRole("status");
+
+    // Played out, so it counts.
+    const ids = (await ann.game(id))!.players.map((p) => p.id);
+    await ann.command(id, { type: "StartGame" });
+    for (const [i, p] of ids.entries()) await ann.command(id, { type: "OpenGift", playerId: p, giftId: `g${i}`, name: `Gift ${i}` });
+    const admin = await server.signedIn("boss@example.org");
+    await waitFor(async () => {
+      const stats = await admin.adminStats();
+      expect(stats !== "notFound" && stats.insights.features.find((f) => f.feature === "rosterPaste")).toEqual({ feature: "rosterPaste", games: 1 });
+    });
   });
 });

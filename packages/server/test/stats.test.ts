@@ -8,6 +8,15 @@ import { capturingMailer, post, signIn, tokenFor } from "./support.js";
 
 type Summary = {
   totals: Record<string, number | null>;
+  insights: {
+    funnel: { step: string; people: number }[];
+    engagement: Record<string, number | null>;
+    gameplay: Record<string, number | null>;
+    features: { feature: string; games: number }[];
+    returningHosts: { returning: number; hosts: number };
+    startTimes: string[];
+    costs: { signInEmails: { day: string; count: number }[]; signInEmailCap: number; photoBytes: number };
+  };
   hosts: { email: string | null; games: number; averageMinutes: number | null }[];
   organizations: { name: string; deleted: boolean; games: number }[];
   sources: { ref: string; visits: number; signUps: number }[];
@@ -17,7 +26,8 @@ type Summary = {
 async function setup(dbPath = ":memory:") {
   let ms = Date.UTC(2026, 11, 13, 19, 0, 0);
   const { sent, mailer } = capturingMailer();
-  const { app } = createServer({ dbPath, mailer, now: () => new Date(ms), adminEmails: ["boss@willey.test"] });
+  // Draws in the order Players were added, so a test knows whose turn it is.
+  const { app } = createServer({ dbPath, mailer, now: () => new Date(ms), adminEmails: ["boss@willey.test"], draw: (waiting) => waiting[0]! });
   const as = (email: string) => signIn(app, sent, email);
   const admin = await as("boss@willey.test");
   const minutes = (n: number) => (ms += n * 60_000);
@@ -129,6 +139,75 @@ describe("Usage statistics", () => {
       { ref: "linkedin", visits: 3, signUps: 1 },
       { ref: "facebook", visits: 1, signUps: 0 },
     ]);
+  });
+
+  it("show where Hosts drop off: signed in, created, started, finished, ran the vote", async () => {
+    const { app, as, stats, party, newGame, send } = await setup();
+    await as("guest@willey.test"); // signed in, never hosted
+    await newGame(await as("cat@willey.test"), { name: "Never started" });
+    const ann = await as("ann@willey.test");
+    const id = await party(ann, "Ann's party");
+    await app.request(`/api/games/${id}/vote/status`, post({ status: "open" }, ann));
+    await party(await as("bob@willey.test"), "Bob's party");
+    void send;
+
+    expect((await stats()).insights.funnel).toEqual([
+      { step: "signedIn", people: 5 }, // with the admin
+      { step: "created", people: 3 },
+      { step: "started", people: 2 },
+      { step: "finished", people: 2 },
+      { step: "voted", people: 1 },
+    ]);
+  });
+
+  it("count steals, frozen Gifts, undos and skips, and play time per Pick", async () => {
+    const { as, stats, newGame, send, minutes } = await setup();
+    const ann = await as("ann@willey.test");
+    const id = await newGame(ann, { name: "Steal fest", settings: { activeSlots: 1, maxSteals: 1 } });
+    for (const p of ["a", "b", "c", "d", "e"]) await send(id, ann, { type: "AddPlayer", playerId: p, name: p.toUpperCase() });
+    await send(id, ann, { type: "StartGame" });
+    const pick = async (cmd: Record<string, unknown>) => {
+      minutes(1);
+      await send(id, ann, cmd);
+    };
+    await pick({ type: "OpenGift", playerId: "a", giftId: "g1", name: "Mug" });
+    await pick({ type: "Steal", playerId: "b", giftId: "g1" }); // Mug frozen (limit 1)
+    await pick({ type: "Undo" });
+    await pick({ type: "Steal", playerId: "b", giftId: "g1" });
+    await pick({ type: "OpenGift", playerId: "a", giftId: "g2", name: "Socks" });
+    await pick({ type: "Skip", playerId: "c" });
+    for (const [p, g] of [["d", "g3"], ["e", "g4"], ["c", "g5"]]) await pick({ type: "OpenGift", playerId: p, giftId: g, name: g });
+    await send(id, ann, { type: "EndGame" });
+
+    const { gameplay } = (await stats()).insights;
+    // The undone steal doesn't count: one steal, which froze the Mug.
+    expect(gameplay).toMatchObject({ averageSteals: 1, averageFrozenGifts: 1, undosPerGame: 1, skipsPerGame: 1, voteShare: 0, finalRoundShare: 0 });
+    expect(gameplay.averageSecondsPerPick).toBeGreaterThan(0);
+  });
+
+  it("count features used, returning Hosts, and sign-in emails a day against the cap", async () => {
+    const { app, as, stats, party } = await setup();
+    const ann = await as("ann@willey.test");
+    const first = await party(ann, "First");
+    await app.request(`/api/games/${first}/screen`, post({ mode: "rules" }, ann));
+    await app.request(`/api/games/${first}/features`, post({ feature: "rosterPaste" }, ann));
+    expect((await app.request(`/api/games/${first}/features`, post({ feature: "anythingElse" }, ann))).status).toBe(400);
+    expect((await app.request(`/api/games/${first}/features`, post({ feature: "rosterPaste" }, await as("bob@willey.test")))).status).toBe(403);
+    await party(ann, "Second");
+
+    const { insights } = await stats();
+    expect(insights.features).toEqual(
+      expect.arrayContaining([
+        { feature: "screenModes", games: 1 },
+        { feature: "rosterPaste", games: 1 },
+        { feature: "posts", games: 0 },
+      ]),
+    );
+    expect(insights.returningHosts).toEqual({ returning: 1, hosts: 1 });
+    expect(insights.startTimes).toHaveLength(2);
+    // The admin, Ann and Bob signed in: three links emailed (the parties ran past midnight, so over two days).
+    expect(insights.costs.signInEmails.reduce((n, d) => n + d.count, 0)).toBe(3);
+    expect(insights.costs.signInEmailCap).toBe(100);
   });
 
   it("are for the admin only", async () => {

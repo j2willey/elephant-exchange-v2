@@ -236,9 +236,38 @@ export const gameStats = sqliteTable("game_stats", {
   photos: integer("photos").notNull().default(0),
   votes: integer("votes").notNull().default(0),
   cohosts: integer("cohosts").notNull().default(0),
+  undos: integer("undos").notNull().default(0),
+  skips: integer("skips").notNull().default(0),
+  /** Gifts that reached the Steal limit. */
+  frozenGifts: integer("frozen_gifts").notNull().default(0),
+  voteUsed: integer("vote_used", { mode: "boolean" }).notNull().default(false),
+  selfSignup: integer("self_signup", { mode: "boolean" }).notNull().default(false),
+  /** The most screens (phones, the scoreboard, the console) watching the Game live at once. */
+  peakScreens: integer("peak_screens").notNull().default(0),
   deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
 });
+
+/** Features a Game used that its log doesn't show: "rosterPaste", "ownLook", "screen:rules" and so on. */
+export const gameFeatures = sqliteTable(
+  "game_features",
+  {
+    gameId: text("game_id").notNull(),
+    feature: text("feature").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.gameId, t.feature] })],
+);
+
+/** Running counts a day at a time, such as "signInEmails" (the links themselves are swept after a day). */
+export const dailyCounts = sqliteTable(
+  "daily_counts",
+  {
+    day: text("day").notNull(),
+    name: text("name").notNull(),
+    count: integer("count").notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.day, t.name] })],
+);
 
 /** One row per person who ever signed in, as a keyed hash of their email; never their address. */
 export const peopleStats = sqliteTable("people_stats", {
