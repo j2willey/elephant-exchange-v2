@@ -8,6 +8,7 @@ import { Feed } from "./Feed.js";
 import { EndGame } from "./GameSettings.js";
 import { ThemeLogo } from "./theme.js";
 import { VotePanel } from "./Vote.js";
+import { RosterPaste } from "./RosterPaste.js";
 import { ScreenSwitch } from "./WatchScreen.js";
 
 type Player = GameView["players"][number];
@@ -104,6 +105,7 @@ export function LaptopConsole({
             </p>
           )}
           {game.phase !== "ended" && <AddParticipant onAdd={(name) => send({ type: "AddPlayer", playerId: crypto.randomUUID(), name })} />}
+          {game.phase === "setup" && <RosterPaste roster={game.players.map((p) => p.name)} onAdd={(name) => send({ type: "AddPlayer", playerId: crypto.randomUUID(), name })} />}
           {game.phase === "setup" && (
             <>
               <button disabled={game.players.length < 2} onClick={() => void send({ type: "StartGame" })}>

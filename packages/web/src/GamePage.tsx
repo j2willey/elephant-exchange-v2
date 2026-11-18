@@ -9,6 +9,7 @@ import { Composer, Feed, PostPhoto, useFeed } from "./Feed.js";
 import { SignInForm, useSignedIn } from "./SignIn.js";
 import { ThemeLogo, useTheme } from "./theme.js";
 import { useLiveGame } from "./useLiveGame.js";
+import { RosterPaste } from "./RosterPaste.js";
 import { ScreenSwitch } from "./WatchScreen.js";
 import { VotePanel } from "./Vote.js";
 
@@ -60,6 +61,7 @@ export function GamePage() {
         </ol>
       )}
       {runs && game.phase !== "ended" && <AddPlayer onAdd={(name) => send({ type: "AddPlayer", playerId: crypto.randomUUID(), name })} />}
+      {runs && game.phase === "setup" && <RosterPaste roster={game.players.map((p) => p.name)} onAdd={(name) => send({ type: "AddPlayer", playerId: crypto.randomUUID(), name })} />}
       {runs && game.phase === "setup" && (
         <>
           <button disabled={game.players.length < 2} onClick={() => send({ type: "StartGame" })}>
