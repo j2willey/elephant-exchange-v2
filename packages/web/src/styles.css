@@ -1739,3 +1739,12 @@ a.button {
   background: var(--brand);
   border-color: var(--brand);
 }
+
+/* Jim's note: set apart from the app's own cards, quietly. */
+.tip-jar {
+  border-style: dashed;
+}
+
+.tip-jar .button {
+  justify-self: start;
+}

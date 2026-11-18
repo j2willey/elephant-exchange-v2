@@ -6,7 +6,7 @@ import { AdminPage } from "./Admin.js";
 import { DemoGame, DemoPage } from "./Demo.js";
 import { GamePage } from "./GamePage.js";
 import { GameSettings } from "./GameSettings.js";
-import { Landing, Playbook } from "./Landing.js";
+import { Landing, Playbook, TipJar } from "./Landing.js";
 import { MyOrgs, OrgPage } from "./Orgs.js";
 import { SignInForm } from "./SignIn.js";
 import { WatchScreen } from "./WatchScreen.js";
@@ -58,6 +58,7 @@ function Home() {
       <DemoGame />
       <MyGames />
       <MyOrgs />
+      <TipJar />
       <section className="card">
         <p>Signed in as {session.email}</p>
         <label className="check">

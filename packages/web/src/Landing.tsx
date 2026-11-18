@@ -49,7 +49,32 @@ export function Landing() {
       <p className="landing-playbook">
         📖 Hosting for the first time? Read the <Link to="/playbook">Host's Playbook</Link>.
       </p>
+      <TipJar />
     </div>
+  );
+}
+
+/** Where tips go: a tip page, so nobody ever sees Jim's own accounts and nothing is ever paid back out. */
+const TIP_URL = "https://ko-fi.com/jimwilley";
+
+/**
+ * Jim's ask, on the pages Hosts read (never in a Game, where guests are): a tip toward the paid email plan,
+ * since sign-in emails are what runs out first (docs/scale-plan.md). No strings: nothing is bought.
+ */
+export function TipJar() {
+  return (
+    <section className="card tip-jar" aria-label="A note from Jim">
+      <h3>A note from Jim</h3>
+      <p>
+        I built Elephant Exchange for my own holiday party, and I'm glad it's helping yours. It runs on my own small
+        server, and the free email plan I'm on sends only 100 sign-in emails a day across the whole site. If your
+        organization's party had fun with it, a $20 tip moves me to the paid email plan and keeps it running for
+        everyone this season. No strings attached, and it's free either way.
+      </p>
+      <a className="button" href={TIP_URL} target="_blank" rel="noopener noreferrer">
+        ☕ Leave a tip
+      </a>
+    </section>
   );
 }
 
@@ -172,6 +197,7 @@ export function Playbook() {
           Start a Game
         </Link>
       </p>
+      <TipJar />
     </article>
   );
 }
