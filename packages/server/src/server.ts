@@ -533,8 +533,12 @@ export function createServer({
     const id = c.req.param("id");
     const email = signedInAs(c);
     if (!email) return c.json({ error: "Sign in first" }, 401);
-    if (!load(id)) return c.json({ error: "Game not found" }, 404);
+    const game = load(id);
+    if (!game) return c.json({ error: "Game not found" }, 404);
     if (roleIn(id, email) !== "host") return c.json({ error: "Only the Host can delete a Game" }, 403);
+    // A party may be under way: it's ended on purpose first, never deleted out from under the room.
+    const now = phase(game.state);
+    if (now === "playing" || now === "finalRound") return c.json({ error: "End the Game before deleting it" }, 409);
     deleteGame(id);
     return c.body(null, 204);
   });

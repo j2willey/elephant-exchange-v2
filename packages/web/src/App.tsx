@@ -129,7 +129,21 @@ function MyGames() {
                 {phaseWords[g.phase]} · {g.players} {g.players === 1 ? "player" : "players"}
                 {g.role === "cohost" && " · Co-host"}
               </span>
-              {deleting === g.id && (
+              {deleting === g.id && (g.phase === "playing" || g.phase === "finalRound") && (
+                // A party may be under way: end it on purpose first; the delete question follows.
+                <ConfirmDelete
+                  question={`${g.name} is still in progress. End it first? Everyone keeps the Gift they're holding, and nobody else gets a turn.`}
+                  yes="End the Game"
+                  no="Keep playing"
+                  onNo={() => setDeleting(null)}
+                  onYes={async () => {
+                    const result = await api.command(g.id, { type: "EndGame" });
+                    if (result.ok) setMine((list) => (Array.isArray(list) ? list.map((x) => (x.id === g.id ? { ...x, phase: "ended" } : x)) : list));
+                    return result.ok;
+                  }}
+                />
+              )}
+              {deleting === g.id && g.phase !== "playing" && g.phase !== "finalRound" && (
                 <ConfirmDelete
                   question={`Delete ${g.name}, with its Players, Gifts, Posts, Photos and votes? This can't be undone.`}
                   yes={`Yes, delete ${g.name}`}

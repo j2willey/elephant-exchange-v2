@@ -28,6 +28,19 @@ describe("A Host deleting their own Game", () => {
     expect(await json<unknown[]>("/api/games", ann)).toEqual([]);
   });
 
+  it("won't delete a Game in progress: it has to be ended first", async () => {
+    const { app, as, newGame } = await setup();
+    const ann = await as("ann@willey.test");
+    const id = await newGame(ann, { name: "Party" });
+    for (const [playerId, name] of [["bob", "Bob"], ["cat", "Cat"]]) await app.request(`/api/games/${id}/commands`, post({ type: "AddPlayer", playerId, name }, ann));
+    await app.request(`/api/games/${id}/commands`, post({ type: "StartGame" }, ann));
+
+    expect((await app.request(`/api/games/${id}`, del(ann))).status).toBe(409);
+
+    await app.request(`/api/games/${id}/commands`, post({ type: "EndGame" }, ann));
+    expect((await app.request(`/api/games/${id}`, del(ann))).status).toBe(204);
+  });
+
   it("is the Host's alone: not a Co-host's, not anyone else's, not signed out", async () => {
     const { app, as, newGame } = await setup();
     const ann = await as("ann@willey.test");

@@ -1,7 +1,19 @@
 import { useState } from "react";
 
-/** Asks before something is deleted for good, under the row it's about: Yes deletes, Keep it changes nothing. */
-export function ConfirmDelete({ question, yes, onYes, onNo }: { question: string; yes: string; onYes: () => Promise<boolean>; onNo: () => void }) {
+/** Asks before something is deleted for good (or ended, first), under the row it's about; No changes nothing. */
+export function ConfirmDelete({
+  question,
+  yes,
+  no = "Keep it",
+  onYes,
+  onNo,
+}: {
+  question: string;
+  yes: string;
+  no?: string;
+  onYes: () => Promise<boolean>;
+  onNo: () => void;
+}) {
   const [failed, setFailed] = useState(false);
   return (
     <div className="confirm-delete">
@@ -11,7 +23,7 @@ export function ConfirmDelete({ question, yes, onYes, onNo }: { question: string
           {yes}
         </button>
         <button className="secondary" onClick={onNo}>
-          Keep it
+          {no}
         </button>
       </div>
       {failed && (

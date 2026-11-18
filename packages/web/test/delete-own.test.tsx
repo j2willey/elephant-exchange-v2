@@ -34,6 +34,36 @@ describe("Deleting your own Games and Organizations from the home screen", () =>
     expect(await ann.game(party)).toBeUndefined();
   });
 
+  it("asks to end a Game in progress first, then deletes it", async () => {
+    const { signedIn } = await startServer();
+    const ann = await signedIn("ann@example.com");
+    const id = await ann.createGame({ activeSlots: 1, maxSteals: 3 }, "Ann's party");
+    for (const [playerId, name] of [["bob", "Bob"], ["cat", "Cat"]] as const) await ann.command(id, { type: "AddPlayer", playerId, name });
+    await ann.command(id, { type: "StartGame" });
+    const user = userEvent.setup();
+    openApp(ann);
+
+    const list = await screen.findByRole("list", { name: /your games/i });
+    const row = () => within(list).queryByRole("listitem", { name: "Ann's party" });
+    await waitFor(() => expect(row()).toHaveTextContent(/in progress/i));
+
+    await user.click(within(row()!).getByRole("button", { name: /delete ann's party/i }));
+    expect(within(row()!).getByText(/still in progress/i)).toBeInTheDocument();
+    expect(within(row()!).queryByRole("button", { name: /yes, delete/i })).not.toBeInTheDocument();
+
+    // Keep playing changes nothing.
+    await user.click(within(row()!).getByRole("button", { name: /keep playing/i }));
+    expect(row()).toHaveTextContent(/in progress/i);
+
+    await user.click(within(row()!).getByRole("button", { name: /delete ann's party/i }));
+    await user.click(within(row()!).getByRole("button", { name: /end the game/i }));
+    await waitFor(() => expect(row()).toHaveTextContent(/finished/i));
+    await user.click(within(row()!).getByRole("button", { name: /yes, delete ann's party/i }));
+
+    await waitFor(() => expect(row()).not.toBeInTheDocument());
+    expect(await ann.game(id)).toBeUndefined();
+  });
+
   it("deletes an Organization, after asking", async () => {
     const { signedIn } = await startServer();
     const ann = await signedIn("ann@example.com");
