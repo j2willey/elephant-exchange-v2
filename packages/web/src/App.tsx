@@ -24,9 +24,12 @@ export function AppRoutes() {
   }, [api]);
   return (
     <main className="page">
-      <h1 className="brand">
-        <Link to="/">Elephant Exchange</Link>
-      </h1>
+      <div className="top-bar">
+        <h1 className="brand">
+          <Link to="/">Elephant Exchange</Link>
+        </h1>
+        <SignOutLink />
+      </div>
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/sign-in" element={<RedeemLink />} />
@@ -43,6 +46,42 @@ export function AppRoutes() {
         <Route path="/admin/feedback" element={<FeedbackPage />} />
       </Routes>
     </main>
+  );
+}
+
+/**
+ * Sign out, at the top of every page for someone signed in, except inside a Game: there a guest could tap it by
+ * mistake mid-party, and the TV's scoreboard has no business signing out. (The home screen has its own button too.)
+ */
+function SignOutLink() {
+  const api = useApi();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const [signedIn, setSignedIn] = useState(false);
+  const inGame = pathname.startsWith("/games/");
+
+  useEffect(() => {
+    if (inGame) return;
+    let current = true;
+    api.session().then((s) => current && setSignedIn(Boolean(s)), () => {});
+    return () => {
+      current = false;
+    };
+  }, [api, pathname, inGame]);
+
+  if (inGame || !signedIn) return null;
+  return (
+    <button
+      className="link sign-out"
+      onClick={() =>
+        void api.signOut().then(() => {
+          setSignedIn(false);
+          navigate("/"); // the home screen checks again who's signed in, so it shows the front page
+        })
+      }
+    >
+      Sign out
+    </button>
   );
 }
 
@@ -100,6 +139,8 @@ function TryDemo() {
 function Home() {
   const api = useApi();
   const [session, setSession] = useState<Session | null | "loading">("loading");
+  // Checked again on every visit, such as straight after signing out from the top of the page.
+  const { key: visit } = useLocation();
 
   useEffect(() => {
     let current = true;
@@ -107,15 +148,10 @@ function Home() {
     return () => {
       current = false;
     };
-  }, [api]);
+  }, [api, visit]);
 
   if (session === "loading") return <p className="muted">Loading…</p>;
   if (!session) return <Landing />;
-
-  async function signOut() {
-    await api.signOut();
-    setSession(null);
-  }
 
   return (
     <div className="stack">
@@ -142,9 +178,6 @@ function Home() {
         <Link to="/playbook">📖 Host's Playbook</Link>
         <Link to="/about">About Elephant Exchange</Link>
         {session.admin && <Link to="/admin">Admin</Link>}
-        <button className="secondary" onClick={signOut}>
-          Sign out
-        </button>
       </section>
     </div>
   );

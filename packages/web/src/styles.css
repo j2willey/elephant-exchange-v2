@@ -43,9 +43,23 @@ body {
   padding: max(16px, env(safe-area-inset-top)) 16px 32px;
 }
 
-.brand {
+/* The app's name, and Sign out at the far end for someone signed in. */
+.top-bar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
   margin: 8px 0 20px;
+}
+
+.brand {
+  margin: 0;
   font-size: 1.5rem;
+}
+
+.top-bar .sign-out {
+  font-size: 0.95rem;
+  white-space: nowrap;
 }
 
 .brand a {
@@ -411,7 +425,7 @@ select {
   padding: 16px 24px;
 }
 
-.page:has(.screen) > .brand {
+.page:has(.screen) > .top-bar {
   display: none;
 }
 
@@ -1091,7 +1105,7 @@ label.check input {
 }
 
 /* Inside the demo page's frames, the brand heading is already on the page around them. */
-[data-embedded] .brand {
+[data-embedded] .top-bar {
   display: none;
 }
 
