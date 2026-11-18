@@ -130,9 +130,10 @@ What users notice: a minute or two of "can't connect" during step 7; phones reco
 
 - [ ] Resend paid plan, and raise `SIGNIN_LINKS_PER_DAY` (limit 1).
 - [ ] Check the droplet's headroom (`free -h`, `df -h`, `docker stats`) and raise EE's `mem_limit` if there's room (limit 2).
-- [ ] An uptime monitor on `/api/health` (limit 3).
+- [x] An uptime monitor on `/api/health` (limit 3): UptimeRobot, every 5 minutes, emails Jim.
 - [x] Copy `backups/` off the droplet on every deploy, and a restore script (limit 3).
-- [ ] Check the droplet's nightly backup cron line is in (`crontab -l`), and turn on DigitalOcean droplet backups (limit 3).
+- [ ] Check the droplet's nightly backup cron line is in (`crontab -l`) (limit 3).
+- [x] DigitalOcean droplet backups (Jim believes they're on, about $4 a month; confirm under Droplet → Backups).
 - [ ] A copy of the droplet's `.env` in the password manager.
 - [ ] No deploys on party evenings (Fri/Sat from 4 pm Pacific) in December. Tabs already open keep running the old code until they're reloaded.
 
