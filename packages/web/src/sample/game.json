@@ -1,0 +1,151 @@
+{
+ "id": "oe3dBFbf60JQX0qLWPw8gg",
+ "name": "Acme Holiday Party",
+ "demo": false,
+ "theme": {
+  "organization": null,
+  "color": null,
+  "page": null,
+  "logoUrl": null,
+  "backgroundUrl": null,
+  "overrides": {
+   "color": false,
+   "page": false,
+   "logo": false,
+   "background": false
+  }
+ },
+ "rosterMode": "host",
+ "moderation": "open",
+ "clock": {
+  "now": 1795032104314,
+  "turnSeconds": 60,
+  "startedAt": {
+   "Ben": 1795025793544
+  }
+ },
+ "version": 30,
+ "phase": "playing",
+ "settings": {
+  "activeSlots": 1,
+  "maxSteals": 3
+ },
+ "players": [
+  {
+   "id": "Priya",
+   "name": "Priya"
+  },
+  {
+   "id": "Marcus",
+   "name": "Marcus"
+  },
+  {
+   "id": "Dana",
+   "name": "Dana"
+  },
+  {
+   "id": "Luis",
+   "name": "Luis"
+  },
+  {
+   "id": "Grace",
+   "name": "Grace"
+  },
+  {
+   "id": "Tom",
+   "name": "Tom"
+  },
+  {
+   "id": "Aisha",
+   "name": "Aisha"
+  },
+  {
+   "id": "Ben",
+   "name": "Ben"
+  },
+  {
+   "id": "Chloe",
+   "name": "Chloe"
+  },
+  {
+   "id": "Sam",
+   "name": "Sam"
+  }
+ ],
+ "active": [
+  "Ben"
+ ],
+ "onDeck": [
+  "Grace"
+ ],
+ "gifts": [
+  {
+   "id": "g0",
+   "name": "Espresso machine",
+   "description": "",
+   "holderId": "Dana",
+   "steals": 2,
+   "frozen": false
+  },
+  {
+   "id": "g1",
+   "name": "Fuzzy socks",
+   "description": "",
+   "holderId": "Priya",
+   "steals": 0,
+   "frozen": false
+  },
+  {
+   "id": "g2",
+   "name": "Singing fish",
+   "description": "",
+   "holderId": "Aisha",
+   "steals": 0,
+   "frozen": false
+  },
+  {
+   "id": "g3",
+   "name": "Lego Death Star",
+   "description": "",
+   "holderId": "Chloe",
+   "steals": 1,
+   "frozen": false
+  },
+  {
+   "id": "g4",
+   "name": "Fondue set",
+   "description": "",
+   "holderId": "Marcus",
+   "steals": 0,
+   "frozen": false
+  },
+  {
+   "id": "g5",
+   "name": "$50 coffee card",
+   "description": "",
+   "holderId": "Tom",
+   "steals": 0,
+   "frozen": false
+  },
+  {
+   "id": "g6",
+   "name": "Mystery candle",
+   "description": "",
+   "holderId": "Luis",
+   "steals": 0,
+   "frozen": false
+  }
+ ],
+ "leftoverGifts": 0,
+ "screen": "gifts",
+ "vote": {
+  "status": "none",
+  "display": "live",
+  "cast": 0,
+  "counts": null,
+  "winner": null
+ },
+ "role": null,
+ "me": null,
+ "myVote": null
+}

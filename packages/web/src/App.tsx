@@ -8,6 +8,7 @@ import { GamePage } from "./GamePage.js";
 import { GameSettings } from "./GameSettings.js";
 import { ConfirmDelete } from "./ConfirmDelete.js";
 import { StatsPage } from "./Stats.js";
+import { SAMPLE_GAME_ID, SamplePhone } from "./SamplePhone.js";
 import { FeedbackPage, SuggestBox } from "./Feedback.js";
 import { Landing, Playbook, TipJar, TipNoteDialog } from "./Landing.js";
 import { MyOrgs, OrgPage } from "./Orgs.js";
@@ -36,6 +37,8 @@ export function AppRoutes() {
         <Route path="/playbook" element={<Playbook />} />
         <Route path="/about" element={<About />} />
         <Route path="/try" element={<TryDemo />} />
+        <Route path={`/games/${SAMPLE_GAME_ID}`} element={<SamplePhone />} />
+        <Route path="/sample" element={<SamplePhone />} />
         <Route path="/games/:id" element={<GamePage />} />
         <Route path="/games/:id/screen" element={<WatchScreen />} />
         <Route path="/games/:id/demo" element={<DemoPage />} />

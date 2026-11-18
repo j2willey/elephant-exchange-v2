@@ -14,9 +14,11 @@ import { ScreenSwitch } from "./WatchScreen.js";
 import { VotePanel } from "./Vote.js";
 import { FeedbackCard } from "./Feedback.js";
 
-export function GamePage() {
+/** `gameId`: the Game to show, when it isn't the one in the address (the front page's sample phone). */
+export function GamePage({ gameId }: { gameId?: string } = {}) {
   const api = useApi();
-  const { id = "" } = useParams();
+  const { id: inAddress = "" } = useParams();
+  const id = gameId ?? inAddress;
   const [game, accept, feedChanges] = useLiveGame(id);
   const [error, setError] = useState<string | null>(null);
   const stars = useStars(id);

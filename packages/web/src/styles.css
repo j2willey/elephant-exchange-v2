@@ -2045,3 +2045,14 @@ a.button.secondary-button {
 .stat-tiles dd.smaller {
   font-size: 1.1rem;
 }
+
+/* The front page's sample phone: a note on top saying what it is. */
+.sample-note {
+  background: color-mix(in srgb, var(--brand) 6%, var(--surface));
+  border-color: color-mix(in srgb, var(--brand) 30%, var(--line));
+}
+
+.sample-note p {
+  margin: 0;
+  line-height: 1.5;
+}
