@@ -107,6 +107,8 @@ const randomDraw: DrawFn = (candidates) => candidates[randomInt(candidates.lengt
 /** A Game as the server holds it: what's stored alongside the log, its state rebuilt from the log, and the log's length. */
 interface LoadedGame {
   name: string;
+  /** Made with "Try a demo game": its Host console offers the demo view. */
+  demo: boolean;
   rosterMode: "host" | "self";
   moderation: "open" | "approval" | "paused";
   turnSeconds: number;
@@ -169,10 +171,11 @@ function tally(ballots: ReadonlyMap<string, string>): Record<string, number> {
 
 /** What screens are shown about a Game: answers from the rules module, never its internal state. */
 function view(id: string, game: LoadedGame, now: Date) {
-  const { name, rosterMode, moderation, turnSeconds, clocks, state, seq, vote } = game;
+  const { name, demo, rosterMode, moderation, turnSeconds, clocks, state, seq, vote } = game;
   return {
     id,
     name,
+    demo,
     theme: resolveTheme(id, game.theme),
     rosterMode,
     moderation,
@@ -279,6 +282,7 @@ export function createServer({
         ballots: new Map(ballots.map((b) => [b.email, b.giftId])),
       },
       name: row.name,
+      demo: row.demo,
       rosterMode: row.rosterMode,
       moderation: row.moderation,
       turnSeconds: row.turnSeconds,

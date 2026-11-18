@@ -73,3 +73,20 @@ describe("The home screen", () => {
     expect(within(orgs).getByRole("button", { name: /^create organization$/i })).toBeInTheDocument();
   });
 });
+
+describe("A demo Game's Host console", () => {
+  it("links to its demo view; any other Game's doesn't", async () => {
+    const { signedIn } = await startServer();
+    const host = await signedIn("host@example.com");
+    const demo = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Demo game", "self", 60, undefined, true);
+    const party = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Party");
+
+    const first = openApp(host, `/games/${demo}`);
+    expect(await screen.findByRole("link", { name: /demo view/i })).toHaveAttribute("href", `/games/${demo}/demo`);
+    first.unmount();
+
+    openApp(host, `/games/${party}`);
+    await screen.findByText(/host console/i);
+    expect(screen.queryByRole("link", { name: /demo view/i })).not.toBeInTheDocument();
+  });
+});

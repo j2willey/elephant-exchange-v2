@@ -6,6 +6,8 @@ export interface GameView {
   id: string;
   /** What the Host calls it. */
   name: string;
+  /** Made with "Try a demo game": its Host console links to the demo view. */
+  demo: boolean;
   /** Who adds Players: only the Host and Co-hosts, or people themselves from their phones too. */
   rosterMode: RosterMode;
   /** The Game's rule for Posts; the Host or a Co-host can switch it at any moment. */

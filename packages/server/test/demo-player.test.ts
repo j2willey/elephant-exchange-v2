@@ -78,3 +78,17 @@ describe("A demo Game's sample phone", () => {
     expect((await get({ cookie: host, "x-demo-player": "nobody" })).status).toBe(403);
   });
 });
+
+describe("A Game's view", () => {
+  it("says whether it's a demo, so the Host console can offer its demo view", async () => {
+    const { sent, mailer } = capturingMailer();
+    const { app } = createServer({ dbPath: ":memory:", mailer });
+    const cookie = await signIn(app, sent, "host@example.com");
+    const make = async (demo: boolean) =>
+      ((await (await app.request("/api/games", post({ settings: { activeSlots: 1, maxSteals: 3 }, demo }, cookie))).json()) as { id: string }).id;
+    const shown = async (id: string) => ((await (await app.request(`/api/games/${id}`)).json()) as { demo: boolean }).demo;
+
+    expect(await shown(await make(true))).toBe(true);
+    expect(await shown(await make(false))).toBe(false);
+  });
+});

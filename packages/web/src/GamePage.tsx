@@ -121,6 +121,8 @@ export function GamePage() {
             <CopyLink path={`/games/${game.id}`} />
           </span>
           <Link to={`/games/${game.id}/settings`}>⚙ Settings</Link>
+          {/* Not inside the demo view itself, which shows this console in a frame. */}
+          {game.demo && window.self === window.top && <Link to={`/games/${game.id}/demo`}>🖥 Demo view</Link>}
         </nav>
       </section>
 
