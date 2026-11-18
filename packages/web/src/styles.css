@@ -726,15 +726,31 @@ button.danger-solid {
   line-height: 1;
 }
 
+/* The tab you're on: tinted, with the brand's line along its top. */
 .tabbar button[aria-selected="true"] {
   color: var(--brand-text);
+  background: color-mix(in srgb, var(--brand) 10%, var(--surface));
   box-shadow: inset 0 3px 0 var(--brand);
 }
 
-/* It's this Player's turn: the Up now tab says so from wherever they are. */
-.tabbar button.alert {
-  color: var(--brand-ink);
+/*
+ * It's this Player's turn: a dot on the You tab, from whichever tab they're on. Only a dot, so it never looks like
+ * the tab that's selected (the status bar at the top turns the brand color too).
+ */
+.tabbar button.alert span {
+  position: relative;
+}
+
+.tabbar button.alert span::after {
+  position: absolute;
+  top: -2px;
+  right: -8px;
+  width: 12px;
+  height: 12px;
+  content: "";
   background: var(--brand);
+  border: 2px solid var(--surface);
+  border-radius: 50%;
 }
 
 .your-turn {
