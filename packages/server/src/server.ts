@@ -528,6 +528,17 @@ export function createServer({
     return c.body(null, 204);
   });
 
+  /** The Host deletes their own Game, with everything in it (not a Co-host: it's the Host's Game). */
+  app.delete("/api/games/:id", (c) => {
+    const id = c.req.param("id");
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    if (!load(id)) return c.json({ error: "Game not found" }, 404);
+    if (roleIn(id, email) !== "host") return c.json({ error: "Only the Host can delete a Game" }, 403);
+    deleteGame(id);
+    return c.body(null, 204);
+  });
+
   app.get("/api/games/:id", (c) => {
     const id = c.req.param("id");
     const game = load(id);
@@ -755,6 +766,26 @@ export function createServer({
     if (Object.keys(body.data).length > 0) db.update(organizations).set(body.data).where(eq(organizations.id, orgId)).run();
     orgChanged(orgId);
     return c.json(orgView(orgTheme(orgId)!));
+  });
+
+  /** The Organizer deletes their Organization. Games that used its look keep going, in their own or the app's colors. */
+  app.delete("/api/orgs/:orgId", (c) => {
+    const orgId = c.req.param("orgId");
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    if (!orgTheme(orgId)) return c.json({ error: "No such Organization" }, 404);
+    if (!organizes(orgId, email)) return c.json({ error: "Only its Organizer can delete an Organization" }, 403);
+    const using = db.select({ id: games.id }).from(games).where(eq(games.orgId, orgId)).all();
+    db.transaction((tx) => {
+      tx.update(games).set({ orgId: null }).where(eq(games.orgId, orgId)).run();
+      tx.delete(organizations).where(eq(organizations.id, orgId)).run();
+    });
+    for (const kind of ["logo", "background"] as const) themeImages.remove(`org-${orgId}`, kind);
+    for (const { id } of using) {
+      const game = cache.get(id);
+      if (game) publish(id, { ...game, theme: { ...game.theme, org: null } });
+    }
+    return c.body(null, 204);
   });
 
   /** The file in a multipart upload's `image` field (checked by type, not `instanceof File`: see the Photo upload). */

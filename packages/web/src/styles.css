@@ -1748,3 +1748,25 @@ a.button {
 .tip-jar .button {
   justify-self: start;
 }
+
+/* A row on the home screen: its name, and Delete at the far end. */
+.row-with-delete {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.row-with-delete button.link {
+  font-size: 0.9rem;
+}
+
+.confirm-delete {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.confirm-delete p {
+  margin: 0;
+}

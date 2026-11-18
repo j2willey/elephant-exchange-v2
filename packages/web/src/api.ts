@@ -422,6 +422,16 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
     },
 
     /** Restarts a Player's countdown; the Game as it now stands, or undefined if that didn't work. */
+    /** The Host deletes their own Game, with everything in it. */
+    async deleteGame(id: string): Promise<boolean> {
+      return (await fetchFn(`/api/games/${encodeURIComponent(id)}`, { method: "DELETE" })).ok;
+    },
+
+    /** The Organizer deletes their Organization; Games that used its look keep going. */
+    async deleteOrg(id: string): Promise<boolean> {
+      return (await fetchFn(`/api/orgs/${encodeURIComponent(id)}`, { method: "DELETE" })).ok;
+    },
+
     async createOrg(name: string): Promise<string> {
       const res = await postJson("/api/orgs", { name });
       if (res.status !== 201) throw new Error(`creating an Organization failed: ${res.status}`);

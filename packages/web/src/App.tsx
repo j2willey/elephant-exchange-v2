@@ -6,6 +6,7 @@ import { AdminPage } from "./Admin.js";
 import { DemoGame, DemoPage } from "./Demo.js";
 import { GamePage } from "./GamePage.js";
 import { GameSettings } from "./GameSettings.js";
+import { ConfirmDelete } from "./ConfirmDelete.js";
 import { Landing, Playbook, TipJar, TipNoteDialog } from "./Landing.js";
 import { MyOrgs, OrgPage } from "./Orgs.js";
 import { SignInForm } from "./SignIn.js";
@@ -89,6 +90,7 @@ const phaseWords = { setup: "Not started", playing: "In progress", finalRound: "
 function MyGames() {
   const api = useApi();
   const [mine, setMine] = useState<MyGame[] | "loading" | "failed">("loading");
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   useEffect(() => {
     let current = true;
@@ -113,12 +115,35 @@ function MyGames() {
       ) : (
         <ul className="my-games" aria-label="Your Games">
           {mine.map((g) => (
-            <li key={g.id}>
-              <Link to={`/games/${g.id}`}>{g.name}</Link>
+            <li key={g.id} aria-label={g.name}>
+              <span className="row-with-delete">
+                <Link to={`/games/${g.id}`}>{g.name}</Link>
+                {/* Only the Host's: a Co-host helps run someone else's Game. */}
+                {g.role === "host" && deleting !== g.id && (
+                  <button className="link danger" aria-label={`Delete ${g.name}`} onClick={() => setDeleting(g.id)}>
+                    Delete
+                  </button>
+                )}
+              </span>
               <span className="muted">
                 {phaseWords[g.phase]} · {g.players} {g.players === 1 ? "player" : "players"}
                 {g.role === "cohost" && " · Co-host"}
               </span>
+              {deleting === g.id && (
+                <ConfirmDelete
+                  question={`Delete ${g.name}, with its Players, Gifts, Posts, Photos and votes? This can't be undone.`}
+                  yes={`Yes, delete ${g.name}`}
+                  onNo={() => setDeleting(null)}
+                  onYes={async () => {
+                    const ok = await api.deleteGame(g.id);
+                    if (ok) {
+                      setDeleting(null);
+                      setMine((list) => (Array.isArray(list) ? list.filter((x) => x.id !== g.id) : list));
+                    }
+                    return ok;
+                  }}
+                />
+              )}
             </li>
           ))}
         </ul>
