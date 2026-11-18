@@ -119,6 +119,7 @@ export function AdminPage() {
                 <th>Games</th>
                 <th>Organizations</th>
                 <th>Feedback OK</th>
+                <th>Read tip note</th>
               </tr>
             </thead>
             <tbody>
@@ -130,6 +131,7 @@ export function AdminPage() {
                   <td>{p.demoGames ? `${p.games} + ${p.demoGames} demo` : p.games}</td>
                   <td>{p.organizations.join(", ") || "—"}</td>
                   <td>{p.feedbackOk ? "Yes" : "—"}</td>
+                  <td>{p.tipNoteRead ? "Yes" : "—"}</td>
                 </tr>
               ))}
             </tbody>

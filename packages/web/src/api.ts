@@ -70,10 +70,14 @@ export type ScreenMode = "gifts" | "rules" | "qr" | "catalog";
 export type RosterMode = "host" | "self";
 export type Moderation = "open" | "approval" | "paused";
 
-/** Who's signed in: whether a feedback email is OK, and whether they may use the admin pages. */
+/**
+ * Who's signed in: whether a feedback email is OK, whether they've read and considered Jim's tip note (New Game
+ * shows it until then), and whether they may use the admin pages.
+ */
 export interface Session {
   email: string;
   feedbackOk: boolean;
+  tipNoteRead: boolean;
   admin: boolean;
 }
 
@@ -82,6 +86,7 @@ export interface AdminPerson {
   firstSeen: string;
   lastSignIn: string | null;
   feedbackOk: boolean;
+  tipNoteRead: boolean;
   games: number;
   demoGames: number;
   organizations: string[];
@@ -217,11 +222,16 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
 
     /** Who is signed in on this browser, if anyone. */
     async session(): Promise<Session | undefined> {
-      if (demoPlayer !== undefined) return { email: "", feedbackOk: false, admin: false };
+      if (demoPlayer !== undefined) return { email: "", feedbackOk: false, tipNoteRead: false, admin: false };
       const res = await fetchFn("/api/session");
       if (res.status === 401) return undefined;
       if (!res.ok) throw new Error(`session check failed: ${res.status}`);
       return (await res.json()) as Session;
+    },
+
+    /** The signed-in person has read and considered Jim's tip note: New Game stops showing it, on every device. */
+    async markTipNoteRead(): Promise<boolean> {
+      return (await postJson("/api/me/tip-note-read", {})).ok;
     },
 
     /** Says whether it's OK to email the signed-in person to ask how it went. */

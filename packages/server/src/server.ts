@@ -441,8 +441,16 @@ export function createServer({
   app.get("/api/session", (c) => {
     const email = signedInAs(c);
     if (!email) return c.json({ error: "Not signed in" }, 401);
-    const feedbackOk = db.select({ ok: users.feedbackOk }).from(users).where(eq(users.email, email)).get()?.ok ?? false;
-    return c.json({ email, feedbackOk, admin: isAdmin(email) });
+    const me = db.select({ feedbackOk: users.feedbackOk, tipNoteRead: users.tipNoteRead }).from(users).where(eq(users.email, email)).get();
+    return c.json({ email, feedbackOk: me?.feedbackOk ?? false, tipNoteRead: me?.tipNoteRead ?? false, admin: isAdmin(email) });
+  });
+
+  /** They've read and considered Jim's tip note: New Game stops showing it. Never unset. */
+  app.post("/api/me/tip-note-read", (c) => {
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    db.update(users).set({ tipNoteRead: true }).where(eq(users.email, email)).run();
+    return c.body(null, 204);
   });
 
   /** Whether it's OK to email the signed-in person to ask how it went. */
@@ -1046,6 +1054,7 @@ export function createServer({
         firstSeen: u.createdAt.toISOString(),
         lastSignIn: u.lastSignInAt?.toISOString() ?? null,
         feedbackOk: u.feedbackOk,
+        tipNoteRead: u.tipNoteRead,
         games: hosted.find((h) => h.email === u.email && !h.demo)?.n ?? 0,
         demoGames: hosted.find((h) => h.email === u.email && h.demo)?.n ?? 0,
         organizations: orgs.filter((o) => o.email === u.email).map((o) => o.name),

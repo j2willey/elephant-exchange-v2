@@ -55,12 +55,16 @@ export async function startServer(options: { draw?: DrawFn; adminEmails?: string
     return url.pathname + url.search;
   };
   const origin = `http://localhost:${port}`;
-  /** A browser already signed in as this person (by the same emailed-link steps the screens use). */
-  const signedIn = async (email: string, { demoPlayer }: { demoPlayer?: string } = {}) => {
+  /**
+   * A browser already signed in as this person (by the same emailed-link steps the screens use). They've already
+   * read Jim's tip note, so New Game goes straight to its form, unless `tipNoteRead: false` (a brand-new Host).
+   */
+  const signedIn = async (email: string, { demoPlayer, tipNoteRead = true }: { demoPlayer?: string; tipNoteRead?: boolean } = {}) => {
     const api = browser(origin, demoPlayer === undefined ? {} : { demoPlayer });
     await api.requestLink(email);
     const token = new URLSearchParams(linkFor(email).split("?")[1]).get("token")!;
     if (!(await api.redeemLink(token))) throw new Error(`could not sign in ${email}`);
+    if (tipNoteRead) await api.markTipNoteRead();
     return api;
   };
   return { origin, sent, linkFor, signedIn };

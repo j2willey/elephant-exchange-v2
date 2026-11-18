@@ -81,6 +81,8 @@ export const users = sqliteTable("users", {
   lastSignInAt: integer("last_sign_in_at", { mode: "timestamp_ms" }),
   /** They said it's OK to email them to ask how it went (ticked at sign-in, changed on the home screen). */
   feedbackOk: integer("feedback_ok", { mode: "boolean" }).notNull().default(false),
+  /** They ticked that they've read and considered Jim's tip note, so New Game no longer shows it. */
+  tipNoteRead: integer("tip_note_read", { mode: "boolean" }).notNull().default(false),
 });
 
 /** Emailed sign-in links. Only a hash of each token is kept, so a leaked database can't sign anyone in. */

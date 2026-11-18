@@ -6,7 +6,7 @@ import { AdminPage } from "./Admin.js";
 import { DemoGame, DemoPage } from "./Demo.js";
 import { GamePage } from "./GamePage.js";
 import { GameSettings } from "./GameSettings.js";
-import { Landing, Playbook, TipJar } from "./Landing.js";
+import { Landing, Playbook, TipJar, TipNoteDialog } from "./Landing.js";
 import { MyOrgs, OrgPage } from "./Orgs.js";
 import { SignInForm } from "./SignIn.js";
 import { WatchScreen } from "./WatchScreen.js";
@@ -54,7 +54,7 @@ function Home() {
 
   return (
     <div className="stack">
-      <NewGame />
+      <NewGame tipNoteRead={session.tipNoteRead} onTipNoteRead={() => setSession({ ...session, tipNoteRead: true })} />
       <DemoGame />
       <MyGames />
       <MyOrgs />
@@ -128,10 +128,12 @@ function MyGames() {
 }
 
 /** Creating a Game: a button first, then its two settings (the usual values filled in). */
-function NewGame() {
+/** `tipNoteRead`: whether this Host has read and considered Jim's tip note; until then New Game shows it first. */
+function NewGame({ tipNoteRead, onTipNoteRead }: { tipNoteRead: boolean; onTipNoteRead: () => void }) {
   const api = useApi();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [noting, setNoting] = useState(false);
   const [name, setName] = useState("Gift exchange");
   const [rosterMode, setRosterMode] = useState<RosterMode>("host");
   const [slots, setSlots] = useState("1");
@@ -150,7 +152,25 @@ function NewGame() {
     };
   }, [api, open]);
 
-  if (!open) return <button onClick={() => setOpen(true)}>New Game</button>;
+  if (!open)
+    return (
+      <>
+        <button onClick={() => (tipNoteRead ? setOpen(true) : setNoting(true))}>New Game</button>
+        {noting && (
+          <TipNoteDialog
+            onClose={() => setNoting(false)}
+            onContinue={(read) => {
+              setNoting(false);
+              setOpen(true);
+              if (read) {
+                onTipNoteRead();
+                void api.markTipNoteRead();
+              }
+            }}
+          />
+        )}
+      </>
+    );
 
   async function submit(e: FormEvent) {
     e.preventDefault();

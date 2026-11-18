@@ -71,6 +71,13 @@
       "when": 1794968027221,
       "tag": "0009_screen_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1795017822020,
+      "tag": "0010_tip_note",
+      "breakpoints": true
     }
   ]
 }

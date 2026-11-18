@@ -65,16 +65,57 @@ export function TipJar() {
   return (
     <section className="card tip-jar" aria-label="A note from Jim">
       <h3>A note from Jim</h3>
-      <p>
-        I built Elephant Exchange for my own holiday party, and I'm glad it's helping yours. It runs on my own small
-        server, and the free email plan I'm on sends only 100 sign-in emails a day across the whole site. If your
-        organization's party had fun with it, a $20 tip moves me to the paid email plan and keeps it running for
-        everyone this season. No strings attached, and it's free either way.
-      </p>
-      <a className="button" href={TIP_URL} target="_blank" rel="noopener noreferrer">
-        ☕ Leave a tip
-      </a>
+      <TipNoteText />
+      <TipLink />
     </section>
+  );
+}
+
+function TipNoteText() {
+  return (
+    <p>
+      I built Elephant Exchange for my own holiday party, and I'm glad it's helping yours. It runs on my own small
+      server, and the free email plan I'm on sends only 100 sign-in emails a day across the whole site. If your
+      organization's party had fun with it, a $20 tip moves me to the paid email plan and keeps it running for everyone
+      this season. No strings attached, and it's free either way.
+    </p>
+  );
+}
+
+function TipLink() {
+  return (
+    <a className="button" href={TIP_URL} target="_blank" rel="noopener noreferrer">
+      ☕ Leave a tip
+    </a>
+  );
+}
+
+/**
+ * The same note, shown when a Host starts a New Game until they tick that they've read and considered it.
+ * `onContinue` says whether they ticked it; the New Game form follows either way.
+ */
+export function TipNoteDialog({ onContinue, onClose }: { onContinue: (read: boolean) => void; onClose: () => void }) {
+  const [read, setRead] = useState(false);
+  return (
+    <div className="lc-overlay" onClick={onClose}>
+      <div role="dialog" aria-modal="true" aria-label="A note from Jim" className="card lc-dialog tip-jar" onClick={(e) => e.stopPropagation()}>
+        <h2>A note from Jim</h2>
+        <TipNoteText />
+        <TipLink />
+        <label className="check">
+          <input type="checkbox" checked={read} onChange={(e) => setRead(e.target.checked)} />
+          I've read and considered this
+        </label>
+        <div className="inline">
+          <button type="button" className="secondary" onClick={onClose}>
+            Not now
+          </button>
+          <button type="button" onClick={() => onContinue(read)}>
+            Continue
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

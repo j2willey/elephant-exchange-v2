@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `tip_note_read` integer DEFAULT false NOT NULL;

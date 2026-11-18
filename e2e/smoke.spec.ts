@@ -32,7 +32,12 @@ test("a Host runs a Game while a guest follows along on their phone", async ({ b
   await host.goto("/");
   await signIn(host, `host-${run}@example.com`);
 
+  // A new Host first sees Jim's tip note; ticking it means the next New Game goes straight to the form.
   await host.getByRole("button", { name: /new game/i }).click();
+  const note = host.getByRole("dialog", { name: /a note from jim/i });
+  await expect(note.getByRole("link", { name: /leave a tip/i })).toBeVisible();
+  await note.getByRole("checkbox", { name: /read and considered/i }).check();
+  await note.getByRole("button", { name: /continue/i }).click();
   await host.getByLabel(/name of the game/i).fill(`Smoke ${run}`);
   await host.getByRole("radio", { name: /players sign up on their phones/i }).check();
   await host.getByRole("button", { name: /create game/i }).click();
@@ -139,6 +144,8 @@ test("an Organizer themes their Organization, and a Game in it shows that Theme"
 
   await page.getByRole("link", { name: /back to your games/i }).click();
   await page.getByRole("button", { name: /new game/i }).click();
+  // A new Organizer: Jim's tip note comes first, once.
+  await page.getByRole("dialog", { name: /a note from jim/i }).getByRole("button", { name: /continue/i }).click();
   await page.getByLabel(/^organization$/i).selectOption({ label: `Lodge ${run}` });
   await page.getByRole("button", { name: /create game/i }).click();
   await expect(page.getByRole("img", { name: new RegExp(`lodge ${run} logo`, "i") })).toBeVisible();
