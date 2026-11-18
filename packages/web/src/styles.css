@@ -837,10 +837,13 @@ label.check input {
   display: none;
 }
 
-/* A phone-sized frame: 360 × 740, about a real phone's screen. */
+/*
+ * A phone-sized frame: 360 × 740, about a real phone's screen, but no taller than the window has room for (the
+ * "Phone of" picker sits above it), so its tab bar stays on screen; it ends level with the console beside it.
+ */
 .demo-phone iframe {
   width: 380px;
-  height: 760px;
+  height: min(760px, max(560px, calc(100vh - 252px)));
   border: 10px solid #1d1d1f;
   border-radius: 36px;
   background: var(--page);
