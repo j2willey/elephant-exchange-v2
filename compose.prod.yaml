@@ -2,9 +2,12 @@
 # routes by hostname to containers on the shared `edge` network). The app publishes no port; ww-edge reaches it as
 # elephant-exchange:3000, and its site file (caddy/sites/elephant-exchange.caddy there) holds the HTTPS headers.
 # Settings come from .env (copy .env.example; its COMPOSE_FILE line adds this file, so plain `docker compose` works):
-#   docker compose up -d --build
+#   docker compose up -d   (scripts/deploy.sh does this, after shipping the image)
+# The image is built on Omarchy and shipped by scripts/deploy.sh, never built here; TAG (in .env) is its commit.
 services:
   app:
+    build: !reset null
+    image: elephant-exchange:${TAG:-latest}
     container_name: elephant-exchange
     ports: !reset []
     expose:

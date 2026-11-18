@@ -120,11 +120,15 @@ Once:
 1. In Cloudflare (DNS for `elephantexchange.app`): an A record for `@` and a CNAME `www` → `elephantexchange.app`, both proxied; SSL/TLS mode **Full**.
 2. In Resend, verify the domain (its DNS records go in Cloudflare, not proxied) and create an API key.
 3. In ww-edge: `caddy/sites/elephant-exchange.caddy` is already there; on the droplet, `cd ~/ww/ww-edge && git pull` and reload Caddy (`rcaddy`).
-4. On the droplet: `git clone https://github.com/j2willey/elephant-exchange-v2 ~/ww/elephant-exchange-v2`, then `cp .env.example .env`, fill it in, and `docker compose up -d --build`.
+4. On the droplet: `git clone https://github.com/j2willey/elephant-exchange-v2 ~/ww/elephant-exchange-v2`, then `cp .env.example .env`, fill it in, and `chmod 600 .env`.
 5. `mkdir -p backups`, then add the cron line from the top of `scripts/backup.sh`, and copy `./backups` off the droplet now and then.
-6. Run the smoke test against it: `SMOKE_URL=https://elephantexchange.app SMOKE_LOGS="ssh conductor 'cd ww/elephant-exchange-v2 && docker compose logs app --no-log-prefix'" npm run smoke` (it reads sign-in links from the log, so run it before setting the Resend key, or check the inbox by hand).
+6. From Omarchy, deploy (below), then run the smoke test against it: `SMOKE_URL=https://elephantexchange.app SMOKE_LOGS="ssh conductor 'cd ww/elephant-exchange-v2 && docker compose logs app --no-log-prefix'" npm run smoke` (it reads sign-in links from the log, so run it before setting the Resend key, or check the inbox by hand).
 
-To update: `git pull && docker compose up -d --build`.
+To deploy, from Omarchy with `main` pushed: `./scripts/deploy.sh`. It builds the image here, tagged with the commit (the droplet's one CPU is shared, so nothing is built there), ships it over ssh, backs up, pulls, sets `TAG` in the droplet's `.env`, and restarts on the new image. Then reload any open tabs (Ctrl+Shift+R): a page already open keeps running the code it loaded.
+
+### Rolling back
+
+The droplet keeps the last three images. On the droplet: `docker images elephant-exchange` to see their tags, set `TAG=` in `.env` to the one before, and `docker compose up -d`. If the newer version ran a migration, restore the backup the deploy took first (above).
 
 ## Smoke test
 
