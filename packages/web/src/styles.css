@@ -858,11 +858,71 @@ button.danger-solid {
   }
 }
 
+/* The results, as v1's podium: each place a size smaller than the one above, the winner in the Theme's color. */
 .podium {
   display: grid;
   gap: 6px;
+  margin: 12px 0 0;
+  padding-left: 1.6em;
+  font-size: 1.1em;
+}
+
+.podium [data-rank="1"] {
+  font-size: 1.6em;
+  color: var(--brand-text);
+}
+
+.podium [data-rank="2"] {
+  font-size: 1.5em;
+}
+
+.podium [data-rank="3"] {
+  font-size: 1.3em;
+}
+
+/* The winner's Photo beside the headline; the text column takes what's left and wraps a long name. */
+.reveal-winner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 24px;
+}
+
+.reveal-winner > :only-child {
+  grid-column: 1 / -1;
+}
+
+.reveal-photo {
+  display: block;
+  max-height: 26vh;
+  max-width: 22vw;
+  width: auto;
+  height: auto;
+  border-radius: var(--radius);
+}
+
+.thanks {
   margin-top: 12px;
   font-size: 1.4em;
+  font-weight: 700;
+  text-align: center;
+  color: var(--brand-text);
+}
+
+/* A short window (a 720p projector): the results a size smaller, so the thanks still shows at the foot. */
+@media (min-width: 60rem) and (max-height: 820px) {
+  .screen .reveal {
+    font-size: 0.8em;
+    gap: 6px;
+  }
+}
+
+/* The results can be taller than the window; on a big screen the card scrolls rather than pushing off the page. */
+@media (min-width: 60rem) {
+  .screen-main > .reveal {
+    min-height: 0;
+    overflow: auto;
+  }
 }
 
 /* Theme settings */

@@ -295,6 +295,9 @@ function useAutoScroll(box: RefObject<HTMLElement | null>) {
   }, [box]);
 }
 
+/** The last word on the big screen, as v1 ended its results. */
+const THANKS = "Thanks for playing! See you next year! 🐘";
+
 const votesText = (n: number) => `${n} ${n === 1 ? "vote" : "votes"}`;
 
 /** Whether the vote takes the place of the plain list of Gifts: it lists them itself, with counts or as a parade. */
@@ -313,6 +316,7 @@ function EndOfGame({ game, posts }: { game: GameView; posts: Post[] }) {
       <section className="card now">
         <h2 className="big">Game over</h2>
         <p className="muted">Here's who went home with what.</p>
+        <p className="thanks">{THANKS}</p>
       </section>
     );
   }
@@ -320,31 +324,37 @@ function EndOfGame({ game, posts }: { game: GameView; posts: Post[] }) {
   if (vote.status === "closed") {
     const counts = vote.counts ?? {};
     const winner = game.gifts.find((g) => g.id === vote.winner);
-    // Most votes first; the winner leads any Gifts it tied with, since the Host picked it.
+    // Posts come newest first: the latest Photo of the winner, if anyone posted one.
+    const photo = winner && posts.find((p) => p.giftId === winner.id && p.status === "visible" && p.photo);
+    // Most votes first; the winner leads any Gifts it tied with, since the Host picked it. Five places, as in v1.
     const podium = game.gifts
       .filter((g) => (counts[g.id] ?? 0) > 0)
       .sort((a, b) => (counts[b.id] ?? 0) - (counts[a.id] ?? 0) || Number(b.id === vote.winner) - Number(a.id === vote.winner))
-      .slice(0, 3);
+      .slice(0, 5);
     return (
-      <section className="card now reveal">
+      <section className="card now reveal" aria-label="Results">
         {winner ? (
-          <>
-            <p className="label">The votes are in</p>
-            <p className="big">Worst Gift: {winner.name}</p>
-            <p className="medium">{holderOf(winner.id)} picks a prize!</p>
-          </>
+          <div className="reveal-winner">
+            {photo && <PostPhoto post={photo} className="reveal-photo" />}
+            <div>
+              <p className="label">The votes are in</p>
+              <p className="big">Worst Gift: {winner.name}</p>
+              <p className="medium">{holderOf(winner.id)} picks a prize!</p>
+            </div>
+          </div>
         ) : (
           <p className="big">Nobody voted</p>
         )}
         {podium.length > 0 && (
           <ol className="podium" aria-label="Results">
-            {podium.map((g) => (
-              <li key={g.id}>
-                {g.name} <span className="muted">· {votesText(counts[g.id] ?? 0)}</span>
+            {podium.map((g, rank) => (
+              <li key={g.id} data-rank={rank + 1}>
+                <strong>{g.name}</strong> <span className="muted">· {holderOf(g.id)} · {votesText(counts[g.id] ?? 0)}</span>
               </li>
             ))}
           </ol>
         )}
+        <p className="thanks">{THANKS}</p>
       </section>
     );
   }
