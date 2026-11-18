@@ -64,6 +64,13 @@
       "when": 1794956298325,
       "tag": "0008_admin",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1794968027221,
+      "tag": "0009_screen_mode",
+      "breakpoints": true
     }
   ]
 }

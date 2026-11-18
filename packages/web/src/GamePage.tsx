@@ -9,6 +9,7 @@ import { Composer, Feed, PostPhoto, useFeed } from "./Feed.js";
 import { SignInForm, useSignedIn } from "./SignIn.js";
 import { ThemeLogo, useTheme } from "./theme.js";
 import { useLiveGame } from "./useLiveGame.js";
+import { ScreenSwitch } from "./WatchScreen.js";
 import { VotePanel } from "./Vote.js";
 
 export function GamePage() {
@@ -137,6 +138,7 @@ export function GamePage() {
           <a href={`/games/${game.id}/screen`} target="_blank" rel="noopener">
             📺 Open the scoreboard
           </a>
+          <ScreenSwitch game={game} />
           {/* What the QR code opens: guests follow along and join from it. Copy it to send ahead of time. */}
           <span className="inline">
             <Link to={`/games/${game.id}`}>🔗 Link for guests</Link>

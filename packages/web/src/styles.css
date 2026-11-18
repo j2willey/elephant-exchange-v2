@@ -1384,3 +1384,135 @@ label.check input {
 .lc-dialog img {
   justify-self: center;
 }
+
+/* The Host's switch for what the scoreboard shows, as v1's menu bar had it: the one showing is filled in. */
+.screen-switch {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.screen-switch-label {
+  margin-right: 4px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.screen-switch .toggle {
+  min-height: 40px;
+  padding: 6px 12px;
+  font-size: 0.9rem;
+  color: var(--brand-text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.screen-switch .toggle[aria-pressed="true"] {
+  color: var(--brand-ink);
+  background: var(--brand);
+  border-color: var(--brand);
+}
+
+/* The rules on the big screen: few enough lines to read aloud, large enough to read from the back. */
+.rules {
+  justify-self: center;
+  align-self: center;
+  width: min(100%, 60rem);
+  padding: 32px 48px;
+}
+
+.rules h2 {
+  font-size: 2em;
+  color: var(--brand-text);
+  text-align: center;
+}
+
+.rules ul {
+  display: grid;
+  gap: 0.7em;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 1.25em;
+}
+
+/* The join code on its own: as big as the window allows. */
+.join.join-big {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  align-self: center;
+  text-align: center;
+  padding: 32px;
+}
+
+.join.join-big img {
+  width: min(60vh, 80vw);
+}
+
+.join-big .label {
+  font-size: 1.4em;
+}
+
+.join-big .url {
+  font-size: 1.2em;
+}
+
+/* The catalog: a card per Gift with its Photo, filling the window and scrolling itself like the board. */
+.catalog-scroll {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.catalog {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.catalog-card {
+  align-content: start;
+  gap: 8px;
+  padding: 12px;
+}
+
+.catalog-card.frozen {
+  opacity: 0.6;
+}
+
+.catalog-photo {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 8px;
+  background: var(--line);
+}
+
+.catalog-none {
+  display: grid;
+  place-items: center;
+  font-size: 3em;
+}
+
+.catalog-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+@media (min-width: 60rem) {
+  /* The views that take the whole space under the banner. */
+  .screen > .rules,
+  .screen > .join-big,
+  .screen > .catalog-scroll {
+    min-height: 0;
+  }
+}

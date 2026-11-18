@@ -8,6 +8,7 @@ import { Feed } from "./Feed.js";
 import { EndGame } from "./GameSettings.js";
 import { ThemeLogo } from "./theme.js";
 import { VotePanel } from "./Vote.js";
+import { ScreenSwitch } from "./WatchScreen.js";
 
 type Player = GameView["players"][number];
 type Gift = GameView["gifts"][number];
@@ -70,6 +71,7 @@ export function LaptopConsole({
         <a href={`/games/${game.id}/screen`} target="_blank" rel="noopener">
           📺 Scoreboard
         </a>
+        <ScreenSwitch game={game} />
         <button className="secondary" onClick={() => setInviting(true)}>
           🔗 Invite
         </button>

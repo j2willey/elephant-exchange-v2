@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, type RefObject } from "react";
 import { useParams } from "react-router";
 import { renderSVG } from "uqr";
-import type { GameView, Post } from "./api.js";
+import type { GameView, Post, ScreenMode } from "./api.js";
+import { useApi } from "./ApiContext.js";
 import { Countdown } from "./Countdown.js";
 import { PostPhoto, useFeed } from "./Feed.js";
 import { ThemeLogo, useTheme } from "./theme.js";
@@ -26,45 +27,155 @@ export function WatchScreen() {
         <ThemeLogo theme={game.theme} className="screen-logo" />
         <h2>{game.name}</h2>
       </header>
-      <div className="screen-body">
-        <div className="screen-main">
-          {game.phase === "ended" ? (
-            <EndOfGame game={game} posts={posts} />
-          ) : game.phase === "setup" ? (
-            <section className="card now">
-              <p className="big">Waiting for the Host to start</p>
-              <p className="muted">
-                {players} {players === 1 ? "player" : "players"} so far
-              </p>
-            </section>
-          ) : (
-            <div className="screen-top">
-              <section className="card now" aria-live="polite">
-                {game.phase === "finalRound" && <h2 className="label">Final Round</h2>}
-                <p className="label">Up now</p>
-                <p className="big">{game.active.map(nameOf).join(", ") || "—"}</p>
-                {game.active.map((playerId) => (
-                  <Countdown key={playerId} game={game} playerId={playerId} name={nameOf(playerId)} />
-                ))}
+      {game.screen === "rules" ? (
+        <Rules game={game} />
+      ) : game.screen === "qr" ? (
+        <Join gameId={game.id} big />
+      ) : game.screen === "catalog" ? (
+        <Catalog game={game} posts={posts} />
+      ) : (
+        <div className="screen-body">
+          <div className="screen-main">
+            {game.phase === "ended" ? (
+              <EndOfGame game={game} posts={posts} />
+            ) : game.phase === "setup" ? (
+              <section className="card now">
+                <p className="big">Waiting for the Host to start</p>
+                <p className="muted">
+                  {players} {players === 1 ? "player" : "players"} so far
+                </p>
               </section>
-              <section className="card">
-                <p className="label">On deck</p>
-                <p className="medium">{game.onDeck.map(nameOf).join(", ") || "—"}</p>
-              </section>
-            </div>
-          )}
-          {game.gifts.length > 0 && !(game.phase === "ended" && showsVote(game)) && <GiftBoard game={game} posts={posts} />}
+            ) : (
+              <div className="screen-top">
+                <section className="card now" aria-live="polite">
+                  {game.phase === "finalRound" && <h2 className="label">Final Round</h2>}
+                  <p className="label">Up now</p>
+                  <p className="big">{game.active.map(nameOf).join(", ") || "—"}</p>
+                  {game.active.map((playerId) => (
+                    <Countdown key={playerId} game={game} playerId={playerId} name={nameOf(playerId)} />
+                  ))}
+                </section>
+                <section className="card">
+                  <p className="label">On deck</p>
+                  <p className="medium">{game.onDeck.map(nameOf).join(", ") || "—"}</p>
+                </section>
+              </div>
+            )}
+            {game.gifts.length > 0 && !(game.phase === "ended" && showsVote(game)) && <GiftBoard game={game} posts={posts} />}
+          </div>
+          <aside className="screen-side">
+            <LatestPosts game={game} posts={posts} />
+            <Join gameId={game.id} />
+          </aside>
         </div>
-        <aside className="screen-side">
-          <LatestPosts game={game} posts={posts} />
-          <Join gameId={game.id} />
-        </aside>
-      </div>
+      )}
     </div>
   );
 }
 
 type Gift = GameView["gifts"][number];
+
+const screenModes: { mode: ScreenMode; label: string }[] = [
+  { mode: "gifts", label: "Gifts" },
+  { mode: "rules", label: "Rules" },
+  { mode: "qr", label: "QR code" },
+  { mode: "catalog", label: "Catalog" },
+];
+
+/**
+ * For the Host's console: what the big screen shows, as v1's menu bar had it. The pressed button follows the Game, so a
+ * Co-host's switch shows here too.
+ */
+export function ScreenSwitch({ game }: { game: GameView }) {
+  const api = useApi();
+  return (
+    <div role="group" aria-label="Scoreboard shows" className="screen-switch">
+      <span className="screen-switch-label">Scoreboard shows</span>
+      {screenModes.map(({ mode, label }) => (
+        <button key={mode} className="toggle" aria-pressed={game.screen === mode} onClick={() => void api.setScreen(game.id, mode)}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** The house rules, read out to the room before the first name is called; the Steal limit is this Game's own. */
+function Rules({ game }: { game: GameView }) {
+  const { maxSteals } = game.settings;
+  return (
+    <section className="card rules" aria-label="How it works">
+      <h2>How it works</h2>
+      <ul>
+        <li>
+          <span aria-hidden="true">🎲</span> Names are drawn at random, so nobody knows when they're up. Watch for yours under On deck.
+        </li>
+        <li>
+          <span aria-hidden="true">🎁</span> When you're called, open a new Gift or steal one that's already open.
+        </li>
+        <li>
+          <span aria-hidden="true">😈</span> If your Gift is stolen, you go next: open a new one or steal another.
+        </li>
+        <li>
+          <span aria-hidden="true">🚫</span> No take-backs: you can't steal straight back the Gift just taken from you.
+        </li>
+        <li>
+          <span aria-hidden="true">❄</span>{" "}
+          {maxSteals === 0
+            ? "No steals in this Game: everyone opens a new Gift."
+            : `A Gift is Frozen after ${maxSteals} ${maxSteals === 1 ? "steal" : "steals"}, and its holder keeps it.`}
+        </li>
+        <li>
+          <span aria-hidden="true">🏁</span> At the end, the first few called may get one last chance to steal.
+        </li>
+        <li>
+          <span aria-hidden="true">📱</span> Follow along on your phone: Star the Gifts you want, and post photos of what you open.
+        </li>
+      </ul>
+    </section>
+  );
+}
+
+/** Every Gift as a card with its Photo, holder and Steals; those with a Photo first. Scrolls itself like the board. */
+function Catalog({ game, posts }: { game: GameView; posts: Post[] }) {
+  const scroller = useRef<HTMLDivElement>(null);
+  useAutoScroll(scroller);
+  const photoOf = (giftId: string) => posts.find((p) => p.giftId === giftId && p.status === "visible" && p.photo);
+  const holderName = (id: string | null) => (id === null ? "On the table" : (game.players.find((p) => p.id === id)?.name ?? "?"));
+  const gifts = [...game.gifts].sort((a, b) => Number(!photoOf(a.id)) - Number(!photoOf(b.id)) || byInterest(a, b));
+  if (gifts.length === 0) {
+    return (
+      <section className="card now">
+        <p className="big">No Gifts opened yet</p>
+      </section>
+    );
+  }
+  return (
+    <div className="catalog-scroll" ref={scroller}>
+      <ul className="catalog" aria-label="Catalog">
+        {gifts.map((g) => {
+          const photo = photoOf(g.id);
+          return (
+            <li key={g.id} aria-label={g.name} className={g.frozen ? "card catalog-card frozen" : "card catalog-card"}>
+              {photo ? (
+                <PostPhoto post={photo} className="catalog-photo" />
+              ) : (
+                <span className="catalog-photo catalog-none" aria-hidden="true">
+                  🎁
+                </span>
+              )}
+              <strong>{g.name}</strong>
+              <span className="catalog-meta">
+                <span>{holderName(g.holderId)}</span>
+                <StealChip gift={g} maxSteals={game.settings.maxSteals} />
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
 
 /** Still in play first, the most stolen (the ones people are fighting over) at the top; Frozen ones sink to the bottom. */
 const byInterest = (a: Gift, b: Gift) => Number(a.frozen) - Number(b.frozen) || b.steals - a.steals;
@@ -331,11 +442,12 @@ function LatestPosts({ game, posts }: { game: GameView; posts: Post[] }) {
   );
 }
 
-function Join({ gameId }: { gameId: string }) {
+/** The QR code for following along; `big` fills the screen, for when the Host puts it up on its own. */
+function Join({ gameId, big = false }: { gameId: string; big?: boolean }) {
   const url = `${window.location.origin}/games/${gameId}`;
   const qr = useMemo(() => `data:image/svg+xml;utf8,${encodeURIComponent(renderSVG(url, { border: 2 }))}`, [url]);
   return (
-    <section className="card join" aria-label="Join">
+    <section className={big ? "card join join-big" : "card join"} aria-label="Join">
       <img src={qr} alt="QR code to join this Game" width={220} height={220} />
       <div>
         <p className="label">Follow along on your phone</p>

@@ -24,6 +24,8 @@ export interface GameView {
   gifts: { id: string; name: string; holderId: string | null; steals: number; frozen: boolean }[];
   /** Unopened Gifts still on the table in the Final Round. */
   leftoverGifts: number;
+  /** What the big screen shows, as the Host switches it: the Gift board, the rules, the join code, or the catalog. */
+  screen: ScreenMode;
   /** How the Game looks: its Organization's Theme with the Game's own overrides; null parts use the app's look. */
   theme: Theme;
   /** The Worst Gift Vote. `counts` is null while they're kept from everyone (Hidden or Parade, before the reveal). */
@@ -63,6 +65,7 @@ export type ColorChange = { color?: string | null; page?: string | null };
 
 export type VoteStatus = "none" | "open" | "closed";
 export type VoteDisplay = "live" | "hidden" | "parade";
+export type ScreenMode = "gifts" | "rules" | "qr" | "catalog";
 
 export type RosterMode = "host" | "self";
 export type Moderation = "open" | "approval" | "paused";
@@ -456,6 +459,10 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
         if (body.code === "Tie" && body.tied) return { tied: body.tied };
       }
       return "failed";
+    },
+
+    async setScreen(gameId: string, mode: ScreenMode): Promise<boolean> {
+      return (await postJson(`/api/games/${encodeURIComponent(gameId)}/screen`, { mode })).ok;
     },
 
     async setVoteDisplay(gameId: string, display: VoteDisplay): Promise<boolean> {

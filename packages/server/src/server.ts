@@ -60,6 +60,7 @@ import {
   timerBody,
   voteBody,
   voteDisplayBody,
+  screenModeBody,
   voteStatusBody,
 } from "./schemas.js";
 
@@ -122,6 +123,8 @@ interface LoadedGame {
     /** The Game's own parts, which win over the Organization's. */
     own: ThemeParts;
   };
+  /** What the big screen shows: the Gift board, the rules, the join code, or the catalog. */
+  screen: "gifts" | "rules" | "qr" | "catalog";
   vote: {
     status: "none" | "open" | "closed";
     display: "live" | "hidden" | "parade";
@@ -171,7 +174,7 @@ function tally(ballots: ReadonlyMap<string, string>): Record<string, number> {
 
 /** What screens are shown about a Game: answers from the rules module, never its internal state. */
 function view(id: string, game: LoadedGame, now: Date) {
-  const { name, demo, rosterMode, moderation, turnSeconds, clocks, state, seq, vote } = game;
+  const { name, demo, rosterMode, moderation, turnSeconds, clocks, state, seq, vote, screen } = game;
   return {
     id,
     name,
@@ -191,6 +194,8 @@ function view(id: string, game: LoadedGame, now: Date) {
     gifts: gifts(state),
     /** Unopened Gifts still on the table in the Final Round. */
     leftoverGifts: leftoverGiftCount(state),
+    /** What the big screen shows: the Gift board, the rules, the join code, or the catalog. */
+    screen,
     /**
      * The Worst Gift Vote. How many have voted is always shown; the counts only once it's closed, or while
      * it's open under the Live display. Under Hidden or Parade they never leave the server until the reveal.
@@ -275,6 +280,7 @@ export function createServer({
         org: row.orgId ? orgTheme(row.orgId) : null,
         own: { color: row.themeColor, page: row.themePage, logo: row.themeLogo, background: row.themeBackground },
       },
+      screen: row.screenMode,
       vote: {
         status: row.voteStatus,
         display: row.voteDisplay,
@@ -905,6 +911,21 @@ export function createServer({
     const winner = picked ?? tied[0] ?? null;
     db.update(games).set({ voteStatus: "closed", voteWinner: winner }).where(eq(games.id, id)).run();
     publish(id, { ...game, vote: { ...game.vote, status: "closed", winner } });
+    return c.body(null, 204);
+  });
+
+  // The Host switches the big screen between the Gift board, the rules, the join code and the catalog.
+  app.post("/api/games/:id/screen", async (c) => {
+    const id = c.req.param("id");
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const body = await parseBody(c, screenModeBody);
+    if (!body.ok) return body.res;
+    const game = load(id);
+    if (!game) return c.json({ error: "Game not found" }, 404);
+    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can switch the big screen" }, 403);
+    db.update(games).set({ screenMode: body.data.mode }).where(eq(games.id, id)).run();
+    publish(id, { ...game, screen: body.data.mode });
     return c.body(null, 204);
   });
 

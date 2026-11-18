@@ -21,6 +21,8 @@ export const games = sqliteTable("games", {
   voteDisplay: text("vote_display", { enum: ["live", "hidden", "parade"] }).notNull().default("live"),
   /** The Gift that won once the vote closed (null if nobody voted). */
   voteWinner: text("vote_winner"),
+  /** What the big screen shows, switched by the Host: the Gift board, the rules, the join code, or the catalog. */
+  screenMode: text("screen_mode", { enum: ["gifts", "rules", "qr", "catalog"] }).notNull().default("gifts"),
   /** The Organization whose Theme the Game shows, if the Host picked one. */
   orgId: text("org_id").references(() => organizations.id),
   /**
@@ -41,6 +43,7 @@ export const games = sqliteTable("games", {
   check("games_moderation", sql`${t.moderation} IN ('open', 'approval', 'paused')`),
   check("games_vote_status", sql`${t.voteStatus} IN ('none', 'open', 'closed')`),
   check("games_vote_display", sql`${t.voteDisplay} IN ('live', 'hidden', 'parade')`),
+  check("games_screen_mode", sql`${t.screenMode} IN ('gifts', 'rules', 'qr', 'catalog')`),
 ]);
 
 /** A group whose exchanges share a Theme. Only its Organizer (who created it) can change it. */
