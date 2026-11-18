@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Link, Route, Routes, useNavigate, useSearchParams } from "react-router";
+import { Link, Route, Routes, useLocation, useNavigate, useSearchParams } from "react-router";
 import { isReturnPath, type MyGame, type MyOrg, type RosterMode, type Session } from "./api.js";
 import { useApi } from "./ApiContext.js";
 import { AdminPage } from "./Admin.js";
@@ -7,12 +7,20 @@ import { DemoGame, DemoPage } from "./Demo.js";
 import { GamePage } from "./GamePage.js";
 import { GameSettings } from "./GameSettings.js";
 import { ConfirmDelete } from "./ConfirmDelete.js";
+import { StatsPage } from "./Stats.js";
 import { Landing, Playbook, TipJar, TipNoteDialog } from "./Landing.js";
 import { MyOrgs, OrgPage } from "./Orgs.js";
 import { SignInForm } from "./SignIn.js";
 import { WatchScreen } from "./WatchScreen.js";
 
 export function AppRoutes() {
+  const api = useApi();
+  const { search } = useLocation();
+  // Where this visitor came from (?ref=linkedin on a shared link): noted on arrival, not on every page after.
+  const arrivedWith = useRef(search);
+  useEffect(() => {
+    api.noteArrival(arrivedWith.current);
+  }, [api]);
   return (
     <main className="page">
       <h1 className="brand">
@@ -28,6 +36,7 @@ export function AppRoutes() {
         <Route path="/games/:id/settings" element={<GameSettings />} />
         <Route path="/orgs/:orgId" element={<OrgPage />} />
         <Route path="/admin" element={<AdminPage />} />
+        <Route path="/admin/stats" element={<StatsPage />} />
       </Routes>
     </main>
   );

@@ -50,6 +50,10 @@ export function Landing() {
         📖 Hosting for the first time? Read the <Link to="/playbook">Host's Playbook</Link>.
       </p>
       <TipJar />
+      <p className="muted hint landing-privacy">
+        We count how the app is used (how many Games, how long they run) to keep it working well. We never sell or
+        share anything about you.
+      </p>
     </div>
   );
 }

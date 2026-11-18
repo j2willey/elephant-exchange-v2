@@ -49,7 +49,7 @@ export function createAuth(db: Db, now: () => Date, limits: LinkLimits) {
      * Records a new sign-in link and returns its token, or undefined if a limit has been reached. `feedbackOk`:
      * they ticked "OK to email me for feedback", which takes effect once the link is used.
      */
-    issueLink(email: string, clientIp: string, feedbackOk = false): string | undefined {
+    issueLink(email: string, clientIp: string, feedbackOk = false, ref: string | null = null): string | undefined {
       if (
         recent(15, eq(signInLinks.email, email)) >= limits.perEmail ||
         recent(60, eq(signInLinks.clientIp, clientIp)) >= limits.perIp ||
@@ -60,13 +60,13 @@ export function createAuth(db: Db, now: () => Date, limits: LinkLimits) {
       const token = newToken();
       const at = now();
       db.insert(signInLinks)
-        .values({ tokenHash: hash(token), email, clientIp, feedbackOk, requestedAt: at, expiresAt: new Date(at.getTime() + LINK_LIFETIME_MS) })
+        .values({ tokenHash: hash(token), email, clientIp, feedbackOk, ref, requestedAt: at, expiresAt: new Date(at.getTime() + LINK_LIFETIME_MS) })
         .run();
       return token;
     },
 
     /** Uses up a link and opens a session; undefined if the link is unknown, used or expired. */
-    redeemLink(token: string): { sessionToken: string; email: string } | undefined {
+    redeemLink(token: string): { sessionToken: string; email: string; ref: string | null } | undefined {
       const at = now();
       const link = db
         .update(signInLinks)
@@ -87,7 +87,7 @@ export function createAuth(db: Db, now: () => Date, limits: LinkLimits) {
       db.insert(sessions)
         .values({ tokenHash: hash(sessionToken), userId: user.id, expiresAt: new Date(at.getTime() + SESSION_LIFETIME_MS) })
         .run();
-      return { sessionToken, email: user.email };
+      return { sessionToken, email: user.email, ref: link.ref };
     },
 
     /** The signed-in person's email, or undefined for no session or an expired one. */

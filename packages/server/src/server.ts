@@ -29,6 +29,7 @@ import {
 import { Server as SocketServer } from "socket.io";
 import type { z } from "zod";
 import { createAuth, DEFAULT_LIMITS, logMailer, SESSION_LIFETIME_MS, type LinkLimits, type Mailer } from "./auth.js";
+import { cleanRef, createStats } from "./stats.js";
 import {
   isThemeImage,
   PHOTO_KEEP_DAYS,
@@ -52,6 +53,8 @@ import {
   joinBody,
   linkRedemption,
   linkRequest,
+  visitBody,
+  excludeBody,
   moderationBody,
   orgBody,
   orgEdit,
@@ -243,6 +246,7 @@ export function createServer({
   const photos = photoStore(photosDir ?? mkdtempSync(join(tmpdir(), "elephant-photos-")));
   const themeImages = themeStore(themesDir ?? mkdtempSync(join(tmpdir(), "elephant-themes-")));
   const auth = createAuth(db, now, { ...DEFAULT_LIMITS, ...limits });
+  const stats = createStats(db, now);
 
   function clientIp(c: Context): string {
     if (trustProxy) {
@@ -407,7 +411,7 @@ export function createServer({
   app.post("/api/auth/link", async (c) => {
     const body = await parseBody(c, linkRequest);
     if (!body.ok) return body.res;
-    const token = auth.issueLink(body.data.email, clientIp(c), body.data.feedbackOk);
+    const token = auth.issueLink(body.data.email, clientIp(c), body.data.feedbackOk, cleanRef(body.data.ref));
     if (!token) return c.json({ error: "Too many sign-in links asked for; try again in a few minutes" }, 429);
     // Someone who scanned a Game's QR code goes back to that Game once signed in.
     const next = body.data.next ? `&next=${encodeURIComponent(body.data.next)}` : "";
@@ -423,11 +427,21 @@ export function createServer({
     return c.body(null, 202);
   });
 
+  /** A browser that arrived from a ?ref= link (it says so once per source): for the statistics. */
+  app.post("/api/stats/visit", async (c) => {
+    const body = await parseBody(c, visitBody);
+    if (!body.ok) return body.res;
+    const ref = cleanRef(body.data.ref);
+    if (ref) stats.recordVisit(ref);
+    return c.body(null, 204);
+  });
+
   app.post("/api/auth/verify", async (c) => {
     const body = await parseBody(c, linkRedemption);
     if (!body.ok) return body.res;
     const session = auth.redeemLink(body.data.token);
     if (!session) return c.json({ error: "This sign-in link is used or expired; ask for a new one" }, 401);
+    stats.recordPerson(session.email, now(), session.ref);
     setCookie(c, SESSION_COOKIE, session.sessionToken, {
       httpOnly: true,
       sameSite: "Lax",
@@ -748,6 +762,7 @@ export function createServer({
     if (!body.ok) return body.res;
     const id = randomBytes(12).toString("base64url");
     db.insert(organizations).values({ id, name: body.data.name, organizerEmail: email, createdAt: now() }).run();
+    stats.recordOrg(id);
     return c.json({ id }, 201);
   });
 
@@ -780,6 +795,7 @@ export function createServer({
     if (!orgTheme(orgId)) return c.json({ error: "No such Organization" }, 404);
     if (!organizes(orgId, email)) return c.json({ error: "Only its Organizer can delete an Organization" }, 403);
     const using = db.select({ id: games.id }).from(games).where(eq(games.orgId, orgId)).all();
+    stats.orgDeleted(orgId);
     db.transaction((tx) => {
       tx.update(games).set({ orgId: null }).where(eq(games.orgId, orgId)).run();
       tx.delete(organizations).where(eq(organizations.id, orgId)).run();
@@ -1121,8 +1137,23 @@ export function createServer({
     );
   });
 
+  /** The usage statistics (ADR-0005), brought up to date first. */
+  app.get("/api/admin/stats", (c) => {
+    stats.refresh();
+    return c.json(stats.summary());
+  });
+
+  /** Leaves a Game out of the statistics (Jim's trial runs), or puts it back. */
+  app.post("/api/admin/stats/games/:id", async (c) => {
+    const body = await parseBody(c, excludeBody);
+    if (!body.ok) return body.res;
+    if (!stats.setExcluded(c.req.param("id"), body.data.excluded)) return c.json({ error: "No such Game" }, 404);
+    return c.body(null, 204);
+  });
+
   /** Removes a Game and everything kept for it: its log, Hosts, Players, Posts and their Photos, votes, Theme images. */
   function deleteGame(id: string) {
+    stats.snapshotGame(id, true); // its last word in the statistics, which outlive it
     db.transaction((tx) => {
       for (const table of [votes, posts, turnClocks, gamePlayers, gameHosts, gameEvents]) tx.delete(table).where(eq(table.gameId, id)).run();
       tx.delete(games).where(eq(games.id, id)).run();
@@ -1152,6 +1183,7 @@ export function createServer({
       : [];
     for (const { id } of testGames) deleteGame(id);
     const testOrgs = emails.length ? db.select({ id: organizations.id }).from(organizations).where(inArray(organizations.organizerEmail, emails)).all() : [];
+    for (const { id } of testOrgs) stats.orgDeleted(id);
     db.transaction((tx) => {
       for (const { id } of testOrgs) {
         tx.update(games).set({ orgId: null }).where(eq(games.orgId, id)).run();

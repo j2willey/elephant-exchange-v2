@@ -68,6 +68,9 @@ export function AdminPage() {
       </Link>
       <section className="card">
         <h2>Admin</h2>
+        <p>
+          <Link to="/admin/stats">📊 Stats</Link>
+        </p>
         <p className="muted">
           {plural(people.filter((p) => !isTestAccount(p.email)).length, "person", "people")} signed in ·{" "}
           {plural(games.filter((g) => !isTestAccount(g.host)).length, "game")} · {okToAsk.length} OK to ask for feedback

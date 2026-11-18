@@ -1770,3 +1770,28 @@ a.button {
 .confirm-delete p {
   margin: 0;
 }
+
+/* The admin's Stats: a figure under each label, as many to a row as fit. */
+.stat-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.stat-tiles div {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.stat-tiles dt {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.stat-tiles dd {
+  margin: 2px 0 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+}

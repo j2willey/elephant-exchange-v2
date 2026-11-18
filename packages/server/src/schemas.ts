@@ -68,7 +68,10 @@ const returnPath = z.string().max(200).regex(/^\/(?![/\\])[\x21-\x7e]*$/);
 
 const email = z.string().trim().toLowerCase().pipe(z.email().max(254));
 
-export const linkRequest = z.object({ email, next: returnPath.optional(), feedbackOk: z.boolean().default(false) });
+/** `ref`: where they came from (?ref= on the link they followed), kept for the statistics if it's a plain word. */
+export const linkRequest = z.object({ email, next: returnPath.optional(), feedbackOk: z.boolean().default(false), ref: z.string().max(64).optional() });
+export const visitBody = z.object({ ref: z.string().max(64) });
+export const excludeBody = z.object({ excluded: z.boolean() });
 export const feedbackBody = z.object({ ok: z.boolean() });
 export const linkRedemption = z.object({ token: z.string().min(1).max(100) });
 export const cohostBody = z.object({ email });

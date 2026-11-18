@@ -96,6 +96,8 @@ export const signInLinks = sqliteTable(
     clientIp: text("client_ip").notNull(),
     /** The "OK to email me for feedback" box, ticked when asking; carried to the person when the link is used. */
     feedbackOk: integer("feedback_ok", { mode: "boolean" }).notNull().default(false),
+    /** Where they came from (?ref=), carried to the statistics when the link is used. */
+    ref: text("ref"),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
     usedAt: integer("used_at", { mode: "timestamp_ms" }),
   },
@@ -192,6 +194,81 @@ export const votes = sqliteTable(
     giftId: text("gift_id").notNull(),
   },
   (t) => [primaryKey({ columns: [t.gameId, t.email] })],
+);
+
+/*
+ * Usage statistics (ADR-0005). These tables are only ever added to and updated, never cleared by a delete, so the
+ * counts outlive deleted Games, Organizations and people. People appear only as a keyed hash of their email.
+ */
+
+/** Secrets the app makes for itself on first start, such as the key for hashing emails in the statistics. */
+export const appKeys = sqliteTable("app_keys", {
+  name: text("name").primaryKey(),
+  value: text("value").notNull(),
+});
+
+/** One row per Game ever created: counts and times, refreshed as it's played and taken just before it's deleted. */
+export const gameStats = sqliteTable("game_stats", {
+  gameId: text("game_id").primaryKey(),
+  name: text("name").notNull(),
+  /** The Host, as a keyed hash of their email. */
+  hostKey: text("host_key").notNull(),
+  orgId: text("org_id"),
+  demo: integer("demo", { mode: "boolean" }).notNull(),
+  /** Hosted from a test address (@example.com): the smoke test's, or Claude's. */
+  test: integer("test", { mode: "boolean" }).notNull(),
+  /** Left out of the statistics by hand, on the admin page: Jim's own trial runs. */
+  excluded: integer("excluded", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  /** The first Pick: when the party really began (a Game may be set up days before). */
+  firstPickAt: integer("first_pick_at", { mode: "timestamp_ms" }),
+  endedAt: integer("ended_at", { mode: "timestamp_ms" }),
+  lastMoveAt: integer("last_move_at", { mode: "timestamp_ms" }),
+  /** Play time from the first Pick, leaving out any gap of over 30 minutes between moves (dinner, say). */
+  activeMs: integer("active_ms").notNull().default(0),
+  players: integer("players").notNull().default(0),
+  /** Players who signed up on their own phones. */
+  signedInPlayers: integer("signed_in_players").notNull().default(0),
+  picks: integer("picks").notNull().default(0),
+  steals: integer("steals").notNull().default(0),
+  finalRound: integer("final_round", { mode: "boolean" }).notNull().default(false),
+  posts: integer("posts").notNull().default(0),
+  photos: integer("photos").notNull().default(0),
+  votes: integer("votes").notNull().default(0),
+  cohosts: integer("cohosts").notNull().default(0),
+  deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+});
+
+/** One row per person who ever signed in, as a keyed hash of their email; never their address. */
+export const peopleStats = sqliteTable("people_stats", {
+  personKey: text("person_key").primaryKey(),
+  firstSeenAt: integer("first_seen_at", { mode: "timestamp_ms" }).notNull(),
+  lastSeenAt: integer("last_seen_at", { mode: "timestamp_ms" }).notNull(),
+  /** Where they first came from (?ref= on the link they followed, such as "linkedin"), if anywhere. */
+  ref: text("ref"),
+  test: integer("test", { mode: "boolean" }).notNull(),
+});
+
+/** One row per Organization ever created. */
+export const orgStats = sqliteTable("org_stats", {
+  orgId: text("org_id").primaryKey(),
+  name: text("name").notNull(),
+  organizerKey: text("organizer_key").notNull(),
+  test: integer("test", { mode: "boolean" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
+});
+
+/** Visits by where they came from (?ref=), a day at a time; each browser counted once per source. */
+export const refVisits = sqliteTable(
+  "ref_visits",
+  {
+    day: text("day").notNull(),
+    ref: text("ref").notNull(),
+    visits: integer("visits").notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.day, t.ref] })],
 );
 
 /** Opens the database, bringing its tables up to date with any migrations it hasn't had yet. */

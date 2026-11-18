@@ -92,6 +92,45 @@ export interface AdminPerson {
   organizations: string[];
 }
 
+/** The usage statistics (ADR-0005), as the admin's Stats page shows them. */
+export interface StatsSummary {
+  totals: {
+    hosts: number;
+    hostsWhoCreated: number;
+    organizations: number;
+    gamesCreated: number;
+    gamesPlayed: number;
+    gamesFinished: number;
+    people: number;
+    players: number;
+    signedInPlayers: number;
+    averageMinutes: number | null;
+    averageActiveMinutes: number | null;
+  };
+  hosts: { email: string | null; games: number; averageMinutes: number | null }[];
+  organizations: { name: string; deleted: boolean; games: number }[];
+  sources: { ref: string; visits: number; signUps: number }[];
+  games: {
+    id: string;
+    name: string;
+    host: string | null;
+    createdAt: string;
+    firstPickAt: string | null;
+    endedAt: string | null;
+    minutes: number | null;
+    activeMinutes: number | null;
+    players: number;
+    picks: number;
+    steals: number;
+    demo: boolean;
+    test: boolean;
+    excluded: boolean;
+    deleted: boolean;
+    played: boolean;
+    counted: boolean;
+  }[];
+}
+
 export interface AdminGame {
   id: string;
   name: string;
@@ -244,7 +283,13 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
      * email me for feedback".
      */
     async requestLink(email: string, next?: string, feedbackOk = false): Promise<"sent" | "tooMany" | "invalidEmail"> {
-      const res = await postJson("/api/auth/link", { email, ...(next === undefined ? {} : { next }), ...(feedbackOk ? { feedbackOk } : {}) });
+      const ref = storage.getItem("ref");
+      const res = await postJson("/api/auth/link", {
+        email,
+        ...(next === undefined ? {} : { next }),
+        ...(feedbackOk ? { feedbackOk } : {}),
+        ...(ref ? { ref } : {}),
+      });
       if (res.status === 202) return "sent";
       if (res.status === 429) return "tooMany";
       if (res.status === 400) return "invalidEmail";
@@ -271,6 +316,32 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
       if (res.status === 404) return "notFound";
       if (!res.ok) throw new Error(`listing people failed: ${res.status}`);
       return (await res.json()) as AdminPerson[];
+    },
+
+    async adminStats(): Promise<StatsSummary | "notFound"> {
+      const res = await fetchFn("/api/admin/stats");
+      if (res.status === 404) return "notFound";
+      if (!res.ok) throw new Error(`loading the statistics failed: ${res.status}`);
+      return (await res.json()) as StatsSummary;
+    },
+
+    /** Leaves a Game out of the statistics (a trial run), or puts it back. */
+    async adminExcludeFromStats(gameId: string, excluded: boolean): Promise<boolean> {
+      return (await postJson(`/api/admin/stats/games/${encodeURIComponent(gameId)}`, { excluded })).ok;
+    },
+
+    /**
+     * Notes where this browser arrived from, if the page's address says (?ref=linkedin): the first source is kept,
+     * to go with a sign-in later, and each source is counted once per browser.
+     */
+    noteArrival(search: string) {
+      const ref = new URLSearchParams(search).get("ref")?.toLowerCase();
+      if (!ref || !/^[a-z0-9_-]{1,32}$/.test(ref)) return;
+      if (!storage.getItem("ref")) storage.setItem("ref", ref);
+      const seen = storage.getItem("refsSeen")?.split(",") ?? [];
+      if (seen.includes(ref)) return;
+      storage.setItem("refsSeen", [...seen, ref].join(","));
+      void postJson("/api/stats/visit", { ref }).catch(() => {});
     },
 
     async adminGames(): Promise<AdminGame[] | "notFound"> {

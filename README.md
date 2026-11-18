@@ -43,6 +43,7 @@ Key decisions, each recorded as an ADR in [`docs/adr`](docs/adr):
 2. **[TypeScript end to end](docs/adr/0002-typescript-end-to-end.md).** One language and shared types across the rules, server and browser. Changes go over HTTP, and Socket.IO only pushes updates out to screens.
 3. **[SQLite on one droplet](docs/adr/0003-sqlite-on-one-droplet.md).** One process and one database file; Photos and Theme images are plain files beside it. Backups are copies of those.
 4. **[A demo Game's sample phone acts as a made-up Player](docs/adr/0004-demo-player-stand-in.md).** It runs in the Host's browser and names its Player in a header, which the server honours only in a demo Game, only for its Hosts.
+5. **[Usage statistics outlive deletes](docs/adr/0005-usage-stats-outlive-deletes.md).** Counts and times live in their own tables, taken from each Game's log and once more before a delete, and people appear only as a keyed hash of their email. The admin's Stats page (`/admin/stats`) shows them; `?ref=` on a shared link records where people came from.
 
 Every screen keeps the newest copy of the Game it has seen, judged by a version number that rises with each change. So a slow reply can never overwrite a newer live update.
 
