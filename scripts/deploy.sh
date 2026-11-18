@@ -8,6 +8,8 @@ cd "$(dirname "$0")/.."
 host=${DEPLOY_HOST:-conductor}
 dir=${DEPLOY_DIR:-ww/elephant-exchange-v2}
 keep=3 # tagged images kept on the droplet, to roll back to
+# One ssh connection for the whole run, so the key's passphrase is asked for once.
+ssh_opts=(-o ControlMaster=auto -o "ControlPath=$HOME/.ssh/cm-deploy-%r@%h:%p" -o ControlPersist=60)
 
 # Only what's on GitHub's main is deployed: the droplet pulls its compose files from there.
 fail() { echo "deploy: $*" >&2; exit 1; }
@@ -21,15 +23,16 @@ echo "== Building elephant-exchange:$tag"
 docker build -t "elephant-exchange:$tag" .
 
 echo "== Shipping it to $host"
-docker save "elephant-exchange:$tag" | gzip | ssh "$host" 'gunzip | docker load'
+docker save "elephant-exchange:$tag" | gzip | ssh "${ssh_opts[@]}" "$host" 'gunzip | docker load'
 
 echo "== On $host: back up, pull, switch to $tag"
-ssh "$host" bash -s -- "$dir" "$tag" "$keep" <<'REMOTE'
+ssh "${ssh_opts[@]}" "$host" bash -s -- "$dir" "$tag" "$keep" <<'REMOTE'
 set -euo pipefail
 cd "$1"
 tag=$2 keep=$3
 # Migrations can't be undone: back up before the new image starts.
-./scripts/backup.sh
+# Its docker compose exec reads stdin, which here is this very script: give it none, or it eats the rest.
+./scripts/backup.sh </dev/null
 git pull -q --ff-only
 if grep -q '^TAG=' .env; then sed -i "s/^TAG=.*/TAG=$tag/" .env; else printf '\nTAG=%s\n' "$tag" >> .env; fi
 chmod 600 .env
