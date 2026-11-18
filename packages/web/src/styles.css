@@ -60,21 +60,6 @@ body {
   object-fit: contain;
 }
 
-.screen-head {
-  display: flex;
-  gap: 24px;
-  align-items: center;
-  padding: 12px 20px;
-  background: var(--surface);
-  border-radius: var(--radius);
-}
-
-.screen-logo {
-  max-height: 120px;
-  max-width: 40%;
-  object-fit: contain;
-}
-
 .card {
   display: grid;
   gap: 12px;
@@ -416,9 +401,18 @@ select {
   border-radius: 999px;
 }
 
-/* The watch screen: read from across a room, so everything is larger and it uses the width it gets. */
+/*
+ * The watch screen (the scoreboard), laid out as v1's: read from across a room, so everything is larger. On a wide
+ * screen it fills the window exactly: a banner, then who's up and the Gift board on the left, and the Posts and the
+ * join code down the right, so the code never scrolls out of sight. The board scrolls itself (WatchScreen.tsx).
+ */
 .page:has(.screen) {
-  max-width: 72rem;
+  max-width: none;
+  padding: 16px 24px;
+}
+
+.page:has(.screen) > .brand {
+  display: none;
 }
 
 .screen {
@@ -427,10 +421,232 @@ select {
   font-size: clamp(1rem, 0.6rem + 1.2vw, 1.6rem);
 }
 
+.screen-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 16px 24px;
+  text-align: center;
+  color: var(--brand-ink);
+  background: var(--brand);
+  border-radius: var(--radius);
+}
+
+.screen-banner h2 {
+  margin: 0;
+  font-size: 2em;
+  line-height: 1.1;
+}
+
+/* The logo sits on a white tile, since a Theme's logo isn't made to be read on its main color. */
+.screen-logo {
+  max-height: 2.6em;
+  max-width: 30%;
+  padding: 6px 10px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 8px;
+}
+
+.screen-body,
+.screen-main,
+.screen-side {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+@media (min-width: 60rem) {
+  .screen {
+    height: calc(100dvh - 32px);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .screen-body {
+    grid-template-columns: minmax(0, 1fr) minmax(16rem, 28%);
+    min-height: 0;
+    align-content: stretch;
+  }
+
+  .screen-main {
+    grid-template-rows: auto minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  .screen-side {
+    grid-template-rows: minmax(0, 1fr) auto;
+    min-height: 0;
+    align-content: stretch;
+  }
+
+  .screen-side > [aria-label="Posts"] {
+    min-height: 0;
+    overflow: hidden;
+    align-content: start;
+  }
+
+  /* The board takes what's left of the window and scrolls inside it. */
+  .board {
+    grid-template-rows: auto minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  .board-scroll {
+    min-height: 0;
+    overflow: hidden;
+  }
+}
+
+/* The Gift board: Gift, Holder and Status columns, headings over them as in v1. */
+.board {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.board-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.board-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(6em, 24%) 8.5em;
+  gap: 16px;
+  align-items: center;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+/* The headings' text is smaller, but the row keeps the rows' font size so em-sized columns line up. */
+.board-head > span {
+  font-size: 0.8em;
+}
+
+.board-head {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  border-bottom-width: 3px;
+}
+
+/* On a phone (someone opening the scoreboard's link): narrower columns, the name keeping the most room. */
+@media (max-width: 59.99rem) {
+  .board-row {
+    grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) 6.5em;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+
+  .board .board-gift {
+    gap: 8px;
+  }
+
+  .board .board-photo {
+    width: 1.8em;
+    height: 1.8em;
+  }
+
+  .board .board-gift strong,
+  .board .board-holder {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
+.board-head > :last-child,
+.board-row > :last-child {
+  text-align: right;
+}
+
+.board-row.frozen {
+  opacity: 0.55;
+}
+
+.board-gift {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.board-gift strong,
+.board-holder {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-holder {
+  font-weight: 500;
+}
+
+/* Every row keeps the thumbnail's space, so the names line up whether or not there's a Photo. */
+.board-photo {
+  flex: none;
+  width: 2.4em;
+  height: 2.4em;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+img.board-photo {
+  background: var(--line);
+}
+
+.chip {
+  display: inline-block;
+  padding: 4px 12px;
+  font-size: 0.8em;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--muted);
+  border: 2px solid var(--line);
+  border-radius: 999px;
+}
+
+.chip[data-state="stolen"] {
+  color: #fff;
+  background: var(--warning);
+  border-color: var(--warning);
+}
+
+.chip[data-state="last"] {
+  color: #fff;
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+.chip[data-state="frozen"] {
+  color: #fff;
+  background: #374151;
+  border-color: #374151;
+}
+
 .screen-top {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
   gap: 16px;
+}
+
+/* Who's up, compact so the board gets the height: the name with its timer beside it. */
+.screen-top .card {
+  gap: 4px;
+  padding: 12px 20px;
+  align-content: center;
+}
+
+.screen-top .now {
+  grid-template-columns: auto 1fr;
+  column-gap: 24px;
+  align-items: baseline;
+}
+
+.screen-top .now > .label {
+  grid-column: 1 / -1;
 }
 
 .screen .label {
@@ -454,8 +670,8 @@ select {
 
 .screen-posts {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
-  gap: 16px;
+  gap: 14px;
+  font-size: 0.8em;
 }
 
 .screen-post {
@@ -468,7 +684,7 @@ select {
   display: block;
   width: 100%;
   height: auto;
-  max-height: 40vh;
+  max-height: 18vh;
   object-fit: contain;
   background: var(--line);
   border-radius: var(--radius);
@@ -479,8 +695,19 @@ select {
   align-items: center;
 }
 
+/* Down the scoreboard's narrow right-hand column: the code over its link. */
+.screen-side .join {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  text-align: center;
+}
+
+.screen-side .join .url {
+  font-size: 0.75em;
+}
+
 .join img {
-  width: clamp(140px, 18vw, 240px);
+  width: clamp(120px, 11vw, 200px);
   height: auto;
   background: #fff;
 }

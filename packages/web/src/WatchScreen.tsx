@@ -1,14 +1,13 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, type RefObject } from "react";
 import { useParams } from "react-router";
 import { renderSVG } from "uqr";
 import type { GameView, Post } from "./api.js";
 import { Countdown } from "./Countdown.js";
 import { PostPhoto, useFeed } from "./Feed.js";
-import { Gifts } from "./GamePage.js";
 import { ThemeLogo, useTheme } from "./theme.js";
 import { useLiveGame } from "./useLiveGame.js";
 
-/** For a projector or TV at the party: who's up, the Gifts, and how to join. It only watches. */
+/** For a projector or TV at the party, laid out as v1's scoreboard: who's up, the Gifts, and how to join. It only watches. */
 export function WatchScreen() {
   const { id = "" } = useParams();
   const [game, , feedChanges] = useLiveGame(id);
@@ -23,42 +22,166 @@ export function WatchScreen() {
 
   return (
     <div className="screen">
-      {game.theme.logoUrl && (
-        <div className="screen-head">
-          <ThemeLogo theme={game.theme} className="screen-logo" />
-          <p className="medium">{game.name}</p>
+      <header className="screen-banner" role="banner">
+        <ThemeLogo theme={game.theme} className="screen-logo" />
+        <h2>{game.name}</h2>
+      </header>
+      <div className="screen-body">
+        <div className="screen-main">
+          {game.phase === "ended" ? (
+            <EndOfGame game={game} posts={posts} />
+          ) : game.phase === "setup" ? (
+            <section className="card now">
+              <p className="big">Waiting for the Host to start</p>
+              <p className="muted">
+                {players} {players === 1 ? "player" : "players"} so far
+              </p>
+            </section>
+          ) : (
+            <div className="screen-top">
+              <section className="card now" aria-live="polite">
+                {game.phase === "finalRound" && <h2 className="label">Final Round</h2>}
+                <p className="label">Up now</p>
+                <p className="big">{game.active.map(nameOf).join(", ") || "—"}</p>
+                {game.active.map((playerId) => (
+                  <Countdown key={playerId} game={game} playerId={playerId} name={nameOf(playerId)} />
+                ))}
+              </section>
+              <section className="card">
+                <p className="label">On deck</p>
+                <p className="medium">{game.onDeck.map(nameOf).join(", ") || "—"}</p>
+              </section>
+            </div>
+          )}
+          {game.gifts.length > 0 && !(game.phase === "ended" && showsVote(game)) && <GiftBoard game={game} posts={posts} />}
         </div>
-      )}
-      {game.phase === "ended" ? (
-        <EndOfGame game={game} posts={posts} />
-      ) : game.phase === "setup" ? (
-        <section className="card now">
-          <p className="big">Waiting for the Host to start</p>
-          <p className="muted">
-            {players} {players === 1 ? "player" : "players"} so far
-          </p>
-        </section>
-      ) : (
-        <div className="screen-top">
-          <section className="card now" aria-live="polite">
-            {game.phase === "finalRound" && <h2 className="label">Final Round</h2>}
-            <p className="label">Up now</p>
-            <p className="big">{game.active.map(nameOf).join(", ") || "—"}</p>
-            {game.active.map((playerId) => (
-              <Countdown key={playerId} game={game} playerId={playerId} name={nameOf(playerId)} />
-            ))}
-          </section>
-          <section className="card">
-            <p className="label">On deck</p>
-            <p className="medium">{game.onDeck.map(nameOf).join(", ") || "—"}</p>
-          </section>
-        </div>
-      )}
-      <LatestPosts game={game} posts={posts} />
-      {game.gifts.length > 0 && !(game.phase === "ended" && showsVote(game)) && <Gifts game={game} />}
-      <Join gameId={game.id} />
+        <aside className="screen-side">
+          <LatestPosts game={game} posts={posts} />
+          <Join gameId={game.id} />
+        </aside>
+      </div>
     </div>
   );
+}
+
+type Gift = GameView["gifts"][number];
+
+/** Still in play first, the most stolen (the ones people are fighting over) at the top; Frozen ones sink to the bottom. */
+const byInterest = (a: Gift, b: Gift) => Number(a.frozen) - Number(b.frozen) || b.steals - a.steals;
+
+/**
+ * The Gifts as a table to read from across the room: each Gift with a Photo if someone posted one, who holds it,
+ * and how many Steals it has left. When there are more than fit, it scrolls slowly through them and starts over.
+ */
+function GiftBoard({ game, posts }: { game: GameView; posts: Post[] }) {
+  const scroller = useRef<HTMLDivElement>(null);
+  useAutoScroll(scroller);
+  const holderName = (id: string | null) => (id === null ? "On the table" : (game.players.find((p) => p.id === id)?.name ?? "?"));
+  // Posts come newest first, so this is the latest Photo of each Gift.
+  const photoOf = (giftId: string) => posts.find((p) => p.giftId === giftId && p.status === "visible" && p.photo);
+  const gifts = [...game.gifts].sort(byInterest);
+  // Room for thumbnails only once there's a Photo to show: until then the names sit at the left edge.
+  const photos = gifts.some((g) => photoOf(g.id));
+  return (
+    <section className={photos ? "card board with-photos" : "card board"} aria-label="Gift board">
+      <div className="board-row board-head" aria-hidden="true">
+        <span>Gift</span>
+        <span>Holder</span>
+        <span>Status</span>
+      </div>
+      <div className="board-scroll" ref={scroller}>
+        <ul className="board-list" aria-label="Gifts">
+          {gifts.map((g) => {
+            const photo = photoOf(g.id);
+            return (
+              <li key={g.id} aria-label={g.name} className={g.frozen ? "board-row frozen" : "board-row"}>
+                <span className="board-gift">
+                  {photo ? <PostPhoto post={photo} className="board-photo" /> : photos && <span className="board-photo" aria-hidden="true" />}
+                  <strong>{g.name}</strong>
+                </span>
+                <span className="board-holder">{holderName(g.holderId)}</span>
+                <span>
+                  <StealChip gift={g} maxSteals={game.settings.maxSteals} />
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+/** "1/3 steals", turning red with one Steal left; "Frozen" once it can't be stolen. */
+function StealChip({ gift, maxSteals }: { gift: Gift; maxSteals: number }) {
+  if (gift.frozen) {
+    return (
+      <span className="chip" data-state="frozen">
+        ❄ Frozen
+      </span>
+    );
+  }
+  if (maxSteals === 0) return <span className="chip">No steals</span>;
+  const state = gift.steals >= maxSteals - 1 ? "last" : gift.steals > 0 ? "stolen" : "fresh";
+  return (
+    <span className="chip" data-state={state}>
+      {gift.steals}/{maxSteals} steals
+    </span>
+  );
+}
+
+/** How fast the board scrolls, and how long it rests at the top and the bottom. */
+const SCROLL_PX_PER_SECOND = 40;
+const REST_MS = 4000;
+/** For anyone who's asked for less motion: a page at a time, each held long enough to read. */
+const PAGE_MS = 8000;
+
+/**
+ * Scrolls a box slowly to its end whenever its content is taller than it, rests, then jumps back to the top and goes
+ * again: the room sees every Gift without anyone touching the screen. Does nothing while everything fits.
+ */
+function useAutoScroll(box: RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const el = box.current;
+    if (!el || typeof requestAnimationFrame !== "function") return;
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    let phase: "top" | "moving" | "bottom" = "top";
+    let restUntil = performance.now() + REST_MS;
+    let position = 0;
+    let last = performance.now();
+    let frame = requestAnimationFrame(function step(now) {
+      frame = requestAnimationFrame(step);
+      const room = el.scrollHeight - el.clientHeight;
+      const elapsed = now - last;
+      last = now;
+      if (room <= 1) {
+        phase = "top";
+        position = el.scrollTop = 0;
+        restUntil = now + REST_MS;
+        return;
+      }
+      if (now < restUntil) return;
+      if (phase === "bottom") {
+        phase = "top";
+        position = el.scrollTop = 0;
+        restUntil = now + REST_MS;
+        return;
+      }
+      phase = "moving";
+      if (reduced) {
+        position = Math.min(room, position + el.clientHeight * 0.9);
+        restUntil = now + PAGE_MS;
+      } else {
+        position = Math.min(room, position + (SCROLL_PX_PER_SECOND * elapsed) / 1000);
+      }
+      el.scrollTop = position;
+      if (position >= room) {
+        phase = "bottom";
+        restUntil = now + (reduced ? PAGE_MS : REST_MS);
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [box]);
 }
 
 const votesText = (n: number) => `${n} ${n === 1 ? "vote" : "votes"}`;

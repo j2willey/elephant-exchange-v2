@@ -40,6 +40,60 @@ describe("The watch screen", () => {
     await waitFor(() => expect(screen.getByRole("listitem", { name: /socks/i })).toHaveTextContent(/socks.*bob.*frozen/i));
   });
 
+  it("names the Game in a banner across the top", async () => {
+    const { origin, signedIn } = await startServer();
+    const host = await signedIn("host@example.com");
+    const id = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "OA Holiday Party");
+    openApp(browser(origin), `/games/${id}/screen`);
+
+    expect(await screen.findByRole("banner")).toHaveTextContent(/oa holiday party/i);
+  });
+
+  it("shows each Gift's holder and its Steals against the limit, under column headings", async () => {
+    const { origin, host, id } = await startedGame();
+    await host.command(id, { type: "OpenGift", playerId: "ann", giftId: "g1", name: "Socks" });
+    await host.command(id, { type: "Steal", playerId: "bob", giftId: "g1" });
+    openApp(browser(origin), `/games/${id}/screen`);
+
+    const socks = await screen.findByRole("listitem", { name: /socks/i });
+    expect(within(socks).getByText("Bob")).toBeInTheDocument();
+    expect(within(socks).getByText(/1\/3 steals/i)).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: /gift board/i })).toHaveTextContent(/^gift\s*holder\s*status/i);
+  });
+
+  it("warns when a Gift has one Steal left before it's Frozen", async () => {
+    const { origin, host, id } = await startedGame();
+    await host.command(id, { type: "ChangeSettings", settings: { maxSteals: 2 } });
+    await host.command(id, { type: "OpenGift", playerId: "ann", giftId: "g1", name: "Socks" });
+    openApp(browser(origin), `/games/${id}/screen`);
+    expect(within(await screen.findByRole("listitem", { name: /socks/i })).getByText(/0\/2 steals/i)).not.toHaveAttribute("data-state", "last");
+
+    await host.command(id, { type: "Steal", playerId: "bob", giftId: "g1" });
+
+    await waitFor(() => expect(within(screen.getByRole("listitem", { name: /socks/i })).getByText(/1\/2 steals/i)).toHaveAttribute("data-state", "last"));
+  });
+
+  it("lists the Gifts still in play first, most stolen at the top, and Frozen ones last", async () => {
+    const server = await startServer({ draw: drawInOrder });
+    const host = await server.signedIn("host@example.com");
+    const id = await host.createGame({ activeSlots: 1, maxSteals: 2 });
+    for (const name of ["Ann", "Bob", "Cat", "Dan", "Eve"]) await host.command(id, { type: "AddPlayer", playerId: name.toLowerCase(), name });
+    await host.command(id, { type: "StartGame" });
+    await host.command(id, { type: "OpenGift", playerId: "ann", giftId: "g1", name: "Socks" });
+    await host.command(id, { type: "Steal", playerId: "bob", giftId: "g1" });
+    await host.command(id, { type: "OpenGift", playerId: "ann", giftId: "g2", name: "Mug" });
+    await host.command(id, { type: "Steal", playerId: "cat", giftId: "g1" }); // Socks' second Steal: Frozen
+    await host.command(id, { type: "OpenGift", playerId: "bob", giftId: "g3", name: "Candle" });
+    await host.command(id, { type: "Steal", playerId: "dan", giftId: "g2" });
+    openApp(browser(server.origin), `/games/${id}/screen`);
+
+    await screen.findByRole("listitem", { name: /socks/i });
+    const order = within(screen.getByRole("list", { name: /gifts/i }))
+      .getAllByRole("listitem")
+      .map((li) => li.getAttribute("aria-label"));
+    expect(order).toEqual(["Mug", "Candle", "Socks"]);
+  });
+
   it("shows a QR code and the link for joining the Game", async () => {
     const { origin, id } = await startedGame();
     openApp(browser(origin), `/games/${id}/screen`);
