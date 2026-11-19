@@ -205,6 +205,27 @@ export const REACTIONS = [
 ] as const;
 export type Emoji = (typeof REACTIONS)[number]["emoji"];
 
+/** Someone the Game knows, as the Host's Co-hosts panel shows them: by name where there is one, never by email. */
+export interface Person {
+  /** Names them to the server when switching them on or off. */
+  key: string;
+  /** Their Player's name, or what they post as; null when they've only opened the Game. */
+  name: string | null;
+  /** Enough of their email to tell two of the same name apart: "te…@example.com". */
+  hint: string;
+  /** The Player they play as, if any. */
+  playerId: string | null;
+  role: "host" | "cohost" | null;
+  /** Whether this is the Host looking. */
+  you: boolean;
+}
+
+/** A Player who is also the Host or a Co-host, marked on their consoles. */
+export interface StaffMember {
+  playerId: string;
+  role: "host" | "cohost";
+}
+
 /** A Post in the Feed, as this viewer may see it. */
 export interface Post {
   id: string;
@@ -498,6 +519,26 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
       if (res.status !== 204) throw new Error(`adding a Co-host failed: ${res.status}`);
     },
 
+    /** Everyone the Game knows, for the Host's Co-hosts panel. */
+    async people(gameId: string): Promise<Person[]> {
+      const res = await fetchFn(`/api/games/${encodeURIComponent(gameId)}/people`);
+      if (!res.ok) throw new Error(`loading the people failed: ${res.status}`);
+      return ((await res.json()) as { people: Person[] }).people;
+    },
+
+    /** The Host switches someone's Co-host role on or off, or says which Player they play as (null: none). */
+    async setPerson(gameId: string, key: string, change: { cohost?: boolean; playsAs?: string | null }): Promise<void> {
+      const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/people/${encodeURIComponent(key)}`, change);
+      if (res.status !== 204) throw new Error(`changing a Co-host failed: ${res.status}`);
+    },
+
+    /** Which Players are the Host or a Co-host, for their consoles. */
+    async staff(gameId: string): Promise<StaffMember[]> {
+      const res = await fetchFn(`/api/games/${encodeURIComponent(gameId)}/staff`);
+      if (!res.ok) throw new Error(`loading the Co-hosts failed: ${res.status}`);
+      return ((await res.json()) as { staff: StaffMember[] }).staff;
+    },
+
     /** The Game's Co-hosts' emails (the Host isn't among them). */
     async cohosts(gameId: string): Promise<string[]> {
       const res = await fetchFn(`/api/games/${encodeURIComponent(gameId)}/cohosts`);
@@ -514,11 +555,18 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
      * Calls onGame with the whole Game now, and again after every change, until the returned function is called.
      * After a phone sleeps, Socket.IO reconnects by itself and the server sends the whole Game again.
      */
-    watch(gameId: string, onGame: (game: SharedGame) => void, onMissing?: () => void, onPostsChanged?: () => void): () => void {
+    watch(
+      gameId: string,
+      onGame: (game: SharedGame) => void,
+      onMissing?: () => void,
+      onPostsChanged?: () => void,
+      onStaffChanged?: () => void,
+    ): () => void {
       const socketOptions = { auth: { gameId }, ...(options.transports ? { transports: options.transports } : {}) };
       const socket = options.socketOrigin ? io(options.socketOrigin, socketOptions) : io(socketOptions);
       socket.on("game", onGame);
       if (onPostsChanged) socket.on("posts", onPostsChanged);
+      if (onStaffChanged) socket.on("staff", onStaffChanged);
       socket.on("connect_error", (err) => {
         if (err.message === "Game not found") {
           socket.close();

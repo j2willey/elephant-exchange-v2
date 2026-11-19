@@ -29,7 +29,7 @@ The person who created a Game and is the authority on every Pick in it; need not
 _Avoid_: Admin, game admin
 
 **Co-host**:
-A person the Host has authorized to make Picks in a Game on the Host's behalf.
+A person the Host has authorized to make Picks in a Game on the Host's behalf, and to moderate its Feed. The Host appoints them in the **Co-hosts panel**, picking from everyone signed in whom the Game knows (by name, never by email), or by email for someone who hasn't opened it yet. Only the Host appoints Co-hosts. The Host and each Co-host may also play; the Host says which Player each plays as (one who joined as a Player is known already), and the consoles mark those Players, since someone else has to enter their Turns.
 _Avoid_: Proxy, moderator, scorekeeper
 
 **Player**:

@@ -215,6 +215,7 @@ function Cohosts({ game }: { game: GameView }) {
         Someone to run the party with you, or instead of you if you'd like to play. A Co-host can do everything at the
         party that you can, but can't add Co-hosts or delete the Game.
       </p>
+      {isHost && <Link to={`/games/${game.id}/cohosts`}>🛡 Find someone in the Game to make a Co-host</Link>}
       {list === null ? (
         <p className="muted">Loading…</p>
       ) : list.length === 0 ? (

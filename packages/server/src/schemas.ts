@@ -94,6 +94,10 @@ export const suggestionBody = z.object({ comment: z.string().trim().min(1).max(2
 export const feedbackBody = z.object({ ok: z.boolean() });
 export const linkRedemption = z.object({ token: z.string().min(1).max(100) });
 export const cohostBody = z.object({ email });
+/** From the Co-hosts panel: switch someone's Co-host role on or off, and/or say which Player they play as. */
+export const personBody = z
+  .object({ cohost: z.boolean().optional(), playsAs: id.nullable().optional() })
+  .refine((b) => b.cohost !== undefined || b.playsAs !== undefined, "Say what to change");
 
 export const command = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("AddPlayer"), playerId: id, name }),

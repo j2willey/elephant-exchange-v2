@@ -9,14 +9,15 @@ import { useApi } from "./ApiContext.js";
  * Returns "loading" at first, null if there's no such Game, and a function to accept a copy from a request
  * (with anything new about the viewer, such as the Player they just joined as; null for the Game when only the
  * viewer changed, since a copy at the same version could be older than one already shown), and a count that rises whenever
- * the Feed changes, for whoever shows it to reload it.
+ * the Feed changes, for whoever shows it to reload it, and another that rises whenever who co-hosts changes.
  */
 export function useLiveGame(
   id: string,
-): [GameView | null | "loading", (game: SharedGame | null, viewer?: Partial<Viewer>) => void, number] {
+): [GameView | null | "loading", (game: SharedGame | null, viewer?: Partial<Viewer>) => void, number, number] {
   const api = useApi();
   const [game, setGame] = useState<GameView | null | "loading">("loading");
   const [feedChanges, setFeedChanges] = useState(0);
+  const [staffChanges, setStaffChanges] = useState(0);
 
   const accept = useCallback(
     (next: SharedGame | null, viewer: Partial<Viewer> = {}) =>
@@ -47,6 +48,7 @@ export function useLiveGame(
       (next) => current && accept(next),
       () => current && setGame(null),
       () => current && setFeedChanges((n) => n + 1),
+      () => current && setStaffChanges((n) => n + 1),
     );
     return () => {
       current = false;
@@ -54,5 +56,5 @@ export function useLiveGame(
     };
   }, [api, id, accept]);
 
-  return [game, accept, feedChanges];
+  return [game, accept, feedChanges, staffChanges];
 }

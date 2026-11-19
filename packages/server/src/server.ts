@@ -1,4 +1,4 @@
-import { randomBytes, randomInt } from "node:crypto";
+import { createHash, randomBytes, randomInt } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import { serve } from "@hono/node-server";
 import { getConnInfo } from "@hono/node-server/conninfo";
@@ -42,7 +42,7 @@ import {
   type ThemeImage,
 } from "./photos.js";
 import { zip } from "./zip.js";
-import { gameEvents, gameHosts, gamePlayers, games, openDb, organizations, postReactions, posts, sessions, signInLinks, turnClocks, users, votes, type Tx } from "./db.js";
+import { gameEvents, gameHosts, gamePlayers, games, gameVisitors, openDb, organizations, postReactions, posts, sessions, signInLinks, turnClocks, users, votes, type Tx } from "./db.js";
 import {
   cohostBody,
   command,
@@ -64,6 +64,7 @@ import {
   orgEdit,
   postBody,
   postStatusBody,
+  personBody,
   reactionBody,
   REACTIONS,
   timerBody,
@@ -601,6 +602,113 @@ export function createServer({
     );
   });
 
+  /** Tells the Host's and Co-hosts' screens that who co-hosts (or plays as whom) changed. */
+  function staffChanged(id: string) {
+    io?.to(id).emit("staff");
+  }
+
+  /** A stable, opaque name for a person in a Game, so the Co-hosts panel never needs their email. */
+  const personKey = (gameId: string, email: string) => createHash("sha256").update(`${gameId}\n${email}`).digest("base64url").slice(0, 16);
+  /** Enough of an email to tell two people of the same name apart: "te…@example.com". */
+  const emailHint = (email: string) => {
+    const at = email.lastIndexOf("@");
+    return `${email.slice(0, Math.min(2, at))}…${email.slice(at)}`;
+  };
+
+  /** Everyone signed in whom the Game knows: its Hosts, those who joined, posted, reacted or voted, or just opened it. */
+  function knownPeople(id: string): Set<string> {
+    const emails = new Set<string>();
+    for (const table of [gameHosts, gameVisitors, gamePlayers, posts, postReactions, votes] as const)
+      for (const r of db.selectDistinct({ email: table.email }).from(table).where(eq(table.gameId, id)).all()) emails.add(r.email);
+    for (const e of emails) if (e.startsWith(DEMO_ACTOR)) emails.delete(e);
+    return emails;
+  }
+
+  /** The Host and Co-hosts who play in the Game, and as which Player: the one the Host named, or the one they joined as. */
+  function staffOf(id: string, game: LoadedGame) {
+    const inRoster = new Set(roster(game.state).map((p) => p.id));
+    return db
+      .select()
+      .from(gameHosts)
+      .where(eq(gameHosts.gameId, id))
+      .all()
+      .flatMap((h) => {
+        const playerId = h.playerId ?? playerOf(id, h.email, game);
+        return playerId && inRoster.has(playerId) ? [{ email: h.email, playerId, role: h.role }] : [];
+      });
+  }
+
+  /** Everyone the Game knows, for the Host's Co-hosts panel: by name where there is one, never by email. */
+  app.get("/api/games/:id/people", (c) => {
+    const id = c.req.param("id");
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const game = load(id);
+    if (!game) return c.json({ error: "Game not found" }, 404);
+    if (roleIn(id, email) !== "host") return c.json({ error: "Only the Host can appoint Co-hosts" }, 403);
+    const roles = new Map(db.select().from(gameHosts).where(eq(gameHosts.gameId, id)).all().map((h) => [h.email, h]));
+    const names = new Map(roster(game.state).map((p) => [p.id, p.name]));
+    const people = [...knownPeople(id)].map((who) => {
+      const playerId = roles.get(who)?.playerId ?? playerOf(id, who, game) ?? null;
+      const posted = db
+        .select({ author: posts.author })
+        .from(posts)
+        .where(and(eq(posts.gameId, id), eq(posts.email, who)))
+        .orderBy(desc(posts.createdAt))
+        .get()?.author;
+      return {
+        key: personKey(id, who),
+        name: (playerId && names.get(playerId)) || posted || null,
+        hint: emailHint(who),
+        playerId,
+        role: roles.get(who)?.role ?? null,
+        you: who === email,
+      };
+    });
+    // By name; those with none yet go last, by their email hint.
+    people.sort((a, b) => (a.name === null ? 1 : 0) - (b.name === null ? 1 : 0) || (a.name ?? a.hint).localeCompare(b.name ?? b.hint));
+    return c.json({ people });
+  });
+
+  /** The Host switches someone's Co-host role on or off, or says which Player a Host or Co-host plays as. */
+  app.post("/api/games/:id/people/:key", async (c) => {
+    const { id, key } = c.req.param();
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const body = await parseBody(c, personBody);
+    if (!body.ok) return body.res;
+    const game = load(id);
+    if (!game) return c.json({ error: "Game not found" }, 404);
+    if (roleIn(id, email) !== "host") return c.json({ error: "Only the Host can appoint Co-hosts" }, 403);
+    const who = [...knownPeople(id)].find((e) => personKey(id, e) === key);
+    if (!who) return c.json({ error: "Nobody like that in this Game" }, 404);
+    const { cohost, playsAs } = body.data;
+    const role = roleIn(id, who);
+    if (role === "host" && cohost === false) return c.json({ error: "The Host is always the Host" }, 400);
+    if (playsAs && !roster(game.state).some((p) => p.id === playsAs)) return c.json({ error: "No such Player in this Game" }, 400);
+    const staffAfter = cohost ?? role !== undefined;
+    if (playsAs !== undefined && !staffAfter) return c.json({ error: "Only a Host or Co-host plays as someone here" }, 400);
+
+    db.transaction((tx) => {
+      if (cohost === true && !role) tx.insert(gameHosts).values({ gameId: id, email: who, role: "cohost" }).run();
+      if (cohost === false && role === "cohost") tx.delete(gameHosts).where(and(eq(gameHosts.gameId, id), eq(gameHosts.email, who))).run();
+      if (playsAs !== undefined) tx.update(gameHosts).set({ playerId: playsAs }).where(and(eq(gameHosts.gameId, id), eq(gameHosts.email, who))).run();
+    });
+    staffChanged(id);
+    return c.body(null, 204);
+  });
+
+  /** Which Players are the Host or a Co-host, for their consoles to mark: they may need to step in on those turns. */
+  app.get("/api/games/:id/staff", (c) => {
+    const id = c.req.param("id");
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const game = load(id);
+    if (!game) return c.json({ error: "Game not found" }, 404);
+    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts" }, 403);
+    return c.json({ staff: staffOf(id, game).map(({ playerId, role }) => ({ playerId, role })) });
+  });
+
   app.post("/api/games/:id/cohosts", async (c) => {
     const id = c.req.param("id");
     const email = signedInAs(c);
@@ -610,6 +718,7 @@ export function createServer({
     if (!load(id)) return c.json({ error: "Game not found" }, 404);
     if (roleIn(id, email) !== "host") return c.json({ error: "Only the Host can appoint Co-hosts" }, 403);
     db.insert(gameHosts).values({ gameId: id, email: body.data.email, role: "cohost" }).onConflictDoNothing().run();
+    staffChanged(id);
     return c.body(null, 204);
   });
 
@@ -640,6 +749,7 @@ export function createServer({
     db.delete(gameHosts)
       .where(and(eq(gameHosts.gameId, id), eq(gameHosts.email, who), eq(gameHosts.role, "cohost")))
       .run();
+    staffChanged(id);
     return c.body(null, 204);
   });
 
@@ -664,6 +774,9 @@ export function createServer({
     if (!game) return c.json({ error: "Game not found" }, 404);
     // Only this answer says who is asking: live updates go to everyone watching, so they never carry a role.
     const email = signedInAs(c);
+    // Remembered so the Host can find them by name in the Co-hosts panel (not the demo's stand-ins).
+    if (email && !email.startsWith(DEMO_ACTOR))
+      db.insert(gameVisitors).values({ gameId: id, email, firstSeenAt: now() }).onConflictDoNothing().run();
     const playerId = email ? playerOf(id, email, game) : undefined;
     return c.json({
       ...view(id, game, now()),
@@ -1324,7 +1437,7 @@ export function createServer({
   function deleteGame(id: string) {
     stats.snapshotGame(id, true); // its last word in the statistics, which outlive it
     db.transaction((tx) => {
-      for (const table of [votes, postReactions, posts, turnClocks, gamePlayers, gameHosts, gameEvents]) tx.delete(table).where(eq(table.gameId, id)).run();
+      for (const table of [votes, postReactions, posts, gameVisitors, turnClocks, gamePlayers, gameHosts, gameEvents]) tx.delete(table).where(eq(table.gameId, id)).run();
       tx.delete(games).where(eq(games.id, id)).run();
     });
     cache.delete(id);

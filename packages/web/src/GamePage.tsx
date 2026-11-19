@@ -1,3 +1,4 @@
+import { StaffMark, useStaff } from "./Cohosts.js";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useLocation, useParams } from "react-router";
 import type { Command } from "@elephant/rules";
@@ -19,7 +20,8 @@ export function GamePage({ gameId }: { gameId?: string } = {}) {
   const api = useApi();
   const { id: inAddress = "" } = useParams();
   const id = gameId ?? inAddress;
-  const [game, accept, feedChanges] = useLiveGame(id);
+  const [game, accept, feedChanges, staffChanges] = useLiveGame(id);
+  const staffRole = useStaff(game, staffChanges);
   const [error, setError] = useState<string | null>(null);
   const stars = useStars(id);
   const [posts, reloadFeed] = useFeed(id, feedChanges);
@@ -53,7 +55,7 @@ export function GamePage({ gameId }: { gameId?: string } = {}) {
         <ol className="roster" aria-label="Players">
           {game.players.map((p) => (
             <li key={p.id}>
-              <span data-name>{p.name}</span>
+              <span data-name>{p.name}</span> <StaffMark role={staffRole(p.id)} />
               {runs && game.phase === "setup" && (
                 <button className="link" aria-label={`Remove ${p.name}`} onClick={() => send({ type: "RemovePlayer", playerId: p.id })}>
                   Remove
@@ -90,7 +92,23 @@ export function GamePage({ gameId }: { gameId?: string } = {}) {
           Up now: <strong>{game.active.map(nameOf).join(", ") || "nobody"}</strong>
         </p>
         <p>
-          On deck: <strong>{game.onDeck.map(nameOf).join(", ") || "nobody"}</strong>
+          On deck:{" "}
+          {game.onDeck.length === 0 ? (
+            <strong>nobody</strong>
+          ) : (
+            game.onDeck.map((playerId, i) => (
+              <span key={playerId}>
+                {i > 0 && ", "}
+                <strong>{nameOf(playerId)}</strong>
+                {runs && (
+                  <>
+                    {" "}
+                    <StaffMark role={staffRole(playerId)} />
+                  </>
+                )}
+              </span>
+            ))
+          )}
         </p>
         {game.phase === "finalRound" && (
           <p className="muted">
@@ -121,6 +139,7 @@ export function GamePage({ gameId }: { gameId?: string } = {}) {
         accept={accept}
         posts={posts}
         reloadFeed={reloadFeed}
+        staffRole={staffRole}
         resetTimer={async (playerId) => {
           const next = await api.resetTimer(game.id, playerId);
           if (next) accept(next);
@@ -150,6 +169,7 @@ export function GamePage({ gameId }: { gameId?: string } = {}) {
             <CopyLink path={`/games/${game.id}`} />
           </span>
           <Link to={`/games/${game.id}/settings`}>⚙ Settings</Link>
+          {game.role === "host" && <Link to={`/games/${game.id}/cohosts`}>🛡 Co-hosts</Link>}
           {/* Not inside the demo view itself, which shows this console in a frame. */}
           {game.demo && window.self === window.top && <Link to={`/games/${game.id}/demo`}>🖥 Demo view</Link>}
         </nav>
@@ -178,6 +198,7 @@ export function GamePage({ gameId }: { gameId?: string } = {}) {
             key={playerId}
             game={game}
             playerId={playerId}
+            staff={staffRole(playerId)}
             send={send}
             resetTimer={async () => {
               const next = await api.resetTimer(game.id, playerId);
@@ -510,11 +531,14 @@ function plainWords(result: Extract<CommandResult, { ok: false }>): string {
 function Turn({
   game,
   playerId,
+  staff,
   send,
   resetTimer,
 }: {
   game: GameView;
   playerId: string;
+  /** Set when this Player is the Host or a Co-host, who'll be busy opening: someone else enters the turn. */
+  staff?: "host" | "cohost" | undefined;
   send: (c: Command) => Promise<void>;
   resetTimer: () => Promise<void>;
 }) {
@@ -541,6 +565,11 @@ function Turn({
         <h2>{final ? `${name}'s final turn` : `${name}'s turn`}</h2>
         <Countdown game={game} playerId={playerId} name={name} />
       </div>
+      {staff && (
+        <p className="staff-note">
+          <StaffMark role={staff} /> {name} is {staff === "host" ? "the Host" : "a Co-host"}: enter this turn for them.
+        </p>
+      )}
       {final && held && (
         <button onClick={() => send({ type: "KeepGift", playerId })}>Keep {held.name}</button>
       )}

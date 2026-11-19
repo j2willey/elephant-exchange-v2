@@ -1,3 +1,4 @@
+import { StaffMark } from "./Cohosts.js";
 import { useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { renderSVG } from "uqr";
@@ -30,8 +31,11 @@ export function LaptopConsole({
   resetTimer,
   joinPanel,
   finalRoundPanel,
+  staffRole,
 }: {
   game: GameView;
+  /** Whether a Player is the Host or a Co-host, marked beside their name. */
+  staffRole: (playerId: string) => "host" | "cohost" | undefined;
   send: (command: Command) => Promise<void>;
   error: string | null;
   accept: (game: SharedGame | null, viewer?: Partial<Viewer>) => void;
@@ -76,6 +80,7 @@ export function LaptopConsole({
             onCancelSteal={() => setStealer(null)}
             send={send}
             resetTimer={() => resetTimer(p.id)}
+            staff={staffRole(p.id)}
           />
         ))}
       </ul>
@@ -136,6 +141,7 @@ export function LaptopConsole({
         {nearTheEnd && <EndGame game={game} onEnded={accept} label="🛑 End Game" />}
         <span className="lc-menu-right">
           {game.demo && window.self === window.top && <Link to={`/games/${game.id}/demo`}>🖥 Demo view</Link>}
+          {game.role === "host" && <Link to={`/games/${game.id}/cohosts`}>🛡 Co-hosts</Link>}
           <Link to={`/games/${game.id}/settings`}>⚙ Settings</Link>
         </span>
       </nav>
@@ -273,9 +279,11 @@ function ParticipantRow({
   onCancelSteal,
   send,
   resetTimer,
+  staff,
 }: {
   game: GameView;
   player: Player;
+  staff?: "host" | "cohost" | undefined;
   stealing: boolean;
   onOpen: () => void;
   onSteal: () => void;
@@ -291,7 +299,9 @@ function ParticipantRow({
 
   return (
     <li aria-label={`${player.name} — ${status}`} className={up ? "lc-up" : undefined}>
-      <span className="lc-name">{player.name}</span>
+      <span className="lc-name">
+        {player.name} <StaffMark role={staff} />
+      </span>
       {up ? (
         <span className="lc-turn">
           <Countdown game={game} playerId={player.id} name={player.name} />

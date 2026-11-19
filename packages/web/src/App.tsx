@@ -1,3 +1,4 @@
+import { CohostsPage } from "./Cohosts.js";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, Route, Routes, useLocation, useNavigate, useSearchParams } from "react-router";
 import { isReturnPath, type MyGame, type MyOrg, type RosterMode, type Session } from "./api.js";
@@ -43,6 +44,7 @@ export function AppRoutes() {
         <Route path="/games/:id/screen" element={<WatchScreen />} />
         <Route path="/games/:id/demo" element={<DemoPage />} />
         <Route path="/games/:id/settings" element={<GameSettings />} />
+        <Route path="/games/:id/cohosts" element={<CohostsPage />} />
         <Route path="/orgs/:orgId" element={<OrgPage />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/admin/stats" element={<StatsPage />} />

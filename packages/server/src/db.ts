@@ -121,8 +121,28 @@ export const gameHosts = sqliteTable(
       .references(() => games.id),
     email: text("email").notNull(),
     role: text("role", { enum: ["host", "cohost"] }).notNull(),
+    /**
+     * The Player this Host or Co-host plays as, when the Host has said (for a Player they typed in). One who joined
+     * as a Player themselves is known by game_players instead.
+     */
+    playerId: text("player_id"),
   },
   (t) => [primaryKey({ columns: [t.gameId, t.email] }), check("game_hosts_role", sql`${t.role} IN ('host', 'cohost')`)],
+);
+
+/**
+ * Everyone who has opened a Game while signed in, so the Host can find them by name to make them a Co-host.
+ */
+export const gameVisitors = sqliteTable(
+  "game_visitors",
+  {
+    gameId: text("game_id")
+      .notNull()
+      .references(() => games.id),
+    email: text("email").notNull(),
+    firstSeenAt: integer("first_seen_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.gameId, t.email] })],
 );
 
 /**

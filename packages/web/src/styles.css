@@ -2181,3 +2181,65 @@ a.button.secondary-button {
   padding: 0.35rem 0;
   overflow-wrap: anywhere;
 }
+
+/* The Host and Co-hosts beside their names on the consoles: they'll be busy opening, so someone else enters their turn. */
+.staff-mark {
+  display: inline-block;
+  padding: 0 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--brand-ink);
+  background: var(--brand);
+  border-radius: 999px;
+  vertical-align: middle;
+}
+
+.lc-up .staff-mark,
+.staff-note .staff-mark {
+  font-size: 0.85rem;
+}
+
+.staff-note {
+  margin: 0;
+  font-weight: 600;
+}
+
+/* The Co-hosts panel: one row per person, the switch and Plays as on the right (wrapping under on a phone). */
+.people {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.people li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.people .person {
+  flex: 1 1 12rem;
+  overflow-wrap: anywhere;
+}
+
+.people .switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+}
+
+.people .switch input {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.plays-as {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
