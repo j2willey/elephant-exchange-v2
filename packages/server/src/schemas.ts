@@ -53,6 +53,8 @@ export const postBody = z.object({
   /** A Guest's name to show; a Player's own name is used instead. */
   name: name.optional(),
   giftId: id.optional(),
+  /** The Post this one replies to: a visible one in the same Game. */
+  replyTo: id.optional(),
 });
 
 export const moderationBody = z.object({ mode: z.enum(["open", "approval", "paused"]) });

@@ -735,17 +735,31 @@ export function createServer({
         const t = tallies.get(postId)?.get(emoji);
         return t ? [{ emoji, ...t }] : [];
       });
+    // A reply quotes the Post it answers, if this viewer may see that Post; otherwise it's shown as removed.
+    // Each Post counts its replies that everyone can see.
+    const seenById = new Map(rows.map((p) => [p.id, p]));
+    const replies = new Map<string, number>();
+    for (const p of rows) if (p.replyTo && p.status === "visible") replies.set(p.replyTo, (replies.get(p.replyTo) ?? 0) + 1);
+    const photoOf = (p: (typeof rows)[number]) =>
+      p.photoWidth && p.photoHeight ? { url: `/api/games/${id}/posts/${p.id}/photo`, width: p.photoWidth, height: p.photoHeight } : null;
+    const quote = (replyTo: string | null) => {
+      if (!replyTo) return null;
+      const o = seenById.get(replyTo);
+      return o ? { id: o.id, author: o.author, text: o.text, photo: photoOf(o) } : { id: replyTo, removed: true as const };
+    };
     return c.json(
       rows.map((p) => ({
         id: p.id,
         author: p.author,
         giftId: p.giftId,
         text: p.text,
-        photo: p.photoWidth && p.photoHeight ? { url: `/api/games/${id}/posts/${p.id}/photo`, width: p.photoWidth, height: p.photoHeight } : null,
+        photo: photoOf(p),
         status: p.status,
         createdAt: p.createdAt.getTime(),
         mine: p.email === email,
         reactions: reactionsOf(p.id),
+        replyTo: quote(p.replyTo),
+        replies: replies.get(p.id) ?? 0,
       })),
     );
   });
@@ -768,7 +782,7 @@ export function createServer({
       const file = form["photo"];
       // A file rather than a text field (checked by type, not `instanceof File`, which depends on whose File).
       upload = file !== undefined && typeof file !== "string" ? (file as File) : undefined;
-      const parsed = postBody.safeParse({ text: field("text"), name: field("name"), giftId: field("giftId") });
+      const parsed = postBody.safeParse({ text: field("text"), name: field("name"), giftId: field("giftId"), replyTo: field("replyTo") });
       body = parsed.success ? { ok: true, data: parsed.data } : { ok: false, res: c.json({ error: "Invalid request", issues: parsed.error.issues }, 400) };
     } else {
       body = await parseBody(c, postBody);
@@ -778,8 +792,17 @@ export function createServer({
     const game = load(id);
     if (!game) return c.json({ error: "Game not found" }, 404);
     if (game.moderation === "paused") return c.json({ code: "Paused", message: "The Host has paused posting" }, 409);
-    const { text, giftId } = body.data;
+    const { text, giftId, replyTo } = body.data;
     if (giftId !== undefined && !gifts(game.state).some((g) => g.id === giftId)) return c.json({ error: "No such Gift in this Game" }, 400);
+    if (
+      replyTo !== undefined &&
+      !db
+        .select({ id: posts.id })
+        .from(posts)
+        .where(and(eq(posts.gameId, id), eq(posts.id, replyTo), eq(posts.status, "visible")))
+        .get()
+    )
+      return c.json({ error: "That Post can't be replied to" }, 400);
     // A Player posts as their Player; anyone else (a Guest) as the name they give.
     const playerId = playerOf(id, email, game);
     const author = playerId ? roster(game.state).find((p) => p.id === playerId)!.name : body.data.name;
@@ -799,6 +822,7 @@ export function createServer({
           email,
           author,
           giftId: giftId ?? null,
+          replyTo: replyTo ?? null,
           text,
           photoWidth: photo?.width ?? null,
           photoHeight: photo?.height ?? null,

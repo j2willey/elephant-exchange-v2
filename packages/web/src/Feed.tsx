@@ -1,6 +1,6 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 import { useLocation } from "react-router";
-import { REACTIONS, type Emoji, type GameView, type Post } from "./api.js";
+import { REACTIONS, type Emoji, type GameView, type Post, type Quote } from "./api.js";
 import { useApi } from "./ApiContext.js";
 import { shrinkPhoto } from "./shrinkPhoto.js";
 import { SignInForm, useSignedIn } from "./SignIn.js";
@@ -46,7 +46,18 @@ export function Feed({
 }) {
   const api = useApi();
   const hosting = game.role !== null;
+  const signedIn = useSignedIn() === true;
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const giftName = (id: string | null) => game.gifts.find((g) => g.id === id)?.name;
+  // Replying is posting, so it goes when posting does: once the Game ends, or while the Host has it Paused.
+  const canReply = signedIn && game.phase !== "ended" && game.moderation !== "paused";
+
+  /** Brings the Post a reply answers into view, and moves focus to it so it's clear which one it is. */
+  function showOriginal(postId: string) {
+    const original = document.getElementById(`feed-post-${postId}`);
+    original?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    original?.focus({ preventScroll: true });
+  }
 
   async function setStatus(post: Post, status: "visible" | "hidden") {
     if (await api.setPostStatus(game.id, post.id, status)) reload();
@@ -59,16 +70,38 @@ export function Feed({
       <div role="feed" aria-label="Feed" className="feed">
         {posts.length === 0 && <p className="muted">No Posts yet.</p>}
         {posts.map((p) => (
-          <article key={p.id} className={`post ${p.status}`}>
+          <article key={p.id} id={`feed-post-${p.id}`} tabIndex={-1} aria-label={`Post from ${p.author}`} className={`post ${p.status}`}>
             <p className="post-meta">
               <strong>{p.author}</strong>
               {p.giftId && giftName(p.giftId) && <span className="muted"> · about {giftName(p.giftId)}</span>}
+              {p.replies > 0 && <span className="muted"> · {p.replies === 1 ? "1 reply" : `${p.replies} replies`}</span>}
             </p>
+            {p.replyTo && <QuoteCard quote={p.replyTo} onOpen={showOriginal} />}
             {p.status === "pending" && <p className="badge">Waiting for the Host to approve</p>}
             {p.status === "hidden" && <p className="badge">Hidden</p>}
             {p.text && <p className="post-text">{p.text}</p>}
             {p.photo && <PostPhoto post={p} />}
-            {p.status === "visible" && <Reactions gameId={game.id} post={p} reload={reload} />}
+            {p.status === "visible" && (
+              <div className="post-actions">
+                <Reactions gameId={game.id} post={p} reload={reload} />
+                {canReply && (
+                  <button type="button" className="reaction add" aria-expanded={replyingTo === p.id} onClick={() => setReplyingTo(replyingTo === p.id ? null : p.id)}>
+                    Reply
+                  </button>
+                )}
+              </div>
+            )}
+            {canReply && replyingTo === p.id && (
+              <Composer
+                game={game}
+                replyTo={p}
+                offerSignIn={false}
+                onPosted={() => {
+                  setReplyingTo(null);
+                  reload();
+                }}
+              />
+            )}
             {hosting && (
               <div className="inline">
                 {p.status === "pending" && <button onClick={() => void setStatus(p, "visible")}>Approve</button>}
@@ -87,6 +120,32 @@ export function Feed({
         ))}
       </div>
     </section>
+  );
+}
+
+/**
+ * The Post a reply answers, shrunk: who wrote it, its first words and a thumbnail of its Photo. Tapping it goes to
+ * the original. Shown as removed once the viewer can no longer see it.
+ */
+export function QuoteCard({ quote, onOpen }: { quote: Quote; onOpen?: (postId: string) => void }) {
+  if ("removed" in quote) return <p className="quote removed">↩ Original post removed</p>;
+  const words = quote.text || "a Photo";
+  const inside = (
+    <>
+      {quote.photo && <img className="quote-photo" src={quote.photo.url} alt="" width={40} height={40} loading="lazy" />}
+      <span className="quote-text">
+        <strong>{quote.author}</strong>: {words}
+      </span>
+    </>
+  );
+  return onOpen ? (
+    <button type="button" className="quote" aria-label={`Replying to ${quote.author}: ${words}`} onClick={() => onOpen(quote.id)}>
+      {inside}
+    </button>
+  ) : (
+    <p className="quote" aria-label={`Replying to ${quote.author}: ${words}`}>
+      {inside}
+    </p>
   );
 }
 
@@ -171,7 +230,8 @@ const postErrors = {
   failed: "That didn't post. Please try again.",
 };
 
-export function Composer({ game, onPosted, offerSignIn }: { game: GameView; onPosted: () => void; offerSignIn: boolean }) {
+/** The form for a new Post or, given `replyTo`, a reply to that one (which isn't about a Gift of its own). */
+export function Composer({ game, onPosted, offerSignIn, replyTo }: { game: GameView; onPosted: () => void; offerSignIn: boolean; replyTo?: Post }) {
   const api = useApi();
   const { pathname } = useLocation();
   const signedIn = useSignedIn();
@@ -182,6 +242,8 @@ export function Composer({ game, onPosted, offerSignIn }: { game: GameView; onPo
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const preview = usePreview(photo);
+  // Its own ids, since a reply's form can be open beside the main one.
+  const ids = useId();
 
   if (game.moderation === "paused") return <p className="muted">The Host has paused posting for now.</p>;
   if (signedIn === "loading") return null;
@@ -205,6 +267,7 @@ export function Composer({ game, onPosted, offerSignIn }: { game: GameView; onPo
         text: text.trim(),
         ...(asks ? { name: name.trim() } : {}),
         ...(giftId ? { giftId } : {}),
+        ...(replyTo ? { replyTo: replyTo.id } : {}),
         ...(shrunk ? { photo: shrunk } : {}),
       })
       .catch(() => "failed" as const);
@@ -222,15 +285,15 @@ export function Composer({ game, onPosted, offerSignIn }: { game: GameView; onPo
   }
 
   return (
-    <form className="stack" aria-label="Post to the Feed" onSubmit={submit}>
+    <form className={replyTo ? "stack reply-form" : "stack"} aria-label={replyTo ? `Reply to ${replyTo.author}` : "Post to the Feed"} onSubmit={submit}>
       {asks && (
         <>
-          <label htmlFor="post-name">Your name</label>
-          <input id="post-name" autoComplete="given-name" maxLength={100} required value={name} onChange={(e) => setName(e.target.value)} />
+          <label htmlFor={`${ids}-name`}>Your name</label>
+          <input id={`${ids}-name`} autoComplete="given-name" maxLength={100} required value={name} onChange={(e) => setName(e.target.value)} />
         </>
       )}
-      <label htmlFor="post-text">What's happening?</label>
-      <textarea id="post-text" rows={2} maxLength={500} value={text} onChange={(e) => setText(e.target.value)} />
+      <label htmlFor={`${ids}-text`}>{replyTo ? "Your reply" : "What's happening?"}</label>
+      <textarea id={`${ids}-text`} rows={2} maxLength={500} value={text} onChange={(e) => setText(e.target.value)} />
       {photo ? (
         <div className="photo-to-post">
           <img src={preview} alt="Photo to post" />
@@ -240,11 +303,11 @@ export function Composer({ game, onPosted, offerSignIn }: { game: GameView; onPo
         </div>
       ) : (
         <>
-          <label htmlFor="post-photo" className="photo-pick">
+          <label htmlFor={`${ids}-photo`} className="photo-pick">
             Add a Photo
           </label>
           <input
-            id="post-photo"
+            id={`${ids}-photo`}
             type="file"
             accept="image/*"
             className="visually-hidden"
@@ -255,10 +318,10 @@ export function Composer({ game, onPosted, offerSignIn }: { game: GameView; onPo
           />
         </>
       )}
-      {game.gifts.length > 0 && (
+      {game.gifts.length > 0 && !replyTo && (
         <>
-          <label htmlFor="post-gift">About a Gift? (optional)</label>
-          <select id="post-gift" value={giftId} onChange={(e) => setGiftId(e.target.value)}>
+          <label htmlFor={`${ids}-gift`}>About a Gift? (optional)</label>
+          <select id={`${ids}-gift`} value={giftId} onChange={(e) => setGiftId(e.target.value)}>
             <option value="">No, just the Feed</option>
             {game.gifts.map((g) => (
               <option key={g.id} value={g.id}>

@@ -19,7 +19,9 @@
     "count": 5,
     "mine": false
    }
-  ]
+  ],
+  "replyTo": null,
+  "replies": 0
  },
  {
   "id": "sI-Nas754ZCKe9vk",
@@ -41,6 +43,8 @@
     "count": 7,
     "mine": false
    }
-  ]
+  ],
+  "replyTo": null,
+  "replies": 0
  }
 ]

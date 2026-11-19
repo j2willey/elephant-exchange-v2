@@ -188,3 +188,64 @@ describe("Reactions", () => {
     expect(within(socks).queryByRole("button", { name: /^react/i })).not.toBeInTheDocument();
   });
 });
+
+describe("Replies", () => {
+  /** Pat's Post in the Feed, and Sam signed in on the phone in front of us. */
+  async function patPosted() {
+    const s = await underway();
+    const pat = await s.signedIn("pat@example.com");
+    await pat.post(s.id, { text: "Stole the lamp!", name: "Pat" });
+    return { ...s, pat };
+  }
+  const article = async (text: RegExp) => within(await feed()).findByRole("article", { name: text });
+
+  it("lets a guest reply to a Post, quoting it, and counts the reply on the original", async () => {
+    const { origin, signedIn, id, user } = await patPosted();
+    openApp(await signedIn("sam@example.com"), `/games/${id}`);
+
+    const lamp = await article(/pat/i);
+    await user.click(await within(lamp).findByRole("button", { name: /^reply/i }));
+    const form = await within(lamp).findByRole("form", { name: /reply to pat/i });
+    await user.type(within(form).getByLabelText(/your name/i), "Sam");
+    await user.type(within(form).getByLabelText(/your reply/i), "Third time!");
+    expect(within(form).queryByLabelText(/about a gift/i)).not.toBeInTheDocument();
+    await user.click(within(form).getByRole("button", { name: /^post$/i }));
+
+    const reply = await article(/sam/i);
+    await waitFor(() => expect(within(reply).getByRole("button", { name: /replying to pat/i })).toHaveTextContent(/stole the lamp/i));
+    await waitFor(async () => expect(await article(/pat/i)).toHaveTextContent(/1 reply/i));
+    const [first] = (await browser(origin).posts(id)).filter((p) => p.replyTo);
+    expect(first!.text).toBe("Third time!");
+  });
+
+  it("jumps to the original when the quote is tapped", async () => {
+    const { signedIn, id, user, pat } = await patPosted();
+    const [lamp] = await pat.posts(id);
+    await (await signedIn("sam@example.com")).post(id, { text: "Third time!", name: "Sam", replyTo: lamp!.id });
+    openApp(await signedIn("eve@example.com"), `/games/${id}`);
+
+    await user.click(within(await article(/sam/i)).getByRole("button", { name: /replying to pat/i }));
+
+    expect(await article(/pat/i)).toHaveFocus();
+  });
+
+  it("says the original was removed once the Host hides it", async () => {
+    const { host, signedIn, id, pat } = await patPosted();
+    const [lamp] = await pat.posts(id);
+    await (await signedIn("sam@example.com")).post(id, { text: "Third time!", name: "Sam", replyTo: lamp!.id });
+    await host.setPostStatus(id, lamp!.id, "hidden");
+    openApp(await signedIn("eve@example.com"), `/games/${id}`);
+
+    expect(await article(/sam/i)).toHaveTextContent(/original post removed/i);
+  });
+
+  it("isn't offered while posting is Paused", async () => {
+    const { host, signedIn, id } = await patPosted();
+    await host.setModeration(id, "paused");
+    openApp(await signedIn("sam@example.com"), `/games/${id}`);
+
+    const lamp = await article(/pat/i);
+    await within(lamp).findByRole("button", { name: /^react/i }); // signed in, and the Feed is ready
+    expect(within(lamp).queryByRole("button", { name: /^reply/i })).not.toBeInTheDocument();
+  });
+});

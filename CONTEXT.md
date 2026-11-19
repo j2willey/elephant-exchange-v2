@@ -118,6 +118,10 @@ A picture attached to a Post, at most one per Post; a Post may be just a Photo. 
 All of a Game's visible Posts, newest first, on phones and the big screen.
 _Avoid_: Chat, blog, wall
 
+**Reply**:
+A Post that answers another visible Post in the same Game. It joins the top of the Feed like any Post (following Moderation, and hidden the same way) with a small quote of the one it answers above it: who wrote it, its first words and a thumbnail of its Photo; tapping the quote goes to the original. The original shows how many replies everyone can see. If the original is later hidden or removed, the quote says so instead.
+_Avoid_: Comment, thread
+
 **Reaction**:
 A friendly emoji anyone signed in puts on a visible Post: 👍 Like, ❤️ Love, 😂 Funny, 🎉 Hooray, 🔥 Fire or 😮 Wow, never a negative one. A person may put on several and take each back. Everyone, the big screen too, sees how many of each a Post has, not who gave them. Reacting isn't posting, so it still works while posting is Paused.
 _Avoid_: Like (as the general name), vote, rating

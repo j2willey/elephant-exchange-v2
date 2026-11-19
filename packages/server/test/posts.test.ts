@@ -3,7 +3,18 @@ import { createServer } from "../src/server.js";
 import { capturingMailer, post, signIn } from "./support.js";
 
 type Reaction = { emoji: string; count: number; mine: boolean };
-type Post = { id: string; author: string; giftId: string | null; text: string; status: string; mine: boolean; reactions: Reaction[] };
+type Quote = { id: string; author: string; text: string; photo: unknown } | { id: string; removed: true };
+type Post = {
+  id: string;
+  author: string;
+  giftId: string | null;
+  text: string;
+  status: string;
+  mine: boolean;
+  reactions: Reaction[];
+  replyTo: Quote | null;
+  replies: number;
+};
 
 async function setup() {
   const { sent, mailer } = capturingMailer();
@@ -179,5 +190,64 @@ describe("Reactions", () => {
     const { as, react, moderate, postId, host } = await onePost();
     await moderate(host, "paused");
     expect((await react(await as("eve@example.com"), postId, "🎉")).status).toBe(204);
+  });
+});
+
+describe("Replies", () => {
+  async function onePost() {
+    const s = await setup();
+    const pat = await s.as("pat@example.com");
+    await s.write(pat, { text: "Stole the lamp!", name: "Pat" });
+    const [p] = await s.read();
+    return { ...s, pat, original: p!.id };
+  }
+
+  it("quotes the Post replied to, and counts the replies on it", async () => {
+    const { as, write, read, original } = await onePost();
+    const sam = await as("sam@example.com");
+
+    expect((await write(sam, { text: "Third time!", name: "Sam", replyTo: original })).status).toBe(201);
+
+    const [reply, first] = await read();
+    expect(reply!.replyTo).toEqual({ id: original, author: "Pat", text: "Stole the lamp!", photo: null });
+    expect(first!.replyTo).toBeNull();
+    expect([reply!.replies, first!.replies]).toEqual([0, 1]);
+  });
+
+  it("can only answer a visible Post in the same Game", async () => {
+    const { app, as, write, read, setStatus, host, original } = await onePost();
+    const sam = await as("sam@example.com");
+    expect((await write(sam, { text: "Hi", name: "Sam", replyTo: "nope" })).status).toBe(400);
+
+    const other = (await (await app.request("/api/games", post({ settings: { activeSlots: 1, maxSteals: 3 } }, host))).json()) as { id: string };
+    expect((await app.request(`/api/games/${other.id}/posts`, post({ text: "Hi", name: "Sam", replyTo: original }, sam))).status).toBe(400);
+
+    await setStatus(host, original, "hidden");
+    expect((await write(sam, { text: "Hi", name: "Sam", replyTo: original })).status).toBe(400);
+    expect(await read()).toEqual([]);
+  });
+
+  it("follows Moderation like any Post, and counts only the replies everyone can see", async () => {
+    const { as, write, read, moderate, host, original } = await onePost();
+    await moderate(host, "approval");
+    const sam = await as("sam@example.com");
+    await write(sam, { text: "Third time!", name: "Sam", replyTo: original });
+
+    expect((await read()).map((p) => [p.text, p.replies])).toEqual([["Stole the lamp!", 0]]);
+    expect((await read(sam)).map((p) => p.status)).toEqual(["pending", "visible"]);
+
+    await moderate(host, "paused");
+    expect((await write(sam, { text: "Again", name: "Sam", replyTo: original })).status).toBe(409);
+  });
+
+  it("shows the Post replied to as removed to anyone who can no longer see it", async () => {
+    const { as, write, read, setStatus, host, original } = await onePost();
+    const sam = await as("sam@example.com");
+    await write(sam, { text: "Third time!", name: "Sam", replyTo: original });
+
+    await setStatus(host, original, "hidden");
+
+    expect((await read(sam)).map((p) => p.replyTo)).toEqual([{ id: original, removed: true }]);
+    expect((await read(host))[0]!.replyTo).toMatchObject({ id: original, author: "Pat" });
   });
 });

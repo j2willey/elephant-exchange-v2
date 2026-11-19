@@ -217,7 +217,14 @@ export interface Post {
   mine: boolean;
   /** The Reactions it has, in the order they're offered (none with no count), and whether the viewer put each on. */
   reactions: { emoji: Emoji; count: number; mine: boolean }[];
+  /** For a reply, the Post it answers, quoted; or just `removed` once the viewer can no longer see that Post. */
+  replyTo: Quote | null;
+  /** How many replies to it everyone can see. */
+  replies: number;
 }
+
+/** The Post a reply answers, as shown above the reply. */
+export type Quote = Pick<Post, "id" | "author" | "text" | "photo"> | { id: string; removed: true };
 
 /** What only the person looking is told about a Game; live updates go to everyone, so they never carry it. */
 export type Viewer = Pick<GameView, "role" | "me" | "myVote">;
@@ -562,7 +569,7 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
     /** Posts words and/or a Photo. A Photo goes as a multipart form; words alone as JSON. */
     async post(
       gameId: string,
-      { photo, ...post }: { text: string; name?: string; giftId?: string; photo?: Blob },
+      { photo, ...post }: { text: string; name?: string; giftId?: string; replyTo?: string; photo?: Blob },
     ): Promise<"posted" | "paused" | "notPhoto" | "tooBig" | "failed"> {
       const path = `/api/games/${encodeURIComponent(gameId)}/posts`;
       let res: Response;

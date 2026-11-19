@@ -54,6 +54,15 @@ describe("Posts on the big screen", () => {
     expect(within(await latest()).queryByRole("button")).not.toBeInTheDocument();
   });
 
+  it("shows a reply with the Post it answers quoted above it", async () => {
+    const { gus, id } = await onTheBigScreen();
+    await gus.post(id, { text: "Stole the lamp!", name: "Gus" });
+    const [lamp] = await gus.posts(id);
+    await gus.post(id, { text: "Third time!", name: "Gus", replyTo: lamp!.id });
+
+    await waitFor(async () => expect((await shown())[0]).toMatch(/gus: stole the lamp!.*third time!/i));
+  });
+
   it("keeps to the newest six, so the room can read them", async () => {
     const { gus, id } = await onTheBigScreen();
     for (let n = 1; n <= 8; n++) await gus.post(id, { text: `Post ${n}`, name: "Gus" });
