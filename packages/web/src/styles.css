@@ -446,6 +446,7 @@ select {
 
 .reaction-picker {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   flex-basis: 100%;
 }
@@ -457,6 +458,11 @@ select {
   background: transparent;
   border: 1px solid transparent;
   border-radius: 999px;
+}
+
+/* An icon of our own (the leg lamp), lined up with the emoji around it. */
+.glyph {
+  vertical-align: -0.2em;
 }
 
 .reaction-picker button[aria-pressed="true"] {

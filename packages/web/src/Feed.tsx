@@ -151,6 +151,41 @@ export function QuoteCard({ quote, onOpen }: { quote: Quote; onOpen?: (postId: s
 
 const nameOf = (emoji: Emoji) => REACTIONS.find((r) => r.emoji === emoji)!.name;
 
+/** How a Reaction looks: its emoji, or the app's own icon for one with no emoji. */
+function Glyph({ emoji }: { emoji: Emoji }) {
+  return emoji === "leg-lamp" ? <LegLamp /> : <>{emoji}</>;
+}
+
+/** The leg's outline: thigh under the shade, calf, ankle. */
+const LEG = "M9.3 8.4C9.1 11.4 10.2 13.5 10.1 15.2 10 16.8 10.9 18 11.2 19.4L12.9 19.2C12.9 17 13.9 14.6 14 12.4 14.1 10.8 14.7 9.6 14.7 8.4Z";
+
+/** A lamp shaped like a stockinged leg in a high heel, under a fringed shade: our own drawing, sized like an emoji. */
+function LegLamp() {
+  const clip = `leg-lamp-${useId().replace(/:/g, "")}`;
+  return (
+    <svg className="glyph" viewBox="0 0 24 24" width="1.15em" height="1.15em" aria-hidden="true">
+      <defs>
+        <clipPath id={clip}>
+          <path d={LEG} />
+        </clipPath>
+      </defs>
+      <path d={LEG} fill="#e9b48c" />
+      <g clipPath={`url(#${clip})`} stroke="#6b3f2a" strokeWidth="0.4" opacity="0.55">
+        <path d="M6 6l12 12M6 8.5l12 12M6 11l12 12M6 3.5l12 12M6 1l12 12M18 6l-12 12M18 8.5l-12 12M18 11l-12 12M18 3.5l-12 12M18 1l-12 12" />
+      </g>
+      <path d="M11 19.1L13 18.9C13.7 20 15.4 20.7 17.2 21.3L17.2 22.2 12.7 22.2 12.4 21.3 12.1 22.2 11.3 22.2Z" fill="#1f1f1f" />
+      <rect x="8.3" y="22.2" width="9.6" height="1.4" rx="0.5" fill="#3a3a3a" />
+      <path d="M8.6 1.3h6.8l3.4 6.9H5.2z" fill="#f4c542" stroke="#a87908" strokeWidth="0.55" strokeLinejoin="round" />
+      <path
+        d="M5.9 8.3v1.2M7.7 8.3v1.2M9.5 8.3v1.2M11.3 8.3v1.2M13.1 8.3v1.2M14.9 8.3v1.2M16.7 8.3v1.2M18.3 8.3v1.2"
+        stroke="#a87908"
+        strokeWidth="0.65"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 /**
  * A Post's Reactions: a chip for each one it has, with its count. Someone signed in taps a chip to add theirs or
  * take it back, and React to pick from all six; someone signed out, or the big screen (`readOnly`), sees just the counts.
@@ -178,11 +213,11 @@ export function Reactions({ gameId, post, reload, readOnly = false }: { gameId: 
             aria-label={`${nameOf(r.emoji)}: ${r.count}`}
             onClick={() => void toggle(r.emoji, !r.mine)}
           >
-            {r.emoji} {r.count}
+            <Glyph emoji={r.emoji} /> {r.count}
           </button>
         ) : (
           <span key={r.emoji} className="reaction" aria-label={`${nameOf(r.emoji)}: ${r.count}`}>
-            {r.emoji} {r.count}
+            <Glyph emoji={r.emoji} /> {r.count}
           </span>
         ),
       )}
@@ -197,7 +232,7 @@ export function Reactions({ gameId, post, reload, readOnly = false }: { gameId: 
             const mine = post.reactions.some((r) => r.emoji === emoji && r.mine);
             return (
               <button key={emoji} type="button" aria-label={name} aria-pressed={mine} onClick={() => void toggle(emoji, !mine)}>
-                {emoji}
+                <Glyph emoji={emoji} />
               </button>
             );
           })}

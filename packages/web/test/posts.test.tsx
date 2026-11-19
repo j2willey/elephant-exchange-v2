@@ -174,6 +174,21 @@ describe("Reactions", () => {
     await waitFor(() => expect(within(socks).queryByRole("button", { name: /funny: 1/i })).not.toBeInTheDocument());
   });
 
+  it("offers the holiday ones too: a snowman and the leg lamp", async () => {
+    const { signedIn, id, user } = await underway();
+    await (await signedIn("gus@example.com")).post(id, { text: "A major award!", name: "Gus" });
+    openApp(await signedIn("eve@example.com"), `/games/${id}`);
+
+    const award = await within(await feed()).findByRole("article");
+    await user.click(await within(award).findByRole("button", { name: /^react/i }));
+    await user.click(within(award).getByRole("button", { name: /^leg lamp$/i }));
+    await user.click(await within(award).findByRole("button", { name: /^react/i }));
+    await user.click(within(award).getByRole("button", { name: /^snowman$/i }));
+
+    await waitFor(() => expect(within(award).getByRole("button", { name: /leg lamp: 1/i })).toHaveAttribute("aria-pressed", "true"));
+    await waitFor(() => expect(within(award).getByRole("button", { name: /snowman: 1/i })).toHaveTextContent("⛄"));
+  });
+
   it("shows the counts to someone signed out, without a way to react", async () => {
     const { origin, signedIn, id } = await underway();
     const gus = await signedIn("gus@example.com");

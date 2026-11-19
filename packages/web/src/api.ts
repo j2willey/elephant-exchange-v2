@@ -188,7 +188,11 @@ export interface AdminGame {
   createdAt: string;
 }
 
-/** The Reactions anyone can put on a Post, in the order they're shown, each with the name a screen reader says. */
+/**
+ * The Reactions anyone can put on a Post, in the order they're shown, each with the name a screen reader says.
+ * `emoji` is what the server knows it by: the emoji itself, or for the leg lamp (which has none) a name the app
+ * draws an icon for.
+ */
 export const REACTIONS = [
   { emoji: "👍", name: "Like" },
   { emoji: "❤️", name: "Love" },
@@ -196,6 +200,8 @@ export const REACTIONS = [
   { emoji: "🎉", name: "Hooray" },
   { emoji: "🔥", name: "Fire" },
   { emoji: "😮", name: "Wow" },
+  { emoji: "⛄", name: "Snowman" },
+  { emoji: "leg-lamp", name: "Leg lamp" },
 ] as const;
 export type Emoji = (typeof REACTIONS)[number]["emoji"];
 

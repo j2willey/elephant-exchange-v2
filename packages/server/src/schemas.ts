@@ -58,8 +58,11 @@ export const postBody = z.object({
 });
 
 export const moderationBody = z.object({ mode: z.enum(["open", "approval", "paused"]) });
-/** The Reactions anyone can put on a Post, in the order they're shown. Friendly ones only, to keep the Feed in good spirits. */
-export const REACTIONS = ["👍", "❤️", "😂", "🎉", "🔥", "😮"] as const;
+/**
+ * The Reactions anyone can put on a Post, in the order they're shown. Friendly ones only, to keep the Feed in good
+ * spirits. Each is its emoji, except the leg lamp, which has no emoji: the web app draws its own icon for it.
+ */
+export const REACTIONS = ["👍", "❤️", "😂", "🎉", "🔥", "😮", "⛄", "leg-lamp"] as const;
 /** Puts a Reaction on a Post (`on`) or takes it back. */
 export const reactionBody = z.object({ emoji: z.enum(REACTIONS), on: z.boolean() });
 export const postStatusBody = z.object({ status: z.enum(["visible", "hidden"]) });

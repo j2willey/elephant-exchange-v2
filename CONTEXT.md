@@ -123,7 +123,7 @@ A Post that answers another visible Post in the same Game. It joins the top of t
 _Avoid_: Comment, thread
 
 **Reaction**:
-A friendly emoji anyone signed in puts on a visible Post: 👍 Like, ❤️ Love, 😂 Funny, 🎉 Hooray, 🔥 Fire or 😮 Wow, never a negative one. A person may put on several and take each back. Everyone, the big screen too, sees how many of each a Post has, not who gave them. Reacting isn't posting, so it still works while posting is Paused.
+A friendly emoji anyone signed in puts on a visible Post: 👍 Like, ❤️ Love, 😂 Funny, 🎉 Hooray, 🔥 Fire, 😮 Wow, or the holiday ones, ⛄ Snowman and the Leg lamp (our own icon, since there's no emoji for it); never a negative one. A person may put on several and take each back. Everyone, the big screen too, sees how many of each a Post has, not who gave them. Reacting isn't posting, so it still works while posting is Paused.
 _Avoid_: Like (as the general name), vote, rating
 
 **Moderation**:

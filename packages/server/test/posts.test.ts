@@ -164,10 +164,10 @@ describe("Reactions", () => {
     expect(counts((await read(eve))[0])).toEqual([["🔥", 1, true]]);
   });
 
-  it("offers only the six friendly reactions", async () => {
+  it("offers only the friendly reactions, holiday ones included", async () => {
     const { as, react, postId } = await onePost();
     const eve = await as("eve@example.com");
-    for (const emoji of ["👍", "❤️", "😂", "🎉", "🔥", "😮"]) expect((await react(eve, postId, emoji)).status).toBe(204);
+    for (const emoji of ["👍", "❤️", "😂", "🎉", "🔥", "😮", "⛄", "leg-lamp"]) expect((await react(eve, postId, emoji)).status).toBe(204);
     for (const emoji of ["👎", "😡", "💩", "x"]) expect((await react(eve, postId, emoji)).status).toBe(400);
   });
 
