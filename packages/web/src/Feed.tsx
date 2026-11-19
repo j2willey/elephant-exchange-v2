@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useLocation } from "react-router";
-import type { GameView, Post } from "./api.js";
+import { REACTIONS, type Emoji, type GameView, type Post } from "./api.js";
 import { useApi } from "./ApiContext.js";
 import { shrinkPhoto } from "./shrinkPhoto.js";
 import { SignInForm, useSignedIn } from "./SignIn.js";
@@ -68,6 +68,7 @@ export function Feed({
             {p.status === "hidden" && <p className="badge">Hidden</p>}
             {p.text && <p className="post-text">{p.text}</p>}
             {p.photo && <PostPhoto post={p} />}
+            {p.status === "visible" && <Reactions gameId={game.id} post={p} reload={reload} />}
             {hosting && (
               <div className="inline">
                 {p.status === "pending" && <button onClick={() => void setStatus(p, "visible")}>Approve</button>}
@@ -86,6 +87,64 @@ export function Feed({
         ))}
       </div>
     </section>
+  );
+}
+
+const nameOf = (emoji: Emoji) => REACTIONS.find((r) => r.emoji === emoji)!.name;
+
+/**
+ * A Post's Reactions: a chip for each one it has, with its count. Someone signed in taps a chip to add theirs or
+ * take it back, and React to pick from all six; someone signed out, or the big screen (`readOnly`), sees just the counts.
+ */
+export function Reactions({ gameId, post, reload, readOnly = false }: { gameId: string; post: Post; reload?: () => void; readOnly?: boolean }) {
+  const api = useApi();
+  const signedIn = useSignedIn() === true && !readOnly;
+  const [picking, setPicking] = useState(false);
+
+  async function toggle(emoji: Emoji, on: boolean) {
+    setPicking(false);
+    if (await api.react(gameId, post.id, emoji, on)) reload?.();
+  }
+
+  if (!signedIn && post.reactions.length === 0) return null;
+  return (
+    <div className="reactions">
+      {post.reactions.map((r) =>
+        signedIn ? (
+          <button
+            key={r.emoji}
+            type="button"
+            className={r.mine ? "reaction mine" : "reaction"}
+            aria-pressed={r.mine}
+            aria-label={`${nameOf(r.emoji)}: ${r.count}`}
+            onClick={() => void toggle(r.emoji, !r.mine)}
+          >
+            {r.emoji} {r.count}
+          </button>
+        ) : (
+          <span key={r.emoji} className="reaction" aria-label={`${nameOf(r.emoji)}: ${r.count}`}>
+            {r.emoji} {r.count}
+          </span>
+        ),
+      )}
+      {signedIn && (
+        <button type="button" className="reaction add" aria-expanded={picking} onClick={() => setPicking(!picking)}>
+          React
+        </button>
+      )}
+      {picking && (
+        <div className="reaction-picker" role="group" aria-label="Reactions">
+          {REACTIONS.map(({ emoji, name }) => {
+            const mine = post.reactions.some((r) => r.emoji === emoji && r.mine);
+            return (
+              <button key={emoji} type="button" aria-label={name} aria-pressed={mine} onClick={() => void toggle(emoji, !mine)}>
+                {emoji}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 

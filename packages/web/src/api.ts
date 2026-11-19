@@ -188,6 +188,17 @@ export interface AdminGame {
   createdAt: string;
 }
 
+/** The Reactions anyone can put on a Post, in the order they're shown, each with the name a screen reader says. */
+export const REACTIONS = [
+  { emoji: "👍", name: "Like" },
+  { emoji: "❤️", name: "Love" },
+  { emoji: "😂", name: "Funny" },
+  { emoji: "🎉", name: "Hooray" },
+  { emoji: "🔥", name: "Fire" },
+  { emoji: "😮", name: "Wow" },
+] as const;
+export type Emoji = (typeof REACTIONS)[number]["emoji"];
+
 /** A Post in the Feed, as this viewer may see it. */
 export interface Post {
   id: string;
@@ -204,6 +215,8 @@ export interface Post {
   createdAt: number;
   /** Whether the viewer posted it. */
   mine: boolean;
+  /** The Reactions it has, in the order they're offered (none with no count), and whether the viewer put each on. */
+  reactions: { emoji: Emoji; count: number; mine: boolean }[];
 }
 
 /** What only the person looking is told about a Game; live updates go to everyone, so they never carry it. */
@@ -570,6 +583,12 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
 
     async setModeration(gameId: string, mode: Moderation): Promise<boolean> {
       return (await postJson(`/api/games/${encodeURIComponent(gameId)}/moderation`, { mode })).ok;
+    },
+
+    /** Puts a Reaction on a Post (`on`) or takes it back. */
+    async react(gameId: string, postId: string, emoji: Emoji, on: boolean): Promise<boolean> {
+      const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/posts/${encodeURIComponent(postId)}/reactions`, { emoji, on });
+      return res.ok;
     },
 
     /** Approves a Pending Post or shows a Hidden one again ("visible"), or hides it. */

@@ -44,6 +44,16 @@ describe("Posts on the big screen", () => {
     expect(second!.status).toBe("pending");
   });
 
+  it("shows each Post's Reactions as they come in, with no way to react from the screen", async () => {
+    const { gus, id } = await onTheBigScreen();
+    await gus.post(id, { text: "Nice socks", name: "Gus" });
+    const [p] = await gus.posts(id);
+    await gus.react(id, p!.id, "😂", true);
+
+    await waitFor(async () => expect(within(await latest()).getByLabelText(/funny: 1/i)).toBeInTheDocument());
+    expect(within(await latest()).queryByRole("button")).not.toBeInTheDocument();
+  });
+
   it("keeps to the newest six, so the room can read them", async () => {
     const { gus, id } = await onTheBigScreen();
     for (let n = 1; n <= 8; n++) await gus.post(id, { text: `Post ${n}`, name: "Gus" });

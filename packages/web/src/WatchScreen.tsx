@@ -4,7 +4,7 @@ import { renderSVG } from "uqr";
 import type { GameView, Post, ScreenMode } from "./api.js";
 import { useApi } from "./ApiContext.js";
 import { Countdown } from "./Countdown.js";
-import { PostPhoto, useFeed } from "./Feed.js";
+import { PostPhoto, Reactions, useFeed } from "./Feed.js";
 import { ThemeLogo, useTheme } from "./theme.js";
 import { useLiveGame } from "./useLiveGame.js";
 
@@ -449,6 +449,7 @@ function LatestPosts({ game, posts }: { game: GameView; posts: Post[] }) {
               {giftName(p.giftId) && <span className="muted"> · about {giftName(p.giftId)}</span>}
             </p>
             {p.text && <p className="post-text">{p.text}</p>}
+            <Reactions gameId={game.id} post={p} readOnly />
           </article>
         ))}
       </div>

@@ -153,3 +153,38 @@ describe("Moderation", () => {
     expect(screen.queryByRole("radio", { name: /approval/i })).not.toBeInTheDocument();
   });
 });
+
+describe("Reactions", () => {
+  it("lets a guest react to a Post from the Feed, which everyone following sees, and take it back", async () => {
+    const { origin, signedIn, id, user } = await underway();
+    await (await signedIn("gus@example.com")).post(id, { text: "Socks again!", name: "Gus" });
+    const watcher = browser(origin);
+    openApp(await signedIn("eve@example.com"), `/games/${id}`);
+
+    const socks = await within(await feed()).findByRole("article");
+    await user.click(await within(socks).findByRole("button", { name: /^react/i }));
+    await user.click(within(socks).getByRole("button", { name: /funny/i }));
+
+    const mine = await within(socks).findByRole("button", { name: /funny: 1/i });
+    expect(mine).toHaveAttribute("aria-pressed", "true");
+    await waitFor(async () => expect((await watcher.posts(id))[0]!.reactions).toEqual([{ emoji: "😂", count: 1, mine: false }]));
+
+    await user.click(mine);
+    await waitFor(async () => expect((await watcher.posts(id))[0]!.reactions).toEqual([]));
+    await waitFor(() => expect(within(socks).queryByRole("button", { name: /funny: 1/i })).not.toBeInTheDocument());
+  });
+
+  it("shows the counts to someone signed out, without a way to react", async () => {
+    const { origin, signedIn, id } = await underway();
+    const gus = await signedIn("gus@example.com");
+    await gus.post(id, { text: "Socks again!", name: "Gus" });
+    const [p] = await gus.posts(id);
+    await gus.react(id, p!.id, "🔥", true);
+
+    openApp(browser(origin), `/games/${id}`);
+
+    const socks = await within(await feed()).findByRole("article");
+    await waitFor(() => expect(within(socks).getByText(/🔥\s*1/)).toBeInTheDocument());
+    expect(within(socks).queryByRole("button", { name: /^react/i })).not.toBeInTheDocument();
+  });
+});

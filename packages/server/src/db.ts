@@ -183,6 +183,23 @@ export const posts = sqliteTable(
   (t) => [index("posts_game").on(t.gameId, t.createdAt), check("posts_status", sql`${t.status} IN ('visible', 'pending', 'hidden')`)],
 );
 
+/**
+ * Each person's Reactions to Posts: one row per Reaction they've put on a Post (they may put on several), taken
+ * back by deleting it. Kept with the Game's id so they go when the Game does.
+ */
+export const postReactions = sqliteTable(
+  "post_reactions",
+  {
+    gameId: text("game_id")
+      .notNull()
+      .references(() => games.id),
+    postId: text("post_id").notNull(),
+    email: text("email").notNull(),
+    emoji: text("emoji").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.postId, t.email, t.emoji] }), index("post_reactions_game").on(t.gameId)],
+);
+
 /** Each person's vote in a Game's Worst Gift Vote: one per person, moved by replacing it. */
 export const votes = sqliteTable(
   "votes",

@@ -118,6 +118,10 @@ A picture attached to a Post, at most one per Post; a Post may be just a Photo. 
 All of a Game's visible Posts, newest first, on phones and the big screen.
 _Avoid_: Chat, blog, wall
 
+**Reaction**:
+A friendly emoji anyone signed in puts on a visible Post: 👍 Like, ❤️ Love, 😂 Funny, 🎉 Hooray, 🔥 Fire or 😮 Wow, never a negative one. A person may put on several and take each back. Everyone, the big screen too, sees how many of each a Post has, not who gave them. Reacting isn't posting, so it still works while posting is Paused.
+_Avoid_: Like (as the general name), vote, rating
+
 **Moderation**:
 The Game's rule for Posts, which the Host or a Co-host can switch at any moment: **Open** (Posts appear at once), **Approval** (each waits for the Host or a Co-host to approve it) or **Paused** (nobody can post). In any mode the Host or a Co-host can hide a single Post.
 

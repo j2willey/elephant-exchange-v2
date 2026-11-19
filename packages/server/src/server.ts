@@ -42,7 +42,7 @@ import {
   type ThemeImage,
 } from "./photos.js";
 import { zip } from "./zip.js";
-import { gameEvents, gameHosts, gamePlayers, games, openDb, organizations, posts, sessions, signInLinks, turnClocks, users, votes, type Tx } from "./db.js";
+import { gameEvents, gameHosts, gamePlayers, games, openDb, organizations, postReactions, posts, sessions, signInLinks, turnClocks, users, votes, type Tx } from "./db.js";
 import {
   cohostBody,
   command,
@@ -64,6 +64,8 @@ import {
   orgEdit,
   postBody,
   postStatusBody,
+  reactionBody,
+  REACTIONS,
   timerBody,
   voteBody,
   voteDisplayBody,
@@ -720,6 +722,19 @@ export function createServer({
       .where(seen ? and(eq(posts.gameId, id), seen) : eq(posts.gameId, id))
       .orderBy(desc(posts.createdAt), desc(sql`${posts}.rowid`))
       .all();
+    // Every Reaction in the Game, tallied per Post in the order they're offered, with the viewer's own marked.
+    const tallies = new Map<string, Map<string, { count: number; mine: boolean }>>();
+    for (const r of db.select().from(postReactions).where(eq(postReactions.gameId, id)).all()) {
+      const tally = tallies.get(r.postId) ?? new Map<string, { count: number; mine: boolean }>();
+      const t = tally.get(r.emoji) ?? { count: 0, mine: false };
+      tally.set(r.emoji, { count: t.count + 1, mine: t.mine || r.email === email });
+      tallies.set(r.postId, tally);
+    }
+    const reactionsOf = (postId: string) =>
+      REACTIONS.flatMap((emoji) => {
+        const t = tallies.get(postId)?.get(emoji);
+        return t ? [{ emoji, ...t }] : [];
+      });
     return c.json(
       rows.map((p) => ({
         id: p.id,
@@ -730,6 +745,7 @@ export function createServer({
         status: p.status,
         createdAt: p.createdAt.getTime(),
         mine: p.email === email,
+        reactions: reactionsOf(p.id),
       })),
     );
   });
@@ -1139,6 +1155,30 @@ export function createServer({
     return c.body(null, 204);
   });
 
+  // Anyone signed in can put a Reaction on a visible Post or take it back, even while posting is Paused.
+  app.post("/api/games/:id/posts/:postId/reactions", async (c) => {
+    const { id, postId } = c.req.param();
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in to react" }, 401);
+    const body = await parseBody(c, reactionBody);
+    if (!body.ok) return body.res;
+    const target = db
+      .select({ id: posts.id })
+      .from(posts)
+      .where(and(eq(posts.gameId, id), eq(posts.id, postId), eq(posts.status, "visible")))
+      .get();
+    if (!target) return c.json({ error: "Post not found" }, 404);
+    const { emoji, on } = body.data;
+    const changed = on
+      ? db.insert(postReactions).values({ gameId: id, postId, email, emoji }).onConflictDoNothing().run()
+      : db
+          .delete(postReactions)
+          .where(and(eq(postReactions.postId, postId), eq(postReactions.email, email), eq(postReactions.emoji, emoji)))
+          .run();
+    if (changed.changes > 0) postsChanged(id);
+    return c.body(null, 204);
+  });
+
   // Approving a Pending Post and showing a Hidden one again are the same: it becomes visible.
   app.post("/api/games/:id/posts/:postId/status", async (c) => {
     const { id, postId } = c.req.param();
@@ -1260,7 +1300,7 @@ export function createServer({
   function deleteGame(id: string) {
     stats.snapshotGame(id, true); // its last word in the statistics, which outlive it
     db.transaction((tx) => {
-      for (const table of [votes, posts, turnClocks, gamePlayers, gameHosts, gameEvents]) tx.delete(table).where(eq(table.gameId, id)).run();
+      for (const table of [votes, postReactions, posts, turnClocks, gamePlayers, gameHosts, gameEvents]) tx.delete(table).where(eq(table.gameId, id)).run();
       tx.delete(games).where(eq(games.id, id)).run();
     });
     cache.delete(id);
@@ -1347,7 +1387,10 @@ export function createServer({
       const photoPosts = and(eq(posts.gameId, gameId), isNotNull(posts.photoWidth));
       deleted += db.transaction((tx) => {
         const count = tx.select({ n: sql<number>`count(*)` }).from(posts).where(photoPosts).get()!.n;
-        tx.delete(posts).where(and(photoPosts, eq(posts.text, ""))).run();
+        const photoOnly = and(photoPosts, eq(posts.text, ""));
+        const gone = tx.select({ id: posts.id }).from(posts).where(photoOnly).all().map((p) => p.id);
+        if (gone.length) tx.delete(postReactions).where(inArray(postReactions.postId, gone)).run();
+        tx.delete(posts).where(photoOnly).run();
         tx.update(posts).set({ photoWidth: null, photoHeight: null }).where(photoPosts).run();
         return count;
       });

@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { createServer } from "../src/server.js";
 import { capturingMailer, post, signIn } from "./support.js";
 
-type Post = { id: string; author: string; giftId: string | null; text: string; status: string; mine: boolean };
+type Reaction = { emoji: string; count: number; mine: boolean };
+type Post = { id: string; author: string; giftId: string | null; text: string; status: string; mine: boolean; reactions: Reaction[] };
 
 async function setup() {
   const { sent, mailer } = capturingMailer();
@@ -21,7 +22,9 @@ async function setup() {
   const moderate = (cookie: string, mode: string) => app.request(`/api/games/${id}/moderation`, post({ mode }, cookie));
   const setStatus = (cookie: string, postId: string, status: string) =>
     app.request(`/api/games/${id}/posts/${postId}/status`, post({ status }, cookie));
-  return { app, id, host, as, write, read, moderate, setStatus };
+  const react = (cookie: string | undefined, postId: string, emoji: string, on = true) =>
+    app.request(`/api/games/${id}/posts/${postId}/reactions`, post({ emoji, on }, cookie));
+  return { app, id, host, as, write, read, moderate, setStatus, react };
 }
 
 describe("Posting", () => {
@@ -103,5 +106,78 @@ describe("Moderation", () => {
     expect((await read(gus)).map((p) => p.status)).toEqual(["hidden"]);
     expect((await read(host)).map((p) => p.status)).toEqual(["hidden"]);
     expect((await setStatus(host, "nope", "hidden")).status).toBe(404);
+  });
+});
+
+describe("Reactions", () => {
+  async function onePost() {
+    const s = await setup();
+    const gus = await s.as("gus@example.com");
+    await s.write(gus, { text: "Socks again!", name: "Gus" });
+    const [p] = await s.read();
+    return { ...s, gus, postId: p!.id };
+  }
+  const counts = (p: Post | undefined) => p!.reactions.map((r) => [r.emoji, r.count, r.mine]);
+
+  it("lets anyone signed in react, and shows everyone the counts in a fixed order", async () => {
+    const { as, react, read, postId, host } = await onePost();
+    const eve = await as("eve@example.com");
+
+    expect((await react(eve, postId, "😂")).status).toBe(204);
+    expect((await react(host, postId, "😂")).status).toBe(204);
+    expect((await react(host, postId, "👍")).status).toBe(204);
+
+    expect(counts((await read(eve))[0])).toEqual([
+      ["👍", 1, false],
+      ["😂", 2, true],
+    ]);
+    expect(counts((await read())[0])).toEqual([
+      ["👍", 1, false],
+      ["😂", 2, false],
+    ]);
+  });
+
+  it("counts each person once per reaction, and takes one back on request", async () => {
+    const { as, react, read, postId } = await onePost();
+    const eve = await as("eve@example.com");
+    await react(eve, postId, "❤️");
+    await react(eve, postId, "❤️");
+    await react(eve, postId, "🔥");
+    expect(counts((await read(eve))[0])).toEqual([
+      ["❤️", 1, true],
+      ["🔥", 1, true],
+    ]);
+
+    expect((await react(eve, postId, "❤️", false)).status).toBe(204);
+    expect((await react(eve, postId, "❤️", false)).status).toBe(204); // already gone: nothing to do
+    expect(counts((await read(eve))[0])).toEqual([["🔥", 1, true]]);
+  });
+
+  it("offers only the six friendly reactions", async () => {
+    const { as, react, postId } = await onePost();
+    const eve = await as("eve@example.com");
+    for (const emoji of ["👍", "❤️", "😂", "🎉", "🔥", "😮"]) expect((await react(eve, postId, emoji)).status).toBe(204);
+    for (const emoji of ["👎", "😡", "💩", "x"]) expect((await react(eve, postId, emoji)).status).toBe(400);
+  });
+
+  it("needs someone signed in, and a Post they can see", async () => {
+    const { as, write, react, read, setStatus, moderate, postId, host } = await onePost();
+    const eve = await as("eve@example.com");
+    expect((await react(undefined, postId, "👍")).status).toBe(401);
+    expect((await react(eve, "nope", "👍")).status).toBe(404);
+
+    await setStatus(host, postId, "hidden");
+    expect((await react(eve, postId, "👍")).status).toBe(404);
+
+    await moderate(host, "approval");
+    await write(eve, { text: "Mine", name: "Eve" });
+    const mine = (await read(eve)).find((p) => p.text === "Mine")!;
+    expect((await react(eve, mine.id, "👍")).status).toBe(404); // not until it's approved
+  });
+
+  it("still works while posting is Paused", async () => {
+    const { as, react, moderate, postId, host } = await onePost();
+    await moderate(host, "paused");
+    expect((await react(await as("eve@example.com"), postId, "🎉")).status).toBe(204);
   });
 });

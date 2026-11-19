@@ -7,7 +7,19 @@
   "photo": null,
   "status": "visible",
   "createdAt": 1795025793667,
-  "mine": false
+  "mine": false,
+  "reactions": [
+   {
+    "emoji": "🔥",
+    "count": 3,
+    "mine": false
+   },
+   {
+    "emoji": "😮",
+    "count": 5,
+    "mine": false
+   }
+  ]
  },
  {
   "id": "sI-Nas754ZCKe9vk",
@@ -17,6 +29,18 @@
   "photo": null,
   "status": "visible",
   "createdAt": 1795025793607,
-  "mine": false
+  "mine": false,
+  "reactions": [
+   {
+    "emoji": "❤️",
+    "count": 2,
+    "mine": false
+   },
+   {
+    "emoji": "😂",
+    "count": 7,
+    "mine": false
+   }
+  ]
  }
 ]
