@@ -27,7 +27,7 @@ describe("Attaching a Post to a Gift from the Feed", () => {
 
     await user.click(await within(await gusPost()).findByRole("button", { name: /attach to a gift/i }));
     const form = within(await gusPost()).getByRole("form", { name: /which gift/i });
-    await user.selectOptions(within(form).getByLabelText(/which gift/i), "Mug");
+    await user.selectOptions(within(form).getByLabelText(/which gift/i), "Mug (Ann)");
     await user.click(within(form).getByRole("button", { name: /save/i }));
 
     await waitFor(async () => expect(await gusPost()).toHaveTextContent(/about mug/i));
@@ -42,7 +42,7 @@ describe("Attaching a Post to a Gift from the Feed", () => {
 
     await user.click(await within(await gusPost()).findByRole("button", { name: /attach to a gift/i }));
     const form = within(await gusPost()).getByRole("form", { name: /which gift/i });
-    await user.selectOptions(within(form).getByLabelText(/which gift/i), "Mug");
+    await user.selectOptions(within(form).getByLabelText(/which gift/i), "Mug (Ann)");
     await user.click(within(form).getByRole("button", { name: /save/i }));
     await waitFor(async () => expect((await host.posts(id))[0]!.giftId).toBe("g1"));
   });
@@ -53,5 +53,60 @@ describe("Attaching a Post to a Gift from the Feed", () => {
     await onTab(/^feed/i);
     await gusPost();
     expect(screen.queryByRole("button", { name: /attach to a gift/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("Picking the Gift, in a big Game with two of the same", () => {
+  /** Two Mugs, held by Ann and Bob; Cat is still to go. */
+  async function twoMugs() {
+    const server = await startServer({ draw: drawInOrder });
+    const host = await server.signedIn("host@example.com");
+    const id = await host.createGame({ name: "Big swap", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
+    for (const name of ["Bob", "Ann", "Cat"]) await host.command(id, { type: "AddPlayer", playerId: name.toLowerCase(), name });
+    await host.command(id, { type: "StartGame" });
+    await host.command(id, { type: "OpenGift", playerId: "bob", giftId: "g1", name: "Mug" });
+    await host.command(id, { type: "OpenGift", playerId: "ann", giftId: "g2", name: "Mug" });
+    await host.command(id, { type: "OpenGift", playerId: "cat", giftId: "g3", name: "Candle" });
+    const gus = await server.signedIn("gus@example.com");
+    return { ...server, gus, id, user: userEvent.setup() };
+  }
+  const choices = (select: HTMLElement) => within(select).getAllByRole("option").map((o) => o.textContent);
+
+  it("says who holds each, A–Z by Gift, or by holder at a tap", async () => {
+    const { gus, id, user } = await twoMugs();
+    openApp(gus, `/games/${id}`);
+    await onTab(/^post/i);
+    const form = await screen.findByRole("form", { name: /post to the feed/i });
+    const select = within(form).getByLabelText(/about a gift/i);
+
+    expect(choices(select)).toEqual(["No, just the Feed", "Candle (Cat)", "Mug (Ann)", "Mug (Bob)"]);
+    await user.click(within(form).getByRole("button", { name: /sort by holder/i }));
+    expect(choices(select)).toEqual(["No, just the Feed", "Ann: Mug", "Bob: Mug", "Cat: Candle"]);
+
+    // The one picked is the one posted about: Bob's Mug, not Ann's.
+    await user.selectOptions(select, "Bob: Mug");
+    await user.type(within(form).getByLabelText(/what's happening/i), "Bob loves it");
+    await user.type(within(form).getByLabelText(/your name/i), "Gus");
+    await user.click(within(form).getByRole("button", { name: /^post$/i }));
+    await waitFor(async () => expect((await gus.posts(id)).map((p) => p.giftId)).toEqual(["g1"]));
+  });
+});
+
+describe("Changing your mind about a Post", () => {
+  it("clears what was written, the Photo and the Gift, without posting", async () => {
+    const { gus, id, user } = await underway();
+    openApp(gus, `/games/${id}`);
+    await onTab(/^post/i);
+    const form = await screen.findByRole("form", { name: /post to the feed/i });
+    expect(within(form).queryByRole("button", { name: /^clear$/i })).not.toBeInTheDocument(); // nothing to clear yet
+
+    await user.type(within(form).getByLabelText(/what's happening/i), "Never mind");
+    await user.selectOptions(within(form).getByLabelText(/about a gift/i), "Mug (Ann)");
+    await user.click(within(form).getByRole("button", { name: /^clear$/i }));
+
+    expect(within(form).getByLabelText(/what's happening/i)).toHaveValue("");
+    expect(within(form).getByLabelText(/about a gift/i)).toHaveValue("");
+    expect(within(form).queryByRole("button", { name: /^clear$/i })).not.toBeInTheDocument();
+    expect(await gus.posts(id)).toHaveLength(1); // only the one from before
   });
 });

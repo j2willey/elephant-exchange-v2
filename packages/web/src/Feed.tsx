@@ -330,6 +330,14 @@ export function Composer({
   const locked = !game.me && game.myName?.locked && game.myName.name ? game.myName.name : undefined;
   const asks = !game.me && !locked;
 
+  /** Changed their mind: back to an empty form. */
+  function clear() {
+    setText("");
+    setGiftId(gift?.id ?? "");
+    setPhoto(null);
+    setError(null);
+  }
+
   async function submit(e: FormEvent) {
     e.preventDefault();
     setSending(true);
@@ -352,10 +360,7 @@ export function Composer({
     setSending(false);
     if (result === "posted") {
       if (asks) api.setGuestName(name.trim());
-      setText("");
-      setGiftId(gift?.id ?? "");
-      setPhoto(null);
-      setError(null);
+      clear();
       onPosted();
     } else {
       setError(postErrors[result]);
@@ -408,14 +413,7 @@ export function Composer({
       {game.gifts.length > 0 && !replyTo && !gift && (
         <>
           <label htmlFor={`${ids}-gift`}>About a Gift? (optional)</label>
-          <select id={`${ids}-gift`} value={giftId} onChange={(e) => setGiftId(e.target.value)}>
-            <option value="">No, just the Feed</option>
-            {game.gifts.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name}
-              </option>
-            ))}
-          </select>
+          <GiftSelect id={`${ids}-gift`} game={game} value={giftId} onChange={setGiftId} none="No, just the Feed" />
         </>
       )}
       {game.moderation === "approval" && <p className="muted hint">The Host approves each Post before others see it.</p>}
@@ -424,10 +422,52 @@ export function Composer({
           {error}
         </p>
       )}
-      <button type="submit" disabled={sending || (!text.trim() && !photo) || (asks && !name.trim())}>
-        {sending ? "Posting…" : "Post"}
-      </button>
+      <div className="inline">
+        <button type="submit" disabled={sending || (!text.trim() && !photo) || (asks && !name.trim())}>
+          {sending ? "Posting…" : "Post"}
+        </button>
+        {(text || photo || giftId !== (gift?.id ?? "")) && (
+          <button type="button" className="secondary" disabled={sending} onClick={clear}>
+            Clear
+          </button>
+        )}
+      </div>
     </form>
+  );
+}
+
+/**
+ * Which Gift, from a dropdown. A big Game often has two of the same (two "Gift card"s, two "Ugly Sweater"s), so each
+ * shows who holds it, "Ugly Sweater (Dana)", in A–Z order by Gift; or by holder, "Dana: Ugly Sweater", to find
+ * the one a friend has.
+ */
+function GiftSelect({ id, game, value, onChange, none }: { id: string; game: GameView; value: string; onChange: (giftId: string) => void; none: string }) {
+  const [byHolder, setByHolder] = useState(false);
+  const holderOf = (holderId: string | null) => (holderId ? (game.players.find((p) => p.id === holderId)?.name ?? null) : null);
+  const az = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: "base", numeric: true });
+  const gifts = game.gifts
+    .map((g) => ({ id: g.id, gift: g.name, holder: holderOf(g.holderId) }))
+    .sort((a, b) =>
+      byHolder
+        ? (a.holder === null ? 1 : 0) - (b.holder === null ? 1 : 0) || az(a.holder ?? "", b.holder ?? "") || az(a.gift, b.gift)
+        : az(a.gift, b.gift) || az(a.holder ?? "", b.holder ?? ""),
+    );
+  return (
+    <>
+      <select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">{none}</option>
+        {gifts.map((g) => (
+          <option key={g.id} value={g.id}>
+            {g.holder === null ? g.gift : byHolder ? `${g.holder}: ${g.gift}` : `${g.gift} (${g.holder})`}
+          </option>
+        ))}
+      </select>
+      {gifts.length > 1 && (
+        <button type="button" className="link gift-sort" onClick={() => setByHolder(!byHolder)}>
+          {byHolder ? "Sort by Gift" : "Sort by holder"}
+        </button>
+      )}
+    </>
   );
 }
 
@@ -529,14 +569,7 @@ function AttachToGift({ game, post, onDone }: { game: GameView; post: Post; onDo
   return (
     <form className="stack reply-form" aria-label="Which gift is this about?" onSubmit={save}>
       <label htmlFor={`${ids}-gift`}>Which gift is this about?</label>
-      <select id={`${ids}-gift`} value={giftId} onChange={(e) => setGiftId(e.target.value)}>
-        <option value="">None, just the Feed</option>
-        {game.gifts.map((g) => (
-          <option key={g.id} value={g.id}>
-            {g.name}
-          </option>
-        ))}
-      </select>
+      <GiftSelect id={`${ids}-gift`} game={game} value={giftId} onChange={setGiftId} none="None, just the Feed" />
       <div className="inline">
         <button type="submit">Save</button>
         <button type="button" className="secondary" onClick={() => setOpen(false)}>

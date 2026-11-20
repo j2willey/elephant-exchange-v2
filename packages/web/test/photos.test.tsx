@@ -68,7 +68,7 @@ describe("Photos in Posts", () => {
     const { user, form } = await underway();
     await user.type(within(form).getByLabelText(/your name/i), "Gus");
     await user.upload(within(form).getByLabelText(/add a photo/i), photoFile());
-    await user.selectOptions(within(form).getByLabelText(/about a gift/i), "Mug");
+    await user.selectOptions(within(form).getByLabelText(/about a gift/i), "Mug (Ann)");
     await user.click(within(form).getByRole("button", { name: /^post$/i }));
     await photoInFeed("Gus");
     await onTab(/gifts/i);

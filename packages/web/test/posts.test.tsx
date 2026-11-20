@@ -70,7 +70,7 @@ describe("Posts", () => {
     const { signedIn, id, user } = await underway();
     openApp(await signedIn("gus@example.com"), `/games/${id}`);
 
-    await post(user, "It's a heated mug!", { as: "Gus", about: "Mug" });
+    await post(user, "It's a heated mug!", { as: "Gus", about: "Mug (Bob)" });
 
     await feedShows(/about mug.*it's a heated mug!/i);
     await onTab(/gifts/i);

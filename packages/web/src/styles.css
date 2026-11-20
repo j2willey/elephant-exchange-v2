@@ -2635,3 +2635,10 @@ button.info {
   background: var(--brand);
   border-radius: 10px;
 }
+
+/* Under a Gift dropdown: flip between A–Z by Gift and by holder. */
+.gift-sort {
+  justify-self: start;
+  margin-top: -4px;
+  font-size: 0.9rem;
+}
