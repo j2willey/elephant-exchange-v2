@@ -122,7 +122,7 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
           </li>
         </ol>
         <p className="muted">
-          Made for office holiday parties, family reunions, troops and clubs: 20, 50 or more people.{" "}
+          Made for big parties of 25 or more: office holiday parties, family reunions, troops and clubs.{" "}
           <Link to="/guide">Read the Host's Guide</Link> for running a smooth one.
         </p>
       </section>
@@ -310,7 +310,7 @@ export function Playbook() {
       <header>
         <h2>Host's Guide</h2>
         <p className="muted">
-          How the game works, and how to run a smooth exchange for 20 people or more. A five-minute read; every setting is
+          How the game works, and how to run a smooth exchange for a big party, 25 people or more. A five-minute read; every setting is
           explained at the end.
         </p>
       </header>

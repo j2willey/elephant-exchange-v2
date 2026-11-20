@@ -9,7 +9,7 @@ export const OPTION_HELP: Record<keyof GameOptions, ReactNode> = {
   activeSlots: (
     <>
       How many Players are up at the same time. <strong>1</strong> is the classic game: the whole room watches every
-      Pick. With 20 or more guests, <strong>2 or 3</strong> keeps the party moving: while one Player unwraps, the next is
+      Pick. With 25 or more guests, <strong>2 or 3</strong> keeps the party moving: while one Player unwraps, the next is
       already choosing, and nobody waits an hour for a turn. Each Player still gets exactly one turn.
     </>
   ),

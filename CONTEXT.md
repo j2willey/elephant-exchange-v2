@@ -1,6 +1,6 @@
 # Elephant Exchange
 
-A live companion for White Elephant (Yankee Swap) gift exchanges. It exists to keep large exchanges (50+ Players) moving and fun: everyone can see the Gifts in play and follow along on their phone, so they're ready when they're called. Many Organizations can run their own branded exchanges on one shared service.
+A live companion for White Elephant (Yankee Swap) gift exchanges. It exists to keep big exchanges (25 or more Players) moving and fun: everyone can see the Gifts in play and follow along on their phone, so they're ready when they're called. Many Organizations can run their own branded exchanges on one shared service.
 
 ## Language
 
