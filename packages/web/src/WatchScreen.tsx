@@ -1,3 +1,4 @@
+import { pitchOf } from "./Pitch.js";
 import { useEffect, useMemo, useRef, type RefObject } from "react";
 import { useParams } from "react-router";
 import { renderSVG } from "uqr";
@@ -166,6 +167,7 @@ function Catalog({ game, posts }: { game: GameView; posts: Post[] }) {
               )}
               <strong>{g.name}</strong>
               {g.description && <span className="gift-desc">{g.description}</span>}
+              <CatalogPitch part={pitchOf(posts, g.id).find((p) => p.status === "visible")} />
               <span className="catalog-meta">
                 <span>{holderName(g.holderId)}</span>
                 <StealChip gift={g} maxSteals={game.settings.maxSteals} />
@@ -175,6 +177,16 @@ function Catalog({ game, posts }: { game: GameView; posts: Post[] }) {
         })}
       </ul>
     </div>
+  );
+}
+
+/** The newest part of a Gift's Pitch, on the TV: the holder's own words, in quotes. */
+function CatalogPitch({ part }: { part: Post | undefined }) {
+  if (!part) return null;
+  return (
+    <span className="catalog-pitch">
+      🎤 “{part.text}” <span className="muted">— {part.author}</span>
+    </span>
   );
 }
 

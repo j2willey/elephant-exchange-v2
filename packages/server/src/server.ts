@@ -77,6 +77,7 @@ import {
   renameBody,
   approveNameBody,
   muteBody,
+  pitchBody,
   postGiftBody,
 } from "./schemas.js";
 
@@ -1121,6 +1122,8 @@ export function createServer({
         reactions: reactionsOf(p.id),
         replyTo: quote(p.replyTo),
         replies: replies.get(p.id) ?? 0,
+        // A part of its Gift's Pitch: whose part it is.
+        pitchFor: p.pitchFor,
         // For the Host and Co-hosts: whether its poster is muted, so they can unmute from here.
         ...(hosting ? { authorMuted: mutedPeople.has(p.email) } : {}),
       })),
@@ -1214,6 +1217,64 @@ export function createServer({
     }
     postsChanged(id);
     return c.body(null, 201);
+  });
+
+  /**
+   * A Gift's Pitch: the story its holder tells, to tempt a Steal or to fend one off. Each holder writes their own
+   * part, kept when the Gift is stolen, so the story builds through the night. The holder may write theirs while
+   * they hold the Gift and change or remove it later; the Host and Co-hosts may write any holder's part (for a
+   * guest without a phone) and change any part. It's a Post, so the Feed's rules apply: Approval, Paused, Mute, Hide.
+   */
+  app.put("/api/games/:id/gifts/:giftId/pitch", async (c) => {
+    const { id, giftId } = c.req.param();
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const body = await parseBody(c, pitchBody);
+    if (!body.ok) return body.res;
+    const game = load(id);
+    if (!game) return c.json({ error: "Game not found" }, 404);
+    const gift = gifts(game.state).find((g) => g.id === giftId);
+    if (!gift) return c.json({ error: "No such Gift in this Game" }, 404);
+    const hosting = roleIn(id, email) !== undefined;
+    const me = playerOf(id, email, game);
+    const playerId = body.data.playerId ?? me;
+    if (!playerId) return c.json({ error: "Only the Gift's holder writes its pitch" }, 403);
+    if (!hosting && playerId !== me) return c.json({ error: "You can only write your own part" }, 403);
+    const at = and(eq(posts.gameId, id), eq(posts.giftId, giftId), eq(posts.pitchFor, playerId));
+    const part = db.select().from(posts).where(at).get();
+    if (!part && gift.holderId !== playerId) return c.json({ error: "Only the Gift's holder writes its pitch" }, 403);
+    if (!hosting) {
+      if (phase(game.state) === "ended") return c.json({ code: "GameOver", message: "The Game is over" }, 409);
+      if (game.moderation === "paused") return c.json({ code: "Paused", message: "The Host has paused posting" }, 409);
+      if (nameRow(id, email)?.muted) return c.json({ code: "Muted", message: "The Host has paused your posting" }, 409);
+    }
+    const { text } = body.data;
+    if (!text) {
+      if (part) db.delete(posts).where(eq(posts.id, part.id)).run();
+    } else if (part) {
+      if (part.text !== text) {
+        // Changed words wait again under Approval; a part a Host hid stays hidden.
+        const status = part.status === "hidden" ? "hidden" : !hosting && game.moderation === "approval" ? "pending" : part.status;
+        db.update(posts).set({ text, status }).where(eq(posts.id, part.id)).run();
+      }
+    } else {
+      db.insert(posts)
+        .values({
+          id: randomBytes(12).toString("base64url"),
+          gameId: id,
+          email,
+          author: roster(game.state).find((p) => p.id === playerId)!.name,
+          giftId,
+          pitchFor: playerId,
+          text,
+          status: !hosting && game.moderation === "approval" ? "pending" : "visible",
+          createdAt: now(),
+        })
+        .run();
+      stats.noteFeature(id, "pitch");
+    }
+    postsChanged(id);
+    return c.body(null, 204);
   });
 
   // Every visible Photo in one zip, for the Host to keep before they're deleted (hidden ones stay out).
@@ -1641,11 +1702,12 @@ export function createServer({
     const game = load(id);
     if (!game) return c.json({ error: "Game not found" }, 404);
     const row = db
-      .select({ email: posts.email })
+      .select({ email: posts.email, pitchFor: posts.pitchFor })
       .from(posts)
       .where(and(eq(posts.gameId, id), eq(posts.id, postId)))
       .get();
     if (!row) return c.json({ error: "Post not found" }, 404);
+    if (row.pitchFor !== null) return c.json({ error: "A pitch stays with its Gift" }, 409);
     if (row.email !== email && !roleIn(id, email)) return c.json({ error: "Only its poster, the Host and Co-hosts can change this Post" }, 403);
     const { giftId } = body.data;
     if (giftId !== null && !gifts(game.state).some((g) => g.id === giftId)) return c.json({ error: "No such Gift in this Game" }, 400);

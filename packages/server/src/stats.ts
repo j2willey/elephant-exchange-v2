@@ -475,6 +475,7 @@ export function createStats(db: Db, now: () => Date) {
         { feature: "cohosts", games: countedWith((s) => s.g.cohosts > 0) },
         { feature: "selfSignup", games: countedWith((s) => s.g.selfSignup) },
         { feature: "rosterPaste", games: usedIn("rosterPaste") },
+        { feature: "pitch", games: usedIn("pitch") },
         { feature: "screenModes", games: countedWith((s) => ["rules", "qr", "catalog"].some((m) => used.get(`screen:${m}`)?.has(s.g.gameId))) },
       ],
       returningHosts: { returning: [...byHost.values()].filter((mine) => mine.length >= 2).length, hosts: byHost.size },

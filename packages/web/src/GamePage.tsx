@@ -1,3 +1,4 @@
+import { aboutGift, GiftPitch } from "./Pitch.js";
 import { MyName, NamesToApprove, RenameButton } from "./Rename.js";
 import { StaffMark, useStaff } from "./Cohosts.js";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
@@ -719,7 +720,7 @@ export function Gifts({
   const signedIn = useSignedIn() === true;
   const canAdd = reload !== undefined && signedIn && game.phase !== "ended" && game.moderation !== "paused" && !game.muted;
   // Newest first, as in the Feed.
-  const about = (giftId: string) => posts.filter((p) => p.giftId === giftId && p.status === "visible");
+  const about = (giftId: string) => aboutGift(posts, giftId).filter((p) => p.status === "visible");
   const viewed = game.gifts.find((g) => g.id === viewing);
   const holderName = (id: string | null) => (id === null ? "on the table" : (game.players.find((p) => p.id === id)?.name ?? "?"));
   const isStarred = (giftId: string) => stars?.starred.has(giftId) ?? false;
@@ -759,6 +760,7 @@ export function Gifts({
                   }}
                 />
               )}
+              <GiftPitch game={game} gift={g} posts={posts} reload={reload} />
               <GiftNewest posts={about(g.id)} giftName={g.name} onOpen={() => setViewing(g.id)} />
               {canAdd && adding !== g.id && (
                 <button type="button" className="link" aria-label={`Add a photo of ${g.name}`} onClick={() => setAdding(g.id)}>

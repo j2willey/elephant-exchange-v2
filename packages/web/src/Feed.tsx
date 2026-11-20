@@ -83,7 +83,7 @@ export function Feed({
                 <span className="muted">
                   {" · "}
                   <button type="button" className="link about-gift" onClick={() => onShowGift(p.giftId!)}>
-                    about {giftName(p.giftId)}
+                    {p.pitchFor ? `🎤 pitching ${giftName(p.giftId)}` : `about ${giftName(p.giftId)}`}
                   </button>
                 </span>
               )}
@@ -94,7 +94,7 @@ export function Feed({
             {p.status === "hidden" && <p className="badge">Hidden</p>}
             {p.text && <p className="post-text">{p.text}</p>}
             {p.photo && <PostPhoto post={p} />}
-            {(p.mine || hosting) && game.gifts.length > 0 && <AttachToGift game={game} post={p} onDone={reload} />}
+            {(p.mine || hosting) && !p.pitchFor && game.gifts.length > 0 && <AttachToGift game={game} post={p} onDone={reload} />}
             {p.status === "visible" && (
               <div className="post-actions">
                 <Reactions gameId={game.id} post={p} reload={reload} />

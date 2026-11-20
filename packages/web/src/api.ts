@@ -324,6 +324,8 @@ export interface Post {
   replies: number;
   /** For the Host and Co-hosts only: whether its poster is muted. */
   authorMuted?: boolean;
+  /** Set when it's a part of its Gift's Pitch: the Player whose part it is. */
+  pitchFor: string | null;
 }
 
 /** Whose name the Host or a Co-host is changing: a Player, whoever wrote a Post, or someone whose name is waiting. */
@@ -797,6 +799,15 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
     },
 
     /** Hides a Post (with every reply under it, given `thread`), or shows it again with whatever was hidden with it. */
+    /** Writes, changes or (with empty text) removes a part of a Gift's Pitch: the viewer's own, or for a Host, `playerId`'s. */
+    async setPitch(gameId: string, giftId: string, text: string, playerId?: string): Promise<boolean> {
+      const res = await sendJson("PUT", `/api/games/${encodeURIComponent(gameId)}/gifts/${encodeURIComponent(giftId)}/pitch`, {
+        text,
+        ...(playerId ? { playerId } : {}),
+      });
+      return res.ok;
+    },
+
     async setPostStatus(gameId: string, postId: string, status: "visible" | "hidden", thread = false): Promise<boolean> {
       const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/posts/${encodeURIComponent(postId)}/status`, {
         status,

@@ -126,6 +126,10 @@ _Avoid_: Chat, blog, wall
 A Post that answers another visible Post in the same Game. It joins the top of the Feed like any Post (following Moderation, and hidden the same way) with a small quote of the one it answers above it: who wrote it, its first words and a thumbnail of its Photo; tapping the quote goes to the original. The original shows how many replies everyone can see. If the original is later hidden or removed, the quote says so instead.
 _Avoid_: Comment, thread
 
+**Pitch**:
+A Gift's story, told by its holders: a horrible Gift gets a creative, enticing story to tempt a Steal, a loved one every reason nobody should take it. Each holder writes their own part, signed with their Player's name, while they hold the Gift; it stays when the Gift is stolen, so the story builds through the night, newest part on top. A holder may change or remove only their own part, any time before the Game ends; the Host and Co-hosts may write the holder's part for them (a Player without a phone) and change any part. Up to 500 characters a part. Each part is a Post about the Gift, so Moderation applies (Approval, Paused, Mute, Hide) and it shows in the Feed too; it can't be moved to another Gift. Separate from the Gift's name and details, which are the Host's facts.
+_Avoid_: Description (that's the Host's details), story, blurb
+
 **Reaction**:
 A friendly emoji anyone signed in puts on a visible Post: 👍 Like, ❤️ Love, 😂 Funny, 🎉 Hooray, 🔥 Fire, 😮 Wow, or the holiday ones, ⛄ Snowman and the Leg lamp (our own icon, since there's no emoji for it); never a negative one. A person may put on several and take each back. Everyone, the big screen too, sees how many of each a Post has, not who gave them. Reacting isn't posting, so it still works while posting is Paused.
 _Avoid_: Like (as the general name), vote, rating

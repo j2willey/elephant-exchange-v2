@@ -1,3 +1,4 @@
+import { aboutGift, GiftPitch } from "./Pitch.js";
 import { RenameButton } from "./Rename.js";
 import { GiftMedia } from "./GiftPosts.js";
 import { StaffMark } from "./Cohosts.js";
@@ -96,7 +97,7 @@ export function LaptopConsole({
           const takeable = stealing !== null && g.holderId !== stealing && !g.frozen;
           return (
             <li key={g.id} id={`gift-${g.id}`} tabIndex={-1} aria-label={g.name}>
-              <GiftMedia giftName={g.name} posts={posts.filter((p) => p.giftId === g.id && p.status === "visible")} />
+              <GiftMedia giftName={g.name} posts={aboutGift(posts, g.id).filter((p) => p.status === "visible")} />
               <span className="lc-gift-name">
                 <strong>{g.name}</strong>
                 {g.frozen && <span className="badge">Frozen</span>}
@@ -110,6 +111,7 @@ export function LaptopConsole({
                   </button>
                 )}
                 {g.description && <span className="gift-desc">{g.description}</span>}
+                <GiftPitch game={game} gift={g} posts={posts} reload={reloadFeed} />
               </span>
               <span className="muted">{g.holderId === null ? "On the table" : <>Held by <strong>{nameOf(g.holderId)}</strong></>}</span>
               <span className="lc-steals">

@@ -394,6 +394,12 @@ export function Playbook() {
           out, Skip them and they'll be called again later. Tapped the wrong thing? Undo takes back the last Pick.
         </p>
         <p>
+          <strong>🎤 The pitch.</strong> The holder of a Gift can pitch it from their phone: a creative story to tempt
+          someone into stealing a horrible gift, or every reason nobody should take one they love. When it's stolen, the
+          new holder adds their own part, so the story builds through the night. You or a Co-host can pitch for a guest
+          without a phone. Read the best ones aloud; the TV's catalog shows the newest part of each.
+        </p>
+        <p>
           <strong>The Steal limit.</strong> A Gift is Frozen by the Steal that reaches the limit, and the Player who made
           it keeps it. Frozen Gifts sink to the bottom of the scoreboard.
         </p>

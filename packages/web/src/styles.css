@@ -2447,3 +2447,54 @@ button.info {
 .records li {
   margin: 4px 0;
 }
+
+/* A Gift's Pitch (Pitch.tsx): its holders' parts, newest first, under the Gift. */
+.pitch {
+  display: block;
+  margin-top: 4px;
+}
+
+.pitch-parts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+/* Plain lines, not Gift rows: the Gifts list's and Gift Tracker's row layout mustn't reach them. */
+.gifts .pitch-parts li,
+.lc-gifts .pitch-parts li {
+  display: block;
+  min-height: 0;
+  margin: 2px 0;
+  padding: 0;
+  border: 0;
+}
+
+.pitch-parts .link,
+.pitch-parts .badge,
+.lc-gifts .pitch-parts li button,
+.lc-gifts .pitch button,
+.lc-gifts .pitch-form button {
+  min-height: 0;
+  margin-left: 6px;
+  padding: 2px 4px;
+  font-style: normal;
+}
+
+.lc-gifts .pitch-form .inline button {
+  padding: 8px 14px;
+}
+
+.pitch-form textarea {
+  width: 100%;
+}
+
+.catalog-pitch {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-style: italic;
+}

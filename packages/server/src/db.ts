@@ -233,9 +233,17 @@ export const posts = sqliteTable(
      * whose thread was hidden, or "mute" when its poster was muted with their Posts hidden. Null when hidden by itself.
      */
     hiddenWith: text("hidden_with"),
+    /**
+     * Set when the Post is a part of its Gift's Pitch: the Player whose part it is (the Gift's holder when it was
+     * written). One part per Player per Gift; the parts build up as the Gift is stolen.
+     */
+    pitchFor: text("pitch_for"),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   },
-  (t) => [index("posts_game").on(t.gameId, t.createdAt), check("posts_status", sql`${t.status} IN ('visible', 'pending', 'hidden')`)],
+  (t) => [
+    index("posts_game").on(t.gameId, t.createdAt),
+    uniqueIndex("posts_pitch_once").on(t.gameId, t.giftId, t.pitchFor),
+    check("posts_status", sql`${t.status} IN ('visible', 'pending', 'hidden')`)],
 );
 
 /**

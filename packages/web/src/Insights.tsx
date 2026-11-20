@@ -9,6 +9,7 @@ const FEATURES: Record<string, string> = {
   cohosts: "Co-hosts",
   selfSignup: "Self sign-up",
   rosterPaste: "Roster paste",
+  pitch: "Gift pitches",
   screenModes: "Scoreboard modes",
 };
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
