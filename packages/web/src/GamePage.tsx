@@ -591,6 +591,11 @@ function Turn({
           </button>
         </form>
       )}
+      {canOpen && !gift.trim() && (
+        <button className="secondary" onClick={() => send({ type: "OpenGift", playerId, giftId: crypto.randomUUID(), name: "" })}>
+          ⏩ Opened: name it later
+        </button>
+      )}
       {onTable.length > 0 && (
         <div className="steals">
           <p className="muted">On the table:</p>
@@ -679,15 +684,21 @@ export function Gifts({
             )}
             <span className="gift-name">
               <strong>{g.name}</strong> — {holderName(g.holderId)}
-              {onEdit && editing !== g.id && (
+              {!g.named && !onEdit && <span className="muted"> (name to come)</span>}
+              {onEdit && editing !== g.id && (g.named ? (
                 <button className="link" aria-label={`Edit ${g.name}`} onClick={() => setEditing(g.id)}>
                   Edit
                 </button>
-              )}
+              ) : (
+                <button className="needs-name" aria-label={`Name ${g.name}`} onClick={() => setEditing(g.id)}>
+                  ✏️ Needs a name
+                </button>
+              ))}
               {g.description && editing !== g.id && <span className="gift-desc">{g.description}</span>}
               {onEdit && editing === g.id && (
                 <EditGift
-                  gift={g}
+                  gift={g.named ? g : { ...g, name: "" }}
+                  label={`Edit ${g.name}`}
                   onCancel={() => setEditing(null)}
                   onSave={async (change) => {
                     setEditing(null);
@@ -719,10 +730,12 @@ export function Gifts({
 /** The Host's correction to a Gift's name, or the details they add, inline on the phone. */
 function EditGift({
   gift,
+  label,
   onSave,
   onCancel,
 }: {
   gift: { id: string; name: string; description: string };
+  label: string;
   onSave: (gift: { name: string; description: string }) => Promise<void>;
   onCancel: () => void;
 }) {
@@ -731,7 +744,7 @@ function EditGift({
   return (
     <form
       className="stack edit-gift"
-      aria-label={`Edit ${gift.name}`}
+      aria-label={label}
       onKeyDown={(e) => e.key === "Escape" && onCancel()}
       onSubmit={(e) => {
         e.preventDefault();

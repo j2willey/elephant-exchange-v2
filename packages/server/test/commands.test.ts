@@ -36,6 +36,21 @@ describe("Commands over HTTP", () => {
     expect(await (await app.request(`/api/games/${id}`)).json()).toMatchObject({ active: ["bob"] });
   });
 
+  it("opens a Gift with no name, to be named later, and still wants one when it's named", async () => {
+    const { id, app, send } = await setup(scriptedDraw(["ann", "bob"]));
+    await send({ type: "AddPlayer", playerId: "ann", name: "Ann" });
+    await send({ type: "AddPlayer", playerId: "bob", name: "Bob" });
+    await send({ type: "StartGame" });
+
+    const res = await send({ type: "OpenGift", playerId: "ann", giftId: "g1", name: "   " });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ gifts: [{ id: "g1", name: "Gift 1", named: false }] });
+
+    expect((await send({ type: "DescribeGift", giftId: "g1", name: "", description: "" })).status).toBe(400);
+    await send({ type: "DescribeGift", giftId: "g1", name: "Lava lamp", description: "" });
+    expect(await (await app.request(`/api/games/${id}`)).json()).toMatchObject({ gifts: [{ name: "Lava lamp", named: true }] });
+  });
+
   it("takes a Gift's description when it's opened, and a correction to it at any time, even after the Game ends", async () => {
     const { app, id, send } = await setup(scriptedDraw(["ann", "bob"]));
     await send({ type: "AddPlayer", playerId: "ann", name: "Ann" });

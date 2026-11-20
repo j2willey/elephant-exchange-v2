@@ -135,10 +135,10 @@ export function decide(state: GameState, command: Command, draw: DrawFn): Event[
       const gift = state.gifts.find((g) => g.id === command.giftId);
       if (!gift) return { code: "GiftNotOpened", message: `No opened Gift ${command.giftId}` };
       if (gift.holderId === null) {
-        return { code: "GiftOnTable", message: `${gift.name} is on the table: take it, don't steal it` };
+        return { code: "GiftOnTable", message: `${giftLabel(state, gift.id)} is on the table: take it, don't steal it` };
       }
       if (gift.steals >= state.settings.maxSteals) {
-        return { code: "GiftFrozen", message: `${gift.name} is Frozen and can't be stolen` };
+        return { code: "GiftFrozen", message: `${giftLabel(state, gift.id)} is Frozen and can't be stolen` };
       }
       if (state.takenFrom[command.playerId] === gift.id) {
         return { code: "NoTakeBacks", message: "You can't steal back the Gift just taken from you" };
@@ -379,7 +379,26 @@ export function roster(state: GameState): { id: PlayerId; name: string }[] {
   return state.players.map((p) => ({ id: p.id, name: p.name }));
 }
 
-/** Opened Gifts in the order opened. A null holder is a Returned Gift. */
-export function gifts(state: GameState): { id: GiftId; name: string; description: string; holderId: PlayerId | null; steals: number; frozen: boolean }[] {
-  return state.gifts.map((g) => ({ id: g.id, name: g.name, description: g.description, holderId: g.holderId, steals: g.steals, frozen: isFrozen(state, g.id) }));
+/**
+ * What a Gift is called: its name, or for one opened without a name (to keep up with a fast party, named later)
+ * "Gift 3", by the order it was opened.
+ */
+function giftLabel(state: GameState, giftId: GiftId): string {
+  const i = state.gifts.findIndex((g) => g.id === giftId);
+  return state.gifts[i]?.name || `Gift ${i + 1}`;
+}
+
+/** Opened Gifts in the order opened. A null holder is a Returned Gift; `named` is false until someone names it. */
+export function gifts(
+  state: GameState,
+): { id: GiftId; name: string; named: boolean; description: string; holderId: PlayerId | null; steals: number; frozen: boolean }[] {
+  return state.gifts.map((g) => ({
+    id: g.id,
+    name: giftLabel(state, g.id),
+    named: g.name !== "",
+    description: g.description,
+    holderId: g.holderId,
+    steals: g.steals,
+    frozen: isFrozen(state, g.id),
+  }));
 }

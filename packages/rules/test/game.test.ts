@@ -702,8 +702,8 @@ describe("Gifts on view", () => {
     );
 
     expect(gifts(state)).toEqual([
-      { id: "g1", name: "Socks", description: "", holderId: "bob", steals: 1, frozen: true },
-      { id: "g2", name: "Mug", description: "", holderId: "ann", steals: 0, frozen: false },
+      { id: "g1", name: "Socks", named: true, description: "", holderId: "bob", steals: 1, frozen: true },
+      { id: "g2", name: "Mug", named: true, description: "", holderId: "ann", steals: 0, frozen: false },
     ]);
   });
 });
@@ -752,5 +752,55 @@ describe("Describing a Gift", () => {
   it("refuses a Gift that hasn't been opened", () => {
     const state = play({ activeSlots: 1, maxSteals: 3 }, opened, draw());
     expect(decide(state, { type: "DescribeGift", giftId: "g9", name: "Mug", description: "" }, draw())).toMatchObject({ code: "GiftNotOpened" });
+  });
+});
+
+describe("A Gift opened without a name", () => {
+  const unnamed = (): Command[] => [
+    ...addPlayers("ann", "bob", "cat"),
+    { type: "StartGame" },
+    { type: "OpenGift", playerId: "bob", giftId: "g1", name: "Chia Pet" },
+    { type: "OpenGift", playerId: "cat", giftId: "g2", name: "" },
+  ];
+
+  it("is called by the order it was opened until someone names it, and says it needs a name", () => {
+    const state = play({ activeSlots: 1, maxSteals: 3 }, unnamed(), scriptedDraw(["bob", "cat", "ann"]));
+    expect(gifts(state).map((g) => [g.name, g.named])).toEqual([
+      ["Chia Pet", true],
+      ["Gift 2", false],
+    ]);
+
+    const named = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [...unnamed(), { type: "DescribeGift", giftId: "g2", name: "Lava lamp", description: "" }],
+      scriptedDraw(["bob", "cat", "ann"]),
+    );
+    expect(gifts(named).map((g) => [g.name, g.named])).toEqual([
+      ["Chia Pet", true],
+      ["Lava lamp", true],
+    ]);
+  });
+
+  it("is called that in the rules' messages too", () => {
+    const state = play(
+      { activeSlots: 1, maxSteals: 0 },
+      unnamed(),
+      scriptedDraw(["bob", "cat", "ann"]),
+    );
+    expect(decide(state, { type: "Steal", playerId: "ann", giftId: "g2" }, scriptedDraw([]))).toMatchObject({
+      code: "GiftFrozen",
+      message: "Gift 2 is Frozen and can't be stolen",
+    });
+  });
+});
+
+describe("Two people entering the same Turn", () => {
+  it("records it once: the second finds the Player is no longer up", () => {
+    const draw = scriptedDraw(["bob", "cat", "ann"]);
+    const state = play({ activeSlots: 1, maxSteals: 3 }, [...addPlayers("ann", "bob", "cat"), { type: "StartGame" }], draw);
+    const first = evolveAll(state, decide(state, { type: "OpenGift", playerId: "bob", giftId: "g1", name: "Socks" }, draw));
+
+    expect(decide(first, { type: "OpenGift", playerId: "bob", giftId: "g9", name: "Socks" }, draw)).toMatchObject({ code: "NotActive" });
+    expect(gifts(first)).toHaveLength(1);
   });
 });

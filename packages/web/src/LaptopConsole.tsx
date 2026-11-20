@@ -97,9 +97,15 @@ export function LaptopConsole({
               <span className="lc-gift-name">
                 <strong>{g.name}</strong>
                 {g.frozen && <span className="badge">Frozen</span>}
-                <button className="link" aria-label={`Edit ${g.name}`} title="Edit" onClick={() => setEditing(g)}>
-                  ✏️
-                </button>
+                {g.named ? (
+                  <button className="link" aria-label={`Edit ${g.name}`} title="Edit" onClick={() => setEditing(g)}>
+                    ✏️
+                  </button>
+                ) : (
+                  <button className="needs-name" aria-label={`Name ${g.name}`} onClick={() => setEditing(g)}>
+                    ✏️ Needs a name
+                  </button>
+                )}
                 {g.description && <span className="gift-desc">{g.description}</span>}
               </span>
               <span className="muted">{g.holderId === null ? "On the table" : <>Held by <strong>{nameOf(g.holderId)}</strong></>}</span>
@@ -240,14 +246,19 @@ export function LaptopConsole({
             setOpening(null);
             await send({ type: "OpenGift", playerId, giftId: crypto.randomUUID(), name, ...(description ? { description } : {}) });
           }}
+          onLater={async () => {
+            const playerId = opening.id;
+            setOpening(null);
+            await send({ type: "OpenGift", playerId, giftId: crypto.randomUUID(), name: "" });
+          }}
         />
       )}
       {editing && (
         <GiftDialog
-          title="✏️ Edit gift"
+          title={editing.named ? "✏️ Edit gift" : `✏️ Name ${editing.name}`}
           label={`Edit ${editing.name}`}
           context={editing.holderId === null ? "On the table" : `Held by ${nameOf(editing.holderId)}`}
-          gift={editing}
+          gift={editing.named ? editing : { ...editing, name: "" }}
           onCancel={() => setEditing(null)}
           onSave={async ({ name, description }) => {
             const giftId = editing.id;
@@ -385,6 +396,7 @@ function GiftDialog({
   gift,
   onSave,
   onCancel,
+  onLater,
 }: {
   title: string;
   label: string;
@@ -392,6 +404,8 @@ function GiftDialog({
   gift?: { name: string; description: string };
   onSave: (gift: { name: string; description: string }) => Promise<void>;
   onCancel: () => void;
+  /** When opening: record the open now and leave the name for later (a busy party). */
+  onLater?: () => Promise<void>;
 }) {
   const [name, setName] = useState(gift?.name ?? "");
   const [description, setDescription] = useState(gift?.description ?? "");
@@ -419,6 +433,11 @@ function GiftDialog({
           <button type="button" className="secondary" onClick={onCancel}>
             Cancel
           </button>
+          {onLater && (
+            <button type="button" className="secondary" onClick={() => void onLater()}>
+              ⏩ Name it later
+            </button>
+          )}
           <button type="submit" disabled={!name.trim()}>
             Save
           </button>
