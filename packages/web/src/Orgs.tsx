@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import type { ColorChange, MyOrg } from "./api.js";
 import { useApi } from "./ApiContext.js";
+import party from "./assets/landing-party.webp";
 import { ConfirmDelete } from "./ConfirmDelete.js";
 
 /** The app's own colors, shown in a color picker when a Theme leaves that part unset. Kept in step with styles.css. */
@@ -137,6 +138,7 @@ export function OrgPage() {
           url={org.backgroundUrl}
           removeLabel="Remove the background"
           onChange={async (file) => update(await api.setOrgImage(org.id, "background", file))}
+          ready={{ label: "🎄 Use the holiday party photo", src: party }}
         />
       </section>
     </div>
@@ -206,6 +208,7 @@ export function ImageField({
   url,
   removeLabel,
   onChange,
+  ready,
 }: {
   id: string;
   label: string;
@@ -214,12 +217,30 @@ export function ImageField({
   url: string | null;
   removeLabel: string;
   onChange: (file: File | null) => Promise<void>;
+  /** A ready-made image the app comes with, offered in one tap, for a Host without one of their own. */
+  ready?: { label: string; src: string };
 }) {
   const [busy, setBusy] = useState(false);
+  const [readyFailed, setReadyFailed] = useState(false);
   const change = async (file: File | null) => {
     setBusy(true);
+    setReadyFailed(false);
     await onChange(file);
     setBusy(false);
+  };
+  // Sent like any image the Host picks, so it's stored and shown the same way.
+  const useReady = async (src: string) => {
+    setBusy(true);
+    setReadyFailed(false);
+    try {
+      const res = await fetch(src);
+      if (!res.ok) throw new Error(`${res.status}`);
+      await onChange(new File([await res.arrayBuffer()], "ready-made.webp", { type: "image/webp" }));
+    } catch {
+      setReadyFailed(true); // whatever was there stays
+    } finally {
+      setBusy(false);
+    }
   };
   return (
     <div className="image-field">
@@ -237,6 +258,16 @@ export function ImageField({
           if (file) void change(file);
         }}
       />
+      {ready && (
+        <button type="button" className="link" disabled={busy} onClick={() => void useReady(ready.src)}>
+          {ready.label}
+        </button>
+      )}
+      {readyFailed && (
+        <p className="error" role="alert">
+          That didn't load. Please try again.
+        </p>
+      )}
       {url && (
         <button type="button" className="link danger" disabled={busy} onClick={() => void change(null)}>
           {removeLabel}

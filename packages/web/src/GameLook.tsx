@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { GameView, MyOrg } from "./api.js";
 import { useApi } from "./ApiContext.js";
+import party from "./assets/landing-party.webp";
 import { ImageField, ThemeColors } from "./Orgs.js";
 
 /**
@@ -67,6 +68,7 @@ export function GameLook({ game }: { game: GameView }) {
         url={theme.overrides.background ? theme.backgroundUrl : null}
         removeLabel={`Use ${fallback} background`}
         onChange={async (file) => report(await api.setGameImage(game.id, "background", file))}
+        ready={{ label: "🎄 Use the holiday party photo", src: party }}
       />
       {error && (
         <p className="error" role="alert">

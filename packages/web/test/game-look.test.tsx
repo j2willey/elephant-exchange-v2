@@ -1,7 +1,9 @@
 import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { browser, drawInOrder, openApp, startServer } from "./harness.js";
 
 const tinyPng = Uint8Array.from(
@@ -73,5 +75,60 @@ describe("A Game's look", () => {
     openApp(browser(origin), `/games/${id}`);
     await waitFor(() => expect(cssVar("--brand")).toBe("#c8102e"));
     expect(screen.queryByRole("region", { name: /how this game looks/i })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The app's own party photo, as the browser would fetch it from the build; anything else goes on to the server.
+ * `found: false` is the photo failing to load (a dropped connection, say).
+ */
+function partyPhotoServed(found = true) {
+  const real = globalThis.fetch;
+  const bytes = readFileSync(join(import.meta.dirname, "../src/assets/landing-party.webp"));
+  vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) =>
+    String(input).includes("landing-party")
+      ? Promise.resolve(found ? new Response(bytes, { headers: { "content-type": "image/webp" } }) : new Response("gone", { status: 404 }))
+      : real(input, init),
+  );
+}
+afterEach(() => vi.unstubAllGlobals());
+
+describe("The ready-made party photo", () => {
+  it("becomes the Game's background in one tap, for a Host without a photo of their own", async () => {
+    partyPhotoServed();
+    const { host, user } = await organizer();
+    const id = await host.createGame({ name: "Party", options: { ...RECOMMENDED_OPTIONS, rosterMode: "host" } });
+    openApp(host, `/games/${id}/settings`);
+
+    await user.click(within(await panel()).getByRole("button", { name: /use the holiday party photo/i }));
+
+    expect(await within(await panel()).findByRole("img", { name: /this game's own background/i })).toBeInTheDocument();
+    await waitFor(() => expect(cssVar("--page-image")).toMatch(new RegExp(`url\\("/api/games/${id}/theme/background\\?v=[^"]+"\\)`)));
+  });
+
+  it("is offered for an Organization's background too", async () => {
+    partyPhotoServed();
+    const { host, lodge, user } = await organizer();
+    openApp(host, `/orgs/${lodge}`);
+
+    await user.click(await screen.findByRole("button", { name: /use the holiday party photo/i }));
+
+    expect(await screen.findByRole("img", { name: /lodge 22 background/i })).toBeInTheDocument();
+    expect((await host.myOrgs()).find((o) => o.id === lodge)).toMatchObject({ backgroundUrl: expect.stringMatching(/background/) });
+  });
+
+  it("leaves the background as it was if the photo doesn't load, and says so", async () => {
+    partyPhotoServed(false);
+    const { host, user } = await organizer();
+    const id = await host.createGame({ name: "Party", options: { ...RECOMMENDED_OPTIONS, rosterMode: "host" } });
+    await host.setGameImage(id, "background", new File([tinyPng], "bg.png", { type: "image/png" }));
+    openApp(host, `/games/${id}/settings`);
+    const look = await panel();
+    const before = (await within(look).findByRole("img", { name: /this game's own background/i })).getAttribute("src");
+
+    await user.click(within(look).getByRole("button", { name: /use the holiday party photo/i }));
+
+    expect(await within(look).findByRole("alert")).toHaveTextContent(/didn't load/i);
+    expect(within(look).getByRole("img", { name: /this game's own background/i })).toHaveAttribute("src", before!);
   });
 });
