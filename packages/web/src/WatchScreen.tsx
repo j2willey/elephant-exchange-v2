@@ -5,6 +5,7 @@ import { renderSVG } from "uqr";
 import type { GameView, Post, ScreenMode } from "./api.js";
 import { useApi } from "./ApiContext.js";
 import { Countdown } from "./Countdown.js";
+import { Highlights } from "./Highlights.js";
 import { PostPhoto, QuoteCard, Reactions, useFeed } from "./Feed.js";
 import { ThemeLogo, useTheme } from "./theme.js";
 import { useLiveGame } from "./useLiveGame.js";
@@ -35,6 +36,8 @@ export function WatchScreen() {
         <Join gameId={game.id} big waiting={game.phase === "setup" ? players : undefined} />
       ) : game.screen === "catalog" ? (
         <Catalog game={game} posts={posts} />
+      ) : game.screen === "highlights" ? (
+        <Highlights game={game} posts={posts} />
       ) : (
         <div className="screen-body">
           <div className="screen-main">
@@ -82,6 +85,7 @@ const screenModes: { mode: ScreenMode; label: string }[] = [
   { mode: "rules", label: "Rules" },
   { mode: "qr", label: "QR code" },
   { mode: "catalog", label: "Catalog" },
+  { mode: "highlights", label: "✨ Highlights" },
 ];
 
 /**
@@ -93,7 +97,8 @@ export function ScreenSwitch({ game }: { game: GameView }) {
   return (
     <div role="group" aria-label="Scoreboard shows" className="screen-switch">
       <span className="screen-switch-label">Scoreboard shows</span>
-      {screenModes.map(({ mode, label }) => (
+      {/* The night's highlights, once there's a night to look back on (or if a Co-host already put them up). */}
+      {screenModes.filter(({ mode }) => mode !== "highlights" || game.phase === "ended" || game.screen === "highlights").map(({ mode, label }) => (
         <button key={mode} className="toggle" aria-pressed={game.screen === mode} onClick={() => void api.setScreen(game.id, mode)}>
           {label}
         </button>

@@ -176,6 +176,13 @@
       "when": 1795208954103,
       "tag": "0024_game_tagline",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1795211423528,
+      "tag": "0025_screen_highlights",
+      "breakpoints": true
     }
   ]
 }

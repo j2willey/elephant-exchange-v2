@@ -158,7 +158,7 @@ interface LoadedGame {
     own: ThemeParts;
   };
   /** What the big screen shows: the Gift board, the rules, the join code, or the catalog. */
-  screen: "gifts" | "rules" | "qr" | "catalog";
+  screen: "gifts" | "rules" | "qr" | "catalog" | "highlights";
   vote: {
     status: "none" | "open" | "closed";
     display: "live" | "hidden" | "parade";
