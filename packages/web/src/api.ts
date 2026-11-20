@@ -659,6 +659,12 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
     },
 
     /** Approves a Pending Post or shows a Hidden one again ("visible"), or hides it. */
+    /** Changes the name the person looking goes by in this Game, unless the Host has locked it. */
+    async changeMyName(gameId: string, name: string): Promise<"ok" | "locked" | "failed"> {
+      const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/me/name`, { name });
+      return res.status === 204 ? "ok" : res.status === 409 ? "locked" : "failed";
+    },
+
     /** The Host or a Co-host renames a Player, or whoever wrote a Post, everywhere; `locked` keeps them from changing it. */
     async rename(gameId: string, who: { playerId: string } | { postId: string }, name: string, locked: boolean): Promise<boolean> {
       const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/names`, { ...who, name, locked });

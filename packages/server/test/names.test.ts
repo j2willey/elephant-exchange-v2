@@ -128,3 +128,40 @@ describe("A Guest's name", () => {
     expect((await game()).myName).toBeNull();
   });
 });
+
+describe("Someone changing their own name", () => {
+  const change = (app: { request: (p: string, i?: RequestInit) => Response | Promise<Response> }, id: string, cookie: string, name: string) =>
+    app.request(`/api/games/${id}/me/name`, post({ name }, cookie));
+
+  it("lets a Player change theirs, on the roster and their Posts", async () => {
+    const { app, id, tess, tessId, nameOf, postBy } = await setup();
+    expect((await change(app, id, tess, "Tessa")).status).toBe(204);
+    expect(await nameOf(tessId)).toBe("Tessa");
+    expect((await postBy("Hi from Tess")).author).toBe("Tessa");
+  });
+
+  it("lets a Guest change theirs, before or after posting", async () => {
+    const { app, id, gus, as, game, postBy } = await setup();
+    expect((await change(app, id, gus, "Gus")).status).toBe(204);
+    expect((await postBy("Hi from Gus")).author).toBe("Gus");
+
+    const dot = await as("dot@example.com");
+    expect((await change(app, id, dot, "Dot")).status).toBe(204);
+    expect((await game(dot)).myName).toEqual({ name: "Dot", locked: false });
+  });
+
+  it("refuses once the Host has locked it", async () => {
+    const { app, id, tess, host, tessId, rename, nameOf } = await setup();
+    await rename(host, { playerId: tessId, name: "Tessa", locked: true });
+    const res = await change(app, id, tess, "Mr. Big");
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: "NameLocked" });
+    expect(await nameOf(tessId)).toBe("Tessa");
+  });
+
+  it("needs someone signed in, and a name", async () => {
+    const { app, id, tess } = await setup();
+    expect((await app.request(`/api/games/${id}/me/name`, post({ name: "X" }))).status).toBe(401);
+    expect((await change(app, id, tess, " ")).status).toBe(400);
+  });
+});

@@ -97,3 +97,50 @@ describe("A Guest whose name is locked", () => {
     expect(form).toHaveTextContent(/your host set this name/i);
   });
 });
+
+describe("Changing your own name", () => {
+  it("is on a Player's You tab, and changes it on the roster", async () => {
+    screenWidth(false);
+    const { teen, id, user } = await party();
+    openApp(teen, `/games/${id}`);
+    await onTab(/^you$/i);
+
+    const you = await screen.findByRole("region", { name: /^you$/i });
+    await user.click(within(you).getByRole("button", { name: /change my name/i }));
+    const form = within(you).getByRole("form", { name: /change my name/i });
+    await user.clear(within(form).getByLabelText(/your name/i));
+    await user.type(within(form).getByLabelText(/your name/i), "Sam");
+    await user.click(within(form).getByRole("button", { name: /save/i }));
+
+    await within(you).findByText(/playing as sam/i);
+    expect((await teen.game(id))!.players.map((p) => p.name)).toContain("Sam");
+  });
+
+  it("is on a Guest's You tab once they've posted", async () => {
+    screenWidth(false);
+    const { guest, id, user } = await party();
+    openApp(guest, `/games/${id}`);
+    await onTab(/^you$/i);
+
+    const mine = await screen.findByRole("region", { name: /your name/i });
+    expect(mine).toHaveTextContent(/rude dude/i);
+    await user.click(within(mine).getByRole("button", { name: /change my name/i }));
+    await user.clear(within(mine).getByLabelText(/your name/i));
+    await user.type(within(mine).getByLabelText(/your name/i), "Gary");
+    await user.click(within(mine).getByRole("button", { name: /save/i }));
+
+    await waitFor(async () => expect((await guest.posts(id)).find((p) => p.text === "hey")!.author).toBe("Gary"));
+  });
+
+  it("isn't offered once the Host has locked it, and says why", async () => {
+    screenWidth(false);
+    const { host, teen, id } = await party();
+    await host.rename(id, { playerId: (await teen.game(id))!.me!.playerId }, "Sam", true);
+    openApp(teen, `/games/${id}`);
+    await onTab(/^you$/i);
+
+    const you = await screen.findByRole("region", { name: /^you$/i });
+    await within(you).findByText(/your host set this name/i);
+    expect(within(you).queryByRole("button", { name: /change my name/i })).not.toBeInTheDocument();
+  });
+});

@@ -1,4 +1,4 @@
-import { RenameButton } from "./Rename.js";
+import { MyName, RenameButton } from "./Rename.js";
 import { StaffMark, useStaff } from "./Cohosts.js";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useLocation, useParams } from "react-router";
@@ -304,6 +304,7 @@ function GuestView({
             {myName ? (
               <section className="card you" aria-label="You">
                 <p>You're playing as {myName}</p>
+                <MyName game={game} onChanged={(name) => accept(null, { myName: { name, locked: false } })} />
                 {onDeck && <p>You're on deck: get ready!</p>}
                 {holding && (
                   <p>You're holding: {holding.name}</p>
@@ -313,6 +314,12 @@ function GuestView({
               <JoinPanel gameId={game.id} onJoined={accept} />
             ) : (
               <p className="card muted">You're following along. The Host enters the Players for this Game.</p>
+            )}
+            {!game.me && game.myName?.name && (
+              <section className="card" aria-label="Your name">
+                <p>You're posting as {game.myName.name}</p>
+                <MyName game={game} onChanged={(name) => { accept(null, { myName: { name, locked: false } }); reloadFeed(); }} />
+              </section>
             )}
             {players}
           </>

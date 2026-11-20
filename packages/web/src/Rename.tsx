@@ -1,4 +1,5 @@
 import { useId, useState, type FormEvent } from "react";
+import type { GameView } from "./api.js";
 import { useApi } from "./ApiContext.js";
 
 /**
@@ -64,6 +65,66 @@ function RenameForm({
       <div className="inline">
         <button type="submit">Save</button>
         <button type="button" className="secondary" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+    </form>
+  );
+}
+
+/**
+ * Someone's own name in this Game, to change: a Player's on their You card, a Guest's once they've given one. Once
+ * the Host or a Co-host has locked it, it just says so.
+ */
+export function MyName({ game, onChanged }: { game: GameView; onChanged: (name: string) => void }) {
+  const api = useApi();
+  const ids = useId();
+  const current = game.myName?.name;
+  const [open, setOpen] = useState(false);
+  const [next, setNext] = useState(current ?? "");
+  const [error, setError] = useState<string | null>(null);
+  if (!current) return null;
+  if (game.myName?.locked) return <p className="muted hint">Your Host set this name.</p>;
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    const name = next.trim();
+    const result = await api.changeMyName(game.id, name);
+    if (result === "ok") {
+      setOpen(false);
+      setError(null);
+      api.setGuestName(name);
+      onChanged(name);
+    } else {
+      setError(result === "locked" ? "Your Host set this name, so it can't be changed." : "That didn't work. Please try again.");
+    }
+  }
+
+  if (!open)
+    return (
+      <button
+        type="button"
+        className="link"
+        onClick={() => {
+          setNext(current);
+          setOpen(true);
+        }}
+      >
+        ✏️ Change my name
+      </button>
+    );
+  return (
+    <form className="stack rename-form" aria-label="Change my name" onSubmit={save}>
+      <label htmlFor={`${ids}-name`}>Your name</label>
+      <input id={`${ids}-name`} required maxLength={100} autoComplete="given-name" value={next} onChange={(e) => setNext(e.target.value)} />
+      <div className="inline">
+        <button type="submit">Save</button>
+        <button type="button" className="secondary" onClick={() => setOpen(false)}>
           Cancel
         </button>
       </div>

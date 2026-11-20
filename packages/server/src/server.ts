@@ -747,6 +747,20 @@ export function createServer({
   });
 
   /** Which Players are the Host or a Co-host, for their consoles to mark: they may need to step in on those turns. */
+  /** Someone changes their own name in a Game (a Player's or a Guest's), unless the Host or a Co-host locked it. */
+  app.post("/api/games/:id/me/name", async (c) => {
+    const id = c.req.param("id");
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const body = await parseBody(c, joinBody);
+    if (!body.ok) return body.res;
+    const game = load(id);
+    if (!game) return c.json({ error: "Game not found" }, 404);
+    if (nameRow(id, email)?.locked) return c.json({ code: "NameLocked", message: "Your Host set this name" }, 409);
+    renamePerson(id, game, { email }, body.data.name);
+    return c.body(null, 204);
+  });
+
   /** The Host or a Co-host renames someone, found by their Player or one of their Posts, and locks the name or not. */
   app.post("/api/games/:id/names", async (c) => {
     const id = c.req.param("id");
