@@ -1,3 +1,4 @@
+import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
@@ -8,7 +9,7 @@ async function underway() {
   const server = await startServer({ draw: drawInOrder });
   const host = await server.signedIn("host@example.com");
   const newGame = async () => {
-    const id = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Swap", "self");
+    const id = await host.createGame({ name: "Swap", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3, rosterMode: "self" } });
     for (const name of ["Ann", "Bob"]) await host.command(id, { type: "AddPlayer", playerId: name.toLowerCase(), name });
     await host.command(id, { type: "StartGame" });
     return id;

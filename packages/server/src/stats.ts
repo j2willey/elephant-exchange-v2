@@ -1,5 +1,6 @@
 import { createHmac, randomBytes } from "node:crypto";
 import { and, asc, count, desc, eq, gte, isNotNull, sql } from "drizzle-orm";
+import { activePlayers, evolve, newGame, OPTION_NAMES, RECOMMENDED_OPTIONS, type Event, type GameOptions, type GameSettings } from "@elephant/rules";
 import {
   appKeys,
   dailyCounts,
@@ -57,6 +58,26 @@ export interface Insights {
   /** When each played Game's first Pick was, for the page to group by the viewer's own week, weekday and hour. */
   startTimes: string[];
   costs: { signInEmails: { day: string; count: number }[]; signInEmailCap: number; photoBytes: number };
+  setup: SetupInsights;
+}
+
+/** How Hosts set their Games up, to learn which options deserve to be the recommended ones. */
+export interface SetupInsights {
+  /** Games created (played or not), by how the options were chosen; `looked`: of those, how many opened the full list. */
+  choices: { choice: "recommended" | "customized" | "saved" | "unknown"; games: number; looked: number }[];
+  /**
+   * Each option: its recommended value; the values Games were created with (all Games created); the values played
+   * Games ended up with; and how many played Games changed it after creation.
+   */
+  options: {
+    option: string;
+    recommended: string;
+    atStart: { value: string; games: number }[];
+    atEnd: { value: string; games: number }[];
+    changedLater: number;
+  }[];
+  /** Played Games by their turn timer (as it ended up): how long Turns really took, and how often they outran it. */
+  timer: { seconds: number; games: number; turns: number; averageTurnSeconds: number | null; overTimerShare: number | null }[];
 }
 
 export interface StatsSummary {
@@ -133,8 +154,8 @@ export function createStats(db: Db, now: () => Date) {
       .orderBy(asc(gameEvents.seq))
       .all()
       .map((e) => {
-        const event = JSON.parse(e.event) as { type: string; giftId?: string };
-        return { type: event.type, giftId: event.giftId, at: e.at.getTime() };
+        const event = JSON.parse(e.event) as { type: string; giftId?: string; playerId?: string; fromPlayerId?: string; settings?: object };
+        return { ...event, at: e.at.getTime() };
       });
 
     let players = 0;
@@ -171,6 +192,38 @@ export function createStats(db: Db, now: () => Date) {
       if (type === "FinalRoundStarted") finalRound = true;
       if (type === "GameEnded") endedAt = at;
     }
+    // Each Turn: from being called up (On Deck doesn't count; a Victim is called up by the Steal) to that Player's
+    // Pick, as the turn timer runs. Replayed with the rules, so it's whoever the screens showed as up. A Turn that
+    // ends without a Pick (a Skip) isn't counted, nor one across a break. An undone Pick's Turn still counts.
+    const upSince = new Map<string, number>();
+    let turns = 0;
+    let turnMs = 0;
+    let turnsOverTimer = 0;
+    let state = newGame(JSON.parse(game.settings) as GameSettings);
+    for (const e of log) {
+      const since = PICKS.has(e.type) && e.playerId ? upSince.get(e.playerId) : undefined;
+      if (since !== undefined) {
+        upSince.delete(e.playerId!);
+        if (e.at - since <= BREAK_MS) {
+          turns++;
+          turnMs += e.at - since;
+          if (game.turnSeconds > 0 && e.at - since > game.turnSeconds * 1000) turnsOverTimer++;
+        }
+      }
+      state = evolve(state, e as unknown as Event);
+      const up = new Set(activePlayers(state));
+      for (const p of upSince.keys()) if (!up.has(p)) upSince.delete(p);
+      for (const p of up) if (!upSince.has(p)) upSince.set(p, e.at);
+    }
+    const rules = log.reduce((r, e) => (e.type === "SettingsChanged" ? { ...r, ...e.settings } : r), JSON.parse(game.settings) as object);
+    const options = {
+      ...rules,
+      turnSeconds: game.turnSeconds,
+      rosterMode: game.rosterMode,
+      approveNames: game.approveNames,
+      moderation: game.moderation,
+    } as GameOptions;
+
     // Play time: the moves from the first Pick on, less any break.
     let activeMs = 0;
     const playing = firstPickAt === null ? [] : log.filter((e) => e.at >= firstPickAt! && (endedAt === null || e.at <= endedAt));
@@ -217,6 +270,10 @@ export function createStats(db: Db, now: () => Date) {
       frozenGifts: maxSteals > 0 ? [...stealsOf.values()].filter((n) => n >= maxSteals).length : 0,
       voteUsed: game.voteStatus !== "none",
       selfSignup: game.rosterMode === "self",
+      options: JSON.stringify(options),
+      turns,
+      turnMs,
+      turnsOverTimer,
       updatedAt: at,
       ...(deleting ? { deletedAt: at } : {}),
     };
@@ -266,6 +323,20 @@ export function createStats(db: Db, now: () => Date) {
       .set({ peakScreens: sql`max(${gameStats.peakScreens}, ${screens})` })
       .where(eq(gameStats.gameId, gameId))
       .run();
+  }
+
+  /** A Game was just created: how the Host chose its options, and what they were. */
+  function gameCreated(gameId: string, { choice, looked, options }: { choice: string | null; looked: boolean; options: GameOptions }) {
+    snapshotGame(gameId);
+    db.update(gameStats)
+      .set({ startChoice: choice, lookedAtOptions: looked, optionsAtStart: JSON.stringify(options) })
+      .where(eq(gameStats.gameId, gameId))
+      .run();
+  }
+
+  /** The Host or a Co-host changed one of the Game's options after creating it: a sign the one they started with didn't suit. */
+  function optionChanged(gameId: string, option: string) {
+    noteFeature(gameId, `changed:${option}`);
   }
 
   /** A Game used a feature its log doesn't show. */
@@ -389,6 +460,7 @@ export function createStats(db: Db, now: () => Date) {
       returningHosts: { returning: [...byHost.values()].filter((mine) => mine.length >= 2).length, hosts: byHost.size },
       startTimes: counted.map((s) => s.g.firstPickAt!.toISOString()),
       costs: { signInEmails: emails, signInEmailCap, photoBytes },
+      setup: setupInsights(real, counted, used, share),
     };
 
     return {
@@ -444,6 +516,52 @@ export function createStats(db: Db, now: () => Date) {
     };
   }
 
+  function setupInsights(
+    real: { g: typeof gameStats.$inferSelect }[],
+    counted: { g: typeof gameStats.$inferSelect }[],
+    used: Map<string, Set<string>>,
+    share: (n: number, of: number) => number | null,
+  ): SetupInsights {
+    const parse = (json: string | null) => (json ? (JSON.parse(json) as Partial<GameOptions>) : null);
+    const tally = (sets: (Partial<GameOptions> | null)[], option: keyof GameOptions) => {
+      const n = new Map<string, number>();
+      for (const o of sets) if (o && o[option] !== undefined) n.set(String(o[option]), (n.get(String(o[option])) ?? 0) + 1);
+      return [...n].map(([value, games]) => ({ value, games })).sort((a, b) => b.games - a.games);
+    };
+    const atStart = real.map((s) => parse(s.g.optionsAtStart));
+    const atEnd = counted.map((s) => parse(s.g.options));
+    const byTimer = new Map<number, (typeof counted)[number]["g"][]>();
+    for (const { g } of counted) {
+      const seconds = parse(g.options)?.turnSeconds;
+      if (seconds !== undefined && g.turns > 0) byTimer.set(seconds, [...(byTimer.get(seconds) ?? []), g]);
+    }
+    return {
+      choices: (["recommended", "customized", "saved", "unknown"] as const).map((choice) => {
+        const mine = real.filter((s) => (s.g.startChoice ?? "unknown") === choice);
+        return { choice, games: mine.length, looked: mine.filter((s) => s.g.lookedAtOptions).length };
+      }),
+      options: OPTION_NAMES.map((option) => ({
+        option,
+        recommended: String(RECOMMENDED_OPTIONS[option]),
+        atStart: tally(atStart, option),
+        atEnd: tally(atEnd, option),
+        changedLater: counted.filter((s) => used.get(`changed:${option}`)?.has(s.g.gameId)).length,
+      })),
+      timer: [...byTimer]
+        .sort(([a], [b]) => a - b)
+        .map(([seconds, gs]) => {
+          const turns = gs.reduce((n, g) => n + g.turns, 0);
+          return {
+            seconds,
+            games: gs.length,
+            turns,
+            averageTurnSeconds: Math.round(gs.reduce((n, g) => n + g.turnMs, 0) / turns / 100) / 10,
+            overTimerShare: seconds > 0 ? share(gs.reduce((n, g) => n + g.turnsOverTimer, 0), turns) : null,
+          };
+        }),
+    };
+  }
+
   return {
     keyOf,
     snapshotGame,
@@ -453,6 +571,8 @@ export function createStats(db: Db, now: () => Date) {
     recordVisit,
     notePeakScreens,
     noteFeature,
+    gameCreated,
+    optionChanged,
     countToday,
     refresh,
     setExcluded,

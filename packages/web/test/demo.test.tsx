@@ -1,3 +1,4 @@
+import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
@@ -40,7 +41,7 @@ describe("The demo page", () => {
   async function demoGame() {
     const server = await startServer();
     const host = await server.signedIn("host@example.com");
-    const id = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Demo game", "self", 60, undefined, true);
+    const id = await host.createGame({ name: "Demo game", demo: true, options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3, rosterMode: "self", turnSeconds: 60 } });
     for (const [playerId, name] of [["ann", "Ann"], ["bob", "Bob"]] as const) await host.command(id, { type: "AddPlayer", playerId, name });
     return { ...server, host, id };
   }
@@ -76,7 +77,7 @@ describe("A demo page's sample phone", () => {
   it("is that made-up Player's phone: the guest's view, posting as them", async () => {
     const { signedIn } = await startServer();
     const host = await signedIn("host@example.com");
-    const id = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Demo game", "self", 60, undefined, true);
+    const id = await host.createGame({ name: "Demo game", demo: true, options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3, rosterMode: "self", turnSeconds: 60 } });
     for (const [playerId, name] of [["ann", "Ann"], ["bob", "Bob"]] as const) await host.command(id, { type: "AddPlayer", playerId, name });
 
     openApp(await signedIn("host@example.com", { demoPlayer: "ann" }), `/games/${id}`);

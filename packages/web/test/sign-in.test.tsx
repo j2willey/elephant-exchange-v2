@@ -1,3 +1,4 @@
+import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
@@ -98,7 +99,7 @@ describe("Signing out", () => {
   it("isn't offered inside a Game, where a guest might tap it by mistake", async () => {
     const { signedIn } = await startServer();
     const host = await signedIn("host@example.com");
-    const id = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Acme Holiday Party");
+    const id = await host.createGame({ name: "Acme Holiday Party", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
     openApp(host, `/games/${id}`);
     await screen.findByText(/acme holiday party/i);
 

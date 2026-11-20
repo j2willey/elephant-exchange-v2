@@ -1,3 +1,4 @@
+import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
@@ -7,7 +8,7 @@ import { browser, clock, drawInOrder, openApp, startServer } from "./harness.js"
 async function started(turnSeconds?: number) {
   const server = await startServer({ draw: drawInOrder });
   const host = await server.signedIn("host@example.com");
-  const id = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Swap", "host", turnSeconds);
+  const id = await host.createGame({ name: "Swap", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3, rosterMode: "host", ...(turnSeconds === undefined ? {} : { turnSeconds }) } });
   for (const name of ["Ann", "Bob", "Cat"]) await host.command(id, { type: "AddPlayer", playerId: name.toLowerCase(), name });
   await host.command(id, { type: "StartGame" });
   return { ...server, host, id, user: userEvent.setup() };
@@ -87,9 +88,10 @@ describe("The turn timer", () => {
     openApp(host);
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: /new game/i }));
+    await user.click(screen.getByRole("button", { name: /customize settings/i }));
     await user.clear(screen.getByLabelText(/seconds per turn/i));
     await user.type(screen.getByLabelText(/seconds per turn/i), "90");
-    await user.click(screen.getByRole("button", { name: /create game/i }));
+    await user.click(screen.getByRole("button", { name: /create the game/i }));
     for (const name of ["Ann", "Bob"]) {
       await user.type(await screen.findByLabelText(/player's name/i), name);
       await user.click(screen.getByRole("button", { name: /add player/i }));

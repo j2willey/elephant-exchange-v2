@@ -1,3 +1,4 @@
+import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
@@ -15,7 +16,7 @@ const photoFile = (name = "IMG_0001.jpg") => new File([jpeg], name, { type: "ima
 async function underway() {
   const server = await startServer({ draw: drawInOrder });
   const host = await server.signedIn("host@example.com");
-  const id = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Troop swap", "self");
+  const id = await host.createGame({ name: "Troop swap", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3, rosterMode: "self" } });
   for (const name of ["Ann", "Bob"]) await host.command(id, { type: "AddPlayer", playerId: name.toLowerCase(), name });
   await host.command(id, { type: "StartGame" });
   await host.command(id, { type: "OpenGift", playerId: "ann", giftId: "g1", name: "Mug" });
@@ -113,7 +114,7 @@ describe("The album", () => {
   it("is offered to the Host, with word of when the Photos go", async () => {
     const server = await startServer({ draw: drawInOrder });
     const host = await server.signedIn("host@example.com");
-    const id = await host.createGame({ activeSlots: 1, maxSteals: 3 });
+    const id = await host.createGame({ options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
     openApp(host, `/games/${id}/settings`);
 
     const link = await screen.findByRole("link", { name: /download all the photos/i });

@@ -1,3 +1,4 @@
+import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
@@ -8,9 +9,9 @@ describe("Deleting your own Games and Organizations from the home screen", () =>
     const { signedIn } = await startServer();
     const ann = await signedIn("ann@example.com");
     const bob = await signedIn("bob@example.com");
-    const party = await ann.createGame({ activeSlots: 1, maxSteals: 3 }, "Ann's party");
-    await ann.createGame({ activeSlots: 1, maxSteals: 3 }, "Ann's other party");
-    const bobs = await bob.createGame({ activeSlots: 1, maxSteals: 3 }, "Bob's party");
+    const party = await ann.createGame({ name: "Ann's party", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
+    await ann.createGame({ name: "Ann's other party", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
+    const bobs = await bob.createGame({ name: "Bob's party", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
     await bob.addCohost(bobs, "ann@example.com");
     const user = userEvent.setup();
     openApp(ann);
@@ -37,7 +38,7 @@ describe("Deleting your own Games and Organizations from the home screen", () =>
   it("asks to end a Game in progress first, then deletes it", async () => {
     const { signedIn } = await startServer();
     const ann = await signedIn("ann@example.com");
-    const id = await ann.createGame({ activeSlots: 1, maxSteals: 3 }, "Ann's party");
+    const id = await ann.createGame({ name: "Ann's party", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
     for (const [playerId, name] of [["bob", "Bob"], ["cat", "Cat"]] as const) await ann.command(id, { type: "AddPlayer", playerId, name });
     await ann.command(id, { type: "StartGame" });
     const user = userEvent.setup();

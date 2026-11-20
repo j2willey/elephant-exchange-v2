@@ -1,3 +1,4 @@
+import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
@@ -7,7 +8,7 @@ import { browser, drawInOrder, openApp, startServer } from "./harness.js";
 async function underway() {
   const server = await startServer({ draw: drawInOrder });
   const host = await server.signedIn("host@example.com");
-  const id = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Troop swap", "self");
+  const id = await host.createGame({ name: "Troop swap", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3, rosterMode: "self" } });
   for (const name of ["Ann", "Bob", "Cat"]) await host.command(id, { type: "AddPlayer", playerId: name.toLowerCase(), name });
   await host.command(id, { type: "StartGame" });
   await host.command(id, { type: "OpenGift", playerId: "ann", giftId: "socks", name: "Socks" });
@@ -42,7 +43,7 @@ describe("A guest's phone", () => {
   it("puts them on two rows, names separated by commas, when 3 or more take a turn at once", async () => {
     const server = await startServer({ draw: drawInOrder });
     const host = await server.signedIn("host@example.com");
-    const id = await host.createGame({ activeSlots: 3, maxSteals: 3 }, "Big swap", "self");
+    const id = await host.createGame({ name: "Big swap", options: { ...RECOMMENDED_OPTIONS, activeSlots: 3, maxSteals: 3, rosterMode: "self" } });
     for (const name of ["Ann", "Bob", "Cat", "Dot", "Eve"]) await host.command(id, { type: "AddPlayer", playerId: name.toLowerCase(), name });
     await host.command(id, { type: "StartGame" });
     openApp(browser(server.origin), `/games/${id}`);
@@ -57,7 +58,7 @@ describe("A guest's phone", () => {
   it("says the Game hasn't started yet, before it has", async () => {
     const server = await startServer();
     const host = await server.signedIn("host@example.com");
-    const id = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Swap", "self");
+    const id = await host.createGame({ name: "Swap", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3, rosterMode: "self" } });
     openApp(browser(server.origin), `/games/${id}`);
 
     expect(await screen.findByRole("status", { name: /who's up/i })).toHaveTextContent(/waiting for the host to start/i);
@@ -90,7 +91,7 @@ describe("A guest's phone", () => {
   it("tells a Player when it's their turn", async () => {
     const server = await startServer({ draw: drawInOrder });
     const host = await server.signedIn("host@example.com");
-    const id = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Troop swap", "self");
+    const id = await host.createGame({ name: "Troop swap", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3, rosterMode: "self" } });
     const dee = await server.signedIn("dee@example.com");
     await dee.join(id, "Dee"); // first on the roster, so drawn first
     await host.command(id, { type: "AddPlayer", playerId: "ann", name: "Ann" });
@@ -106,7 +107,7 @@ describe("A guest's phone", () => {
   it("shows a Player the Gift they're holding", async () => {
     const server = await startServer({ draw: drawInOrder });
     const host = await server.signedIn("host@example.com");
-    const id = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Troop swap", "self");
+    const id = await host.createGame({ name: "Troop swap", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3, rosterMode: "self" } });
     const dee = await server.signedIn("dee@example.com");
     await dee.join(id, "Dee");
     const deeId = (await host.game(id))!.players[0]!.id;

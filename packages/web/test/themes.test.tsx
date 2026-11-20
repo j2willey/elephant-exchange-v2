@@ -1,3 +1,4 @@
+import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
@@ -21,7 +22,7 @@ async function themed(theme: { color?: string; page?: string } = {}) {
   const host = await server.signedIn("host@example.com");
   const org = await host.createOrg("Lodge 22");
   await host.editOrg(org, theme);
-  const id = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Holiday Party", "host", undefined, org);
+  const id = await host.createGame({ name: "Holiday Party", orgId: org, options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3, rosterMode: "host" } });
   return { ...server, host, org, id, user: userEvent.setup() };
 }
 

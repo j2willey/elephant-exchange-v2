@@ -163,6 +163,8 @@ export function Insights({ insights, now = new Date() }: { insights: StatsInsigh
         />
       </section>
 
+      <GameSetup setup={insights.setup} played={played} />
+
       <section className="card" aria-label="Running costs">
         <h2>Running costs</h2>
         <dl className="stat-tiles">
@@ -190,5 +192,103 @@ export function Insights({ insights, now = new Date() }: { insights: StatsInsigh
         )}
       </section>
     </>
+  );
+}
+
+const CHOICES = { recommended: "Recommended settings", customized: "Customized", saved: "Their saved settings", unknown: "Before this was asked" } as const;
+const OPTIONS: Record<string, string> = {
+  activeSlots: "Players at once",
+  maxSteals: "Steals before Frozen",
+  turnSeconds: "Seconds per turn",
+  rosterMode: "Who adds Players",
+  approveNames: "Approve names",
+  moderation: "Feed posting",
+};
+const VALUES: Record<string, string> = { host: "Host enters", self: "Sign up on phones", true: "on", false: "off" };
+const valueWords = (v: string) => VALUES[v] ?? v;
+const tally = (values: { value: string; games: number }[], recommended: string) =>
+  values.length === 0
+    ? "—"
+    : values.map((v) => `${valueWords(v.value)}${v.value === recommended ? " (rec.)" : ""}: ${v.games}`).join(" · ");
+
+/** How Hosts set their Games up: which options might deserve to become the recommended ones. */
+function GameSetup({ setup, played }: { setup: StatsInsights["setup"]; played: number }) {
+  const created = setup.choices.reduce((n, c) => n + c.games, 0);
+  return (
+    <section className="card" aria-label="How Games are set up">
+      <h2>How Games are set up</h2>
+      <p className="muted hint">How the {created} Games created (played or not) got their settings, and how many of those Hosts opened the full list first.</p>
+      <BarList
+        label="Settings chosen"
+        max={created}
+        items={setup.choices
+          .filter((c) => c.choice !== "unknown" || c.games > 0)
+          .map((c) => ({ name: CHOICES[c.choice], value: c.games, note: `${c.looked} looked at the list` }))}
+      />
+
+      <h3>Each setting</h3>
+      <p className="muted hint">
+        What Games were created with (all Games), what the {played} played Games ended up with, and how many played Games
+        changed it after creating the Game: a sign the starting value didn't suit.
+      </p>
+      <div className="table-scroll">
+        <table aria-label="Settings used">
+          <thead>
+            <tr>
+              <th>Setting</th>
+              <th>Recommended</th>
+              <th>Created with</th>
+              <th>Played with</th>
+              <th>Changed later</th>
+            </tr>
+          </thead>
+          <tbody>
+            {setup.options.map((o) => (
+              <tr key={o.option}>
+                <td>{OPTIONS[o.option] ?? o.option}</td>
+                <td>{valueWords(o.recommended)}</td>
+                <td>{tally(o.atStart, o.recommended)}</td>
+                <td>{tally(o.atEnd, o.recommended)}</td>
+                <td>{o.changedLater}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <h3>The turn timer against real Turns</h3>
+      <p className="muted hint">
+        Played Games by their timer: how long a Turn really took (from being called up to the Pick, breaks left out), and
+        how often it ran past the timer.
+      </p>
+      {setup.timer.length === 0 ? (
+        <p className="muted">No played Games yet.</p>
+      ) : (
+        <div className="table-scroll">
+          <table aria-label="Turn timer">
+            <thead>
+              <tr>
+                <th>Timer</th>
+                <th>Games</th>
+                <th>Turns</th>
+                <th>Average Turn</th>
+                <th>Past the timer</th>
+              </tr>
+            </thead>
+            <tbody>
+              {setup.timer.map((t) => (
+                <tr key={t.seconds}>
+                  <td>{t.seconds === 0 ? "None" : `${t.seconds} s`}</td>
+                  <td>{t.games}</td>
+                  <td>{t.turns}</td>
+                  <td>{t.averageTurnSeconds === null ? "—" : `${t.averageTurnSeconds} s`}</td>
+                  <td>{pct(t.overTimerShare)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }

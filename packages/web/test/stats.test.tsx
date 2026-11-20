@@ -1,3 +1,4 @@
+import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
@@ -27,7 +28,7 @@ describe("The admin's Stats page", () => {
   it("shows the totals and the Games, and leaves out a Game the admin excludes", async () => {
     const server = await startServer({ draw: drawInOrder, adminEmails: ["boss@example.org"] });
     const ann = await server.signedIn("ann@example.org");
-    const id = await ann.createGame({ activeSlots: 1, maxSteals: 3 }, "Office party");
+    const id = await ann.createGame({ name: "Office party", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
     for (const p of ["a", "b", "c", "d"]) await ann.command(id, { type: "AddPlayer", playerId: p, name: p.toUpperCase() });
     await ann.command(id, { type: "StartGame" });
     for (const [p, g] of [["a", "g1"], ["b", "g2"], ["c", "g3"], ["d", "g4"]] as const) await ann.command(id, { type: "OpenGift", playerId: p, giftId: g, name: g });
@@ -65,7 +66,7 @@ describe("Features only the browser sees", () => {
   it("counts a roster pasted on the Host's console", async () => {
     const server = await startServer({ draw: drawInOrder, adminEmails: ["boss@example.org"] });
     const ann = await server.signedIn("ann@example.org");
-    const id = await ann.createGame({ activeSlots: 1, maxSteals: 3 }, "Pasted party");
+    const id = await ann.createGame({ name: "Pasted party", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
     const user = userEvent.setup();
     openApp(ann, `/games/${id}`);
 
@@ -84,5 +85,27 @@ describe("Features only the browser sees", () => {
       const stats = await admin.adminStats();
       expect(stats !== "notFound" && stats.insights.features.find((f) => f.feature === "rosterPaste")).toEqual({ feature: "rosterPaste", games: 1 });
     });
+  });
+});
+
+describe("How Games are set up, on the Stats page", () => {
+  it("shows how settings were chosen, what each was set to, and the timer against real Turns", async () => {
+    const server = await startServer({ draw: drawInOrder, adminEmails: ["boss@example.org"] });
+    const ann = await server.signedIn("ann@example.org");
+    await ann.createGame({ name: "Quick one", options: { ...RECOMMENDED_OPTIONS }, start: "recommended" });
+    const id = await ann.createGame({ name: "Big party", options: { ...RECOMMENDED_OPTIONS, activeSlots: 3, turnSeconds: 90 }, start: "customized", looked: true });
+    for (const p of ["a", "b", "c", "d"]) await ann.command(id, { type: "AddPlayer", playerId: p, name: p.toUpperCase() });
+    await ann.command(id, { type: "StartGame" });
+    for (const [p, g] of [["a", "g1"], ["b", "g2"], ["c", "g3"], ["d", "g4"]] as const) await ann.command(id, { type: "OpenGift", playerId: p, giftId: g, name: g });
+    openApp(await server.signedIn("boss@example.org"), "/admin/stats");
+
+    const section = await screen.findByRole("region", { name: /how games are set up/i });
+    const chosen = within(section).getByRole("list", { name: /settings chosen/i });
+    expect(within(chosen).getByRole("listitem", { name: /^recommended settings: 1, 0 looked/i })).toBeInTheDocument();
+    expect(within(chosen).getByRole("listitem", { name: /^customized: 1, 1 looked/i })).toBeInTheDocument();
+    const slots = within(within(section).getByRole("table", { name: /settings used/i })).getByRole("row", { name: /players at once/i });
+    expect(slots).toHaveTextContent(/1 \(rec\.\): 1.*3: 1/);
+    const timer = within(within(section).getByRole("table", { name: /turn timer/i })).getAllByRole("row");
+    expect(timer[1]).toHaveTextContent(/^90 s1/);
   });
 });

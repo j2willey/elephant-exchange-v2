@@ -1,3 +1,4 @@
+import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
@@ -8,10 +9,10 @@ const admin = "boss@willey.test";
 async function withPeople() {
   const server = await startServer({ adminEmails: [admin] });
   const ann = await server.signedIn("ann@willey.test");
-  const party = await ann.createGame({ activeSlots: 1, maxSteals: 3 }, "Ann's party");
-  await ann.createGame({ activeSlots: 1, maxSteals: 3 }, "Demo game", "self", 60, undefined, true);
+  const party = await ann.createGame({ name: "Ann's party", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
+  await ann.createGame({ name: "Demo game", demo: true, options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3, rosterMode: "self", turnSeconds: 60 } });
   const tester = await server.signedIn("guest-abc@example.com");
-  await tester.createGame({ activeSlots: 1, maxSteals: 3 }, "Smoke test game");
+  await tester.createGame({ name: "Smoke test game", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
   return { ...server, party, me: await server.signedIn(admin), user: userEvent.setup() };
 }
 

@@ -48,6 +48,7 @@ import {
   command,
   createGameBody,
   feedbackBody,
+  gameOptions,
   gameOptionsEdit,
   gameOrgBody,
   gameThemeEdit,
@@ -620,8 +621,20 @@ export function createServer({
   app.get("/api/session", (c) => {
     const email = signedInAs(c);
     if (!email) return c.json({ error: "Not signed in" }, 401);
-    const me = db.select({ feedbackOk: users.feedbackOk, tipNoteRead: users.tipNoteRead }).from(users).where(eq(users.email, email)).get();
-    return c.json({ email, feedbackOk: me?.feedbackOk ?? false, tipNoteRead: me?.tipNoteRead ?? false, admin: isAdmin(email) });
+    const me = db
+      .select({ feedbackOk: users.feedbackOk, tipNoteRead: users.tipNoteRead, myOptions: users.myOptions, alwaysMyOptions: users.alwaysMyOptions })
+      .from(users)
+      .where(eq(users.email, email))
+      .get();
+    const mine = me?.myOptions ? gameOptions.safeParse(JSON.parse(me.myOptions)) : null;
+    return c.json({
+      email,
+      feedbackOk: me?.feedbackOk ?? false,
+      tipNoteRead: me?.tipNoteRead ?? false,
+      admin: isAdmin(email),
+      myOptions: mine?.success ? mine.data : null,
+      alwaysMyOptions: Boolean(mine?.success && me?.alwaysMyOptions),
+    });
   });
 
   /** They've read and considered Jim's tip note: New Game stops showing it. Never unset. */
@@ -658,21 +671,29 @@ export function createServer({
     if (orgId !== undefined && !organizes(orgId, email)) return c.json({ error: "Only an Organization's Organizer can use its Theme" }, 403);
     // 16 random bytes: unguessable, so a Game can't be found without its link or QR code.
     const id = randomBytes(16).toString("base64url");
+    const { rosterMode, turnSeconds, approveNames, moderation, settings, start, looked, remember } = body.data;
+    const options = { ...settings, turnSeconds, rosterMode, approveNames, moderation };
     db.transaction((tx) => {
       tx.insert(games)
         .values({
           id,
           name: body.data.name,
-          rosterMode: body.data.rosterMode,
-          turnSeconds: body.data.turnSeconds,
+          rosterMode,
+          turnSeconds,
+          approveNames,
+          moderation,
           orgId: orgId ?? null,
           demo: body.data.demo,
-          settings: JSON.stringify(body.data.settings),
+          settings: JSON.stringify(settings),
           createdAt: now(),
         })
         .run();
       tx.insert(gameHosts).values({ gameId: id, email, role: "host" }).run();
+      // The whole set is saved, so the Host's Games never change behind their back.
+      if (remember === true) tx.update(users).set({ myOptions: JSON.stringify(options), alwaysMyOptions: true }).where(eq(users.email, email)).run();
+      if (remember === false) tx.update(users).set({ alwaysMyOptions: false }).where(eq(users.email, email)).run();
     });
+    stats.gameCreated(id, { choice: start ?? null, looked, options });
     return c.json({ id }, 201);
   });
 
@@ -996,6 +1017,9 @@ export function createServer({
     const result = run(id, game, cmd, (tx) => {
       if (standIn && cmd.type === "AddPlayer") tx.insert(gamePlayers).values({ gameId: id, playerId: cmd.playerId, email: standIn }).run();
     });
+    if (!("code" in result) && cmd.type === "ChangeSettings")
+      for (const [option, value] of Object.entries(cmd.settings))
+        if (value !== game.state.settings[option as keyof typeof game.state.settings]) stats.optionChanged(id, option);
     return "code" in result ? c.json(result, 409) : c.json(result);
   });
 
@@ -1400,6 +1424,9 @@ export function createServer({
       ...(rosterMode !== undefined ? { rosterMode } : {}),
     };
     if (Object.keys(set).length > 0) db.update(games).set(set).where(eq(games.id, id)).run();
+    const was = { turnSeconds: game.turnSeconds, rosterMode: game.rosterMode, approveNames: game.approveNames };
+    for (const [option, value] of Object.entries({ turnSeconds, rosterMode, approveNames }))
+      if (value !== undefined && value !== was[option as keyof typeof was]) stats.optionChanged(id, option);
     return c.json(publish(id, { ...game, ...set }));
   });
 
@@ -1515,6 +1542,7 @@ export function createServer({
     if (!game) return c.json({ error: "Game not found" }, 404);
     if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can moderate this Game" }, 403);
     db.update(games).set({ moderation: body.data.mode }).where(eq(games.id, id)).run();
+    if (body.data.mode !== game.moderation) stats.optionChanged(id, "moderation");
     publish(id, { ...game, moderation: body.data.mode });
     return c.body(null, 204);
   });

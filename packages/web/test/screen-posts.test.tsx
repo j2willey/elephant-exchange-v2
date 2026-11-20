@@ -1,3 +1,4 @@
+import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { drawInOrder, openApp, startServer } from "./harness.js";
@@ -6,7 +7,7 @@ import { drawInOrder, openApp, startServer } from "./harness.js";
 async function onTheBigScreen() {
   const server = await startServer({ draw: drawInOrder });
   const host = await server.signedIn("host@example.com");
-  const id = await host.createGame({ activeSlots: 1, maxSteals: 3 });
+  const id = await host.createGame({ options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
   for (const name of ["Ann", "Bob"]) await host.command(id, { type: "AddPlayer", playerId: name.toLowerCase(), name });
   await host.command(id, { type: "StartGame" });
   const gus = await server.signedIn("gus@example.com");

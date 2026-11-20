@@ -1,3 +1,4 @@
+import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -7,7 +8,7 @@ import { browser, drawInOrder, openApp, startServer } from "./harness.js";
 async function underway() {
   const server = await startServer({ draw: drawInOrder });
   const host = await server.signedIn("host@example.com");
-  const id = await host.createGame({ activeSlots: 1, maxSteals: 2 }, "Acme Holiday Party");
+  const id = await host.createGame({ name: "Acme Holiday Party", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 2 } });
   for (const name of ["Ann", "Bob", "Cat"]) await host.command(id, { type: "AddPlayer", playerId: name.toLowerCase(), name });
   await host.command(id, { type: "StartGame" });
   await host.command(id, { type: "OpenGift", playerId: "ann", giftId: "g1", name: "Socks" });

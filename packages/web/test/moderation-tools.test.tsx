@@ -1,3 +1,4 @@
+import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -19,7 +20,7 @@ afterEach(() => vi.unstubAllGlobals());
 async function party() {
   const server = await startServer({ draw: drawInOrder });
   const host = await server.signedIn("host@example.com");
-  const id = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Troop Party");
+  const id = await host.createGame({ name: "Troop Party", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
   const gus = await server.signedIn("gus@example.com");
   const dot = await server.signedIn("dot@example.com");
   const eve = await server.signedIn("eve@example.com");

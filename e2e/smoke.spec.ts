@@ -39,8 +39,9 @@ test("a Host runs a Game while a guest follows along on their phone", async ({ b
   await note.getByRole("checkbox", { name: /read and considered/i }).check();
   await note.getByRole("button", { name: /continue/i }).click();
   await host.getByLabel(/name of the game/i).fill(`Smoke ${run}`);
+  await host.getByRole("button", { name: /customize settings/i }).click();
   await host.getByRole("radio", { name: /players sign up on their phones/i }).check();
-  await host.getByRole("button", { name: /create game/i }).click();
+  await host.getByRole("button", { name: /create the game/i }).click();
   await expect(host.getByRole("heading", { name: `Smoke ${run}` })).toBeVisible();
   for (const name of ["Ann", "Bob"]) {
     await host.getByLabel(/player's name/i).fill(name);
@@ -153,7 +154,7 @@ test("an Organizer themes their Organization, and a Game in it shows that Theme"
   // A new Organizer: Jim's tip note comes first, once.
   await page.getByRole("dialog", { name: /a note from jim/i }).getByRole("button", { name: /continue/i }).click();
   await page.getByLabel(/^organization$/i).selectOption({ label: `Lodge ${run}` });
-  await page.getByRole("button", { name: /create game/i }).click();
+  await page.getByRole("button", { name: /use recommended settings/i }).click();
   await expect(page.getByRole("img", { name: new RegExp(`lodge ${run} logo`, "i") })).toBeVisible();
 
   const screen = await (await browser.newContext({ viewport: { width: 1280, height: 720 } })).newPage();

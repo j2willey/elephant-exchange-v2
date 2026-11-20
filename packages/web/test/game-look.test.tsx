@@ -1,3 +1,4 @@
+import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
@@ -30,14 +31,14 @@ describe("A Game's look", () => {
 
     await screen.findByRole("option", { name: "Lodge 22" }); // once the Organizations have loaded
     await user.selectOptions(screen.getByLabelText(/^organization$/i), "Lodge 22");
-    await user.click(screen.getByRole("button", { name: /create game/i }));
+    await user.click(screen.getByRole("button", { name: /use recommended settings/i }));
 
     await waitFor(() => expect(cssVar("--brand")).toBe("#c8102e"));
   });
 
   it("can be switched to another Organization, or none, by the Host at any time", async () => {
     const { host, lodge, user } = await organizer();
-    const id = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Party", "host", undefined, lodge);
+    const id = await host.createGame({ name: "Party", orgId: lodge, options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3, rosterMode: "host" } });
     openApp(host, `/games/${id}/settings`);
     await waitFor(() => expect(cssVar("--brand")).toBe("#c8102e"));
 
@@ -51,7 +52,7 @@ describe("A Game's look", () => {
 
   it("can have its own colors and logo for this Game only, and hand them back", async () => {
     const { host, lodge, user } = await organizer();
-    const id = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Party", "host", undefined, lodge);
+    const id = await host.createGame({ name: "Party", orgId: lodge, options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3, rosterMode: "host" } });
     openApp(host, `/games/${id}/settings`);
     const look = await panel();
 
@@ -68,7 +69,7 @@ describe("A Game's look", () => {
 
   it("is only for the Host and Co-hosts to change", async () => {
     const { host, origin, lodge } = await organizer();
-    const id = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Party", "host", undefined, lodge);
+    const id = await host.createGame({ name: "Party", orgId: lodge, options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3, rosterMode: "host" } });
     openApp(browser(origin), `/games/${id}`);
     await waitFor(() => expect(cssVar("--brand")).toBe("#c8102e"));
     expect(screen.queryByRole("region", { name: /how this game looks/i })).not.toBeInTheDocument();

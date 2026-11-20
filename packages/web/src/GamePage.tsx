@@ -76,6 +76,9 @@ export function GamePage({ gameId }: { gameId?: string } = {}) {
             Start game
           </button>
           {game.players.length < 2 && <p className="muted hint">Add at least 2 players to start.</p>}
+          <p className="playbook-nudge">
+            📖 Before the party: the <Link to="/playbook">Host's Playbook</Link> explains how it all works.
+          </p>
         </>
       )}
     </section>

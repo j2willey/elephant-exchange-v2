@@ -1,3 +1,4 @@
+import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
@@ -7,6 +8,7 @@ import { browser, drawInOrder, onTab, openApp, startServer } from "./harness.js"
 async function createGame(settings?: { slots?: string; steals?: string }) {
   const user = userEvent.setup();
   await user.click(await screen.findByRole("button", { name: /new game/i }));
+  if (settings) await user.click(screen.getByRole("button", { name: /customize settings/i }));
   if (settings?.slots) {
     await user.clear(screen.getByLabelText(/players taking a turn at once/i));
     await user.type(screen.getByLabelText(/players taking a turn at once/i), settings.slots);
@@ -15,7 +17,7 @@ async function createGame(settings?: { slots?: string; steals?: string }) {
     await user.clear(screen.getByLabelText(/steals before a gift is frozen/i));
     await user.type(screen.getByLabelText(/steals before a gift is frozen/i), settings.steals);
   }
-  await user.click(screen.getByRole("button", { name: /create game/i }));
+  await user.click(screen.getByRole("button", { name: settings ? /create the game/i : /use recommended settings/i }));
   await screen.findByRole("heading", { name: /players/i });
   return user;
 }
@@ -108,7 +110,7 @@ describe("Setting up a Game", () => {
   it("keeps the settings page to the Host and Co-hosts", async () => {
     const { origin, signedIn } = await startServer();
     const host = await signedIn("host@example.com");
-    const id = await host.createGame({ activeSlots: 1, maxSteals: 3 });
+    const id = await host.createGame({ options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
     openApp(browser(origin), `/games/${id}/settings`);
 
     expect(await screen.findByText(/only the host/i)).toBeInTheDocument();

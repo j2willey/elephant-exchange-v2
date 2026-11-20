@@ -1,7 +1,7 @@
 import { CohostsPage } from "./Cohosts.js";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, Route, Routes, useLocation, useNavigate, useSearchParams } from "react-router";
-import { isReturnPath, type MyGame, type MyOrg, type RosterMode, type Session } from "./api.js";
+import { isReturnPath, type MyGame, type Session } from "./api.js";
 import { useApi } from "./ApiContext.js";
 import { AdminPage } from "./Admin.js";
 import { DemoGame, DemoPage } from "./Demo.js";
@@ -11,7 +11,8 @@ import { ConfirmDelete } from "./ConfirmDelete.js";
 import { StatsPage } from "./Stats.js";
 import { SAMPLE_GAME_ID, SamplePhone } from "./SamplePhone.js";
 import { FeedbackPage, SuggestBox } from "./Feedback.js";
-import { Landing, Playbook, TipJar, TipNoteDialog } from "./Landing.js";
+import { Landing, Playbook, TipJar } from "./Landing.js";
+import { NewGame } from "./NewGame.js";
 import { MyOrgs, OrgPage } from "./Orgs.js";
 import { SignInForm } from "./SignIn.js";
 import { WatchScreen } from "./WatchScreen.js";
@@ -160,7 +161,19 @@ function Home() {
 
   return (
     <div className="stack">
-      <NewGame tipNoteRead={session.tipNoteRead} onTipNoteRead={() => setSession({ ...session, tipNoteRead: true })} />
+      <NewGame
+        session={session}
+        onTipNoteRead={() => setSession({ ...session, tipNoteRead: true })}
+        onOptionsSaved={(myOptions, alwaysMyOptions) => setSession({ ...session, myOptions, alwaysMyOptions })}
+      />
+      <section className="card playbook-card">
+        <h2>📖 Host's Playbook</h2>
+        <p>
+          How the game works and how to run a smooth party: why several Players can go at once, how to use the turn timer,
+          the rules, and what every setting is for. A five-minute read, worth it before your first party.
+        </p>
+        <Link to="/playbook">Read the Host's Playbook</Link>
+      </section>
       <DemoGame />
       <MyGames />
       <MyOrgs />
@@ -180,7 +193,6 @@ function Home() {
           />
           OK to contact me to ask how it went
         </label>
-        <Link to="/playbook">📖 Host's Playbook</Link>
         <Link to="/about">About Elephant Exchange</Link>
         {session.admin && <Link to="/admin">Admin</Link>}
       </section>
@@ -267,125 +279,6 @@ function MyGames() {
         </ul>
       )}
     </section>
-  );
-}
-
-/** Creating a Game: a button first, then its two settings (the usual values filled in). */
-/** `tipNoteRead`: whether this Host has read and considered Jim's tip note; until then New Game shows it first. */
-function NewGame({ tipNoteRead, onTipNoteRead }: { tipNoteRead: boolean; onTipNoteRead: () => void }) {
-  const api = useApi();
-  const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
-  const [noting, setNoting] = useState(false);
-  const [name, setName] = useState("Gift exchange");
-  const [rosterMode, setRosterMode] = useState<RosterMode>("host");
-  const [slots, setSlots] = useState("1");
-  const [steals, setSteals] = useState("3");
-  const [turnSeconds, setTurnSeconds] = useState("60");
-  const [orgs, setOrgs] = useState<MyOrg[]>([]);
-  const [orgId, setOrgId] = useState("");
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    let current = true;
-    api.myOrgs().then((mine) => current && setOrgs(mine));
-    return () => {
-      current = false;
-    };
-  }, [api, open]);
-
-  if (!open)
-    return (
-      <>
-        <button onClick={() => (tipNoteRead ? setOpen(true) : setNoting(true))}>New Game</button>
-        {noting && (
-          <TipNoteDialog
-            onClose={() => setNoting(false)}
-            onContinue={(read) => {
-              setNoting(false);
-              setOpen(true);
-              if (read) {
-                onTipNoteRead();
-                void api.markTipNoteRead();
-              }
-            }}
-          />
-        )}
-      </>
-    );
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    try {
-      const id = await api.createGame(
-        { activeSlots: Number(slots), maxSteals: Number(steals) },
-        name.trim(),
-        rosterMode,
-        Number(turnSeconds),
-        orgId || undefined,
-      );
-      navigate(`/games/${id}`);
-    } catch {
-      setFailed(true);
-    }
-  }
-
-  return (
-    <form className="card" onSubmit={submit}>
-      <h2>New Game</h2>
-      <label htmlFor="game-name">Name of the Game</label>
-      <input id="game-name" required maxLength={100} autoComplete="off" value={name} onChange={(e) => setName(e.target.value)} />
-      {orgs.length > 0 && (
-        <>
-          <label htmlFor="new-game-org">Organization</label>
-          <select id="new-game-org" value={orgId} onChange={(e) => setOrgId(e.target.value)}>
-            <option value="">None (the app's own look)</option>
-            {orgs.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.name}
-              </option>
-            ))}
-          </select>
-        </>
-      )}
-      <label htmlFor="slots">Players taking a turn at once</label>
-      <input id="slots" type="number" inputMode="numeric" min={1} max={10} required value={slots} onChange={(e) => setSlots(e.target.value)} />
-      <label htmlFor="steals">Steals before a Gift is Frozen</label>
-      <input id="steals" type="number" inputMode="numeric" min={0} max={20} required value={steals} onChange={(e) => setSteals(e.target.value)} />
-      <label htmlFor="turn-seconds">Seconds per turn</label>
-      <input
-        id="turn-seconds"
-        type="number"
-        inputMode="numeric"
-        min={0}
-        max={600}
-        required
-        aria-describedby="turn-seconds-hint"
-        value={turnSeconds}
-        onChange={(e) => setTurnSeconds(e.target.value)}
-      />
-      <p id="turn-seconds-hint" className="muted hint">
-        A countdown to keep things moving. Nobody is skipped when it runs out. 0 for none.
-      </p>
-      <fieldset className="choices">
-        <legend>Who adds the Players?</legend>
-        <label>
-          <input type="radio" name="roster-mode" checked={rosterMode === "host"} onChange={() => setRosterMode("host")} />
-          I'll enter them
-        </label>
-        <label>
-          <input type="radio" name="roster-mode" checked={rosterMode === "self"} onChange={() => setRosterMode("self")} />
-          Players sign up on their phones
-        </label>
-      </fieldset>
-      {failed && (
-        <p className="error" role="alert">
-          The Game couldn't be created. Please try again.
-        </p>
-      )}
-      <button type="submit">Create game</button>
-    </form>
   );
 }
 

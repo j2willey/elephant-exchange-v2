@@ -1,3 +1,4 @@
+import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
@@ -9,7 +10,7 @@ describe("Co-hosts in a Game's settings", () => {
   it("lets the Host add a Co-host by email, who then sees the Game on their home screen, and remove them", async () => {
     const { signedIn } = await startServer();
     const host = await signedIn("host@example.com");
-    const id = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Office swap");
+    const id = await host.createGame({ name: "Office swap", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
     const user = userEvent.setup();
 
     const page = openApp(host, `/games/${id}/settings`);
@@ -35,7 +36,7 @@ describe("Co-hosts in a Game's settings", () => {
   it("shows a Co-host who else co-hosts, without the Host's controls", async () => {
     const { signedIn } = await startServer();
     const host = await signedIn("host@example.com");
-    const id = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Office swap");
+    const id = await host.createGame({ name: "Office swap", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
     await host.addCohost(id, "bob@example.com");
     const bob = await signedIn("bob@example.com");
 

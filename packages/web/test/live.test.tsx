@@ -1,3 +1,4 @@
+import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { browser, drawInOrder, openApp, startServer } from "./harness.js";
@@ -6,7 +7,7 @@ import { browser, drawInOrder, openApp, startServer } from "./harness.js";
 async function startedGame() {
   const server = await startServer({ draw: drawInOrder });
   const host = await server.signedIn("host@example.com");
-  const id = await host.createGame({ activeSlots: 1, maxSteals: 3 });
+  const id = await host.createGame({ options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
   for (const name of ["Ann", "Bob", "Cat"]) await host.command(id, { type: "AddPlayer", playerId: name.toLowerCase(), name });
   await host.command(id, { type: "StartGame" });
   return { ...server, host, id };
@@ -43,7 +44,7 @@ describe("The watch screen", () => {
   it("names the Game in a banner across the top", async () => {
     const { origin, signedIn } = await startServer();
     const host = await signedIn("host@example.com");
-    const id = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "OA Holiday Party");
+    const id = await host.createGame({ name: "OA Holiday Party", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
     openApp(browser(origin), `/games/${id}/screen`);
 
     expect(await screen.findByRole("banner")).toHaveTextContent(/oa holiday party/i);
@@ -76,7 +77,7 @@ describe("The watch screen", () => {
   it("lists the Gifts still in play first, most stolen at the top, and Frozen ones last", async () => {
     const server = await startServer({ draw: drawInOrder });
     const host = await server.signedIn("host@example.com");
-    const id = await host.createGame({ activeSlots: 1, maxSteals: 2 });
+    const id = await host.createGame({ options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 2 } });
     for (const name of ["Ann", "Bob", "Cat", "Dan", "Eve"]) await host.command(id, { type: "AddPlayer", playerId: name.toLowerCase(), name });
     await host.command(id, { type: "StartGame" });
     await host.command(id, { type: "OpenGift", playerId: "ann", giftId: "g1", name: "Socks" });
@@ -106,7 +107,7 @@ describe("The watch screen", () => {
   it("before the start, says it's waiting and counts the Players", async () => {
     const { origin, signedIn } = await startServer();
     const host = await signedIn("host@example.com");
-    const id = await host.createGame({ activeSlots: 1, maxSteals: 3 });
+    const id = await host.createGame({ options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
     openApp(browser(origin), `/games/${id}/screen`);
     expect(await screen.findByText(/waiting for the host to start/i)).toBeInTheDocument();
 

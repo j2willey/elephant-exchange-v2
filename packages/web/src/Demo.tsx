@@ -1,3 +1,4 @@
+import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useApi } from "./ApiContext.js";
@@ -36,7 +37,7 @@ export function DemoGame({ startOpen = false }: { startOpen?: boolean }) {
     e.preventDefault();
     setBusy(true);
     try {
-      const id = await api.createGame({ activeSlots: 1, maxSteals: 3 }, "Demo game", "self", 60, undefined, true);
+      const id = await api.createGame({ name: "Demo game", options: { ...RECOMMENDED_OPTIONS, rosterMode: "self" }, demo: true });
       for (const name of shuffled(demoNames).slice(0, Number(players))) {
         await api.command(id, { type: "AddPlayer", playerId: crypto.randomUUID(), name });
       }

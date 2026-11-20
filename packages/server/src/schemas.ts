@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Command, GameSettings } from "@elephant/rules";
+import type { Command, GameOptions, GameSettings } from "@elephant/rules";
 
 /** What comes over the wire is checked here, so the rules module only ever sees well-formed input. */
 
@@ -14,15 +14,38 @@ export const gameSettings = z.strictObject({ activeSlots, maxSteals }) satisfies
 
 export const rosterMode = z.enum(["host", "self"]);
 
+const turnSeconds = z.int().min(0).max(600);
+const moderation = z.enum(["open", "approval", "paused"]);
+
+/** A whole set of options, as a Host saves it to start every Game with. */
+export const gameOptions = z.strictObject({
+  activeSlots,
+  maxSteals,
+  turnSeconds,
+  rosterMode,
+  approveNames: z.boolean(),
+  moderation,
+}) satisfies z.ZodType<GameOptions>;
+
 export const createGameBody = z.object({
   name: name.default("Gift exchange"),
   rosterMode: rosterMode.default("host"),
-  turnSeconds: z.int().min(0).max(600).default(60),
+  turnSeconds: turnSeconds.default(60),
+  approveNames: z.boolean().default(false),
+  moderation: moderation.default("open"),
   settings: gameSettings,
   /** The Organization whose Theme it shows: one the Host is the Organizer of. */
   orgId: id.optional(),
   /** Made with "Try a demo game". */
   demo: z.boolean().default(false),
+  /**
+   * How the Host chose the options, for the statistics: the recommended ones, their own this time ("customized"), or
+   * their saved ones. `looked`: they opened the full list of options, whatever they chose.
+   */
+  start: z.enum(["recommended", "customized", "saved"]).optional(),
+  looked: z.boolean().default(false),
+  /** "Always start with these settings": true saves this Game's options as theirs; false stops using saved ones. */
+  remember: z.boolean().optional(),
 });
 
 /** A Theme color: "#rrggbb" only (it goes into the page's styles), kept lowercase. Null clears it. */
@@ -39,7 +62,7 @@ export const gameOrgBody = z.object({ orgId: id.nullable() });
 /** A Game's options besides its rules: each optional, so one can be changed at a time. */
 export const gameOptionsEdit = z.object({
   name: name.optional(),
-  turnSeconds: z.int().min(0).max(600).optional(),
+  turnSeconds: turnSeconds.optional(),
   rosterMode: rosterMode.optional(),
   approveNames: z.boolean().optional(),
 });
@@ -58,7 +81,7 @@ export const postBody = z.object({
   replyTo: id.optional(),
 });
 
-export const moderationBody = z.object({ mode: z.enum(["open", "approval", "paused"]) });
+export const moderationBody = z.object({ mode: moderation });
 /**
  * The Reactions anyone can put on a Post, in the order they're shown. Friendly ones only, to keep the Feed in good
  * spirits. Each is its emoji, except the leg lamp, which has no emoji: the web app draws its own icon for it.

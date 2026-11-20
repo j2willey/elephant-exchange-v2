@@ -1,3 +1,4 @@
+import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
@@ -6,7 +7,7 @@ import { drawInOrder, openApp, startServer } from "./harness.js";
 async function hosting() {
   const server = await startServer({ draw: drawInOrder });
   const host = await server.signedIn("host@example.com");
-  const id = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Gift exchange");
+  const id = await host.createGame({ name: "Gift exchange", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
   return { ...server, host, id, user: userEvent.setup() };
 }
 
@@ -78,8 +79,8 @@ describe("A demo Game's Host console", () => {
   it("links to its demo view; any other Game's doesn't", async () => {
     const { signedIn } = await startServer();
     const host = await signedIn("host@example.com");
-    const demo = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Demo game", "self", 60, undefined, true);
-    const party = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Party");
+    const demo = await host.createGame({ name: "Demo game", demo: true, options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3, rosterMode: "self", turnSeconds: 60 } });
+    const party = await host.createGame({ name: "Party", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
 
     const first = openApp(host, `/games/${demo}`);
     expect(await screen.findByRole("link", { name: /demo view/i })).toHaveAttribute("href", `/games/${demo}/demo`);

@@ -1,4 +1,4 @@
-import type { Command, GameSettings, Phase, RuleErrorCode } from "@elephant/rules";
+import type { Command, GameOptions, GameSettings, Phase, RuleErrorCode } from "@elephant/rules";
 import { io } from "socket.io-client";
 
 /** A Game as the server shows it (see view() in the server). */
@@ -89,6 +89,25 @@ export interface Session {
   feedbackOk: boolean;
   tipNoteRead: boolean;
   admin: boolean;
+  /** Their own Game options, saved with "Always start with these settings" (null if never saved). */
+  myOptions: GameOptions | null;
+  /** New Game uses `myOptions` straight away. */
+  alwaysMyOptions: boolean;
+}
+
+/** How a Host chose a new Game's options, for the statistics. */
+export type StartChoice = "recommended" | "customized" | "saved";
+
+export interface NewGameRequest {
+  name?: string;
+  orgId?: string | undefined;
+  options: GameOptions;
+  start?: StartChoice;
+  /** They opened the full list of options. */
+  looked?: boolean;
+  /** "Always start with these settings", ticked (true) or not (false); left out when the list wasn't shown. */
+  remember?: boolean;
+  demo?: boolean;
 }
 
 export interface AdminPerson {
@@ -146,6 +165,17 @@ export interface StatsInsights {
   returningHosts: { returning: number; hosts: number };
   startTimes: string[];
   costs: { signInEmails: { day: string; count: number }[]; signInEmailCap: number; photoBytes: number };
+  setup: {
+    choices: { choice: "recommended" | "customized" | "saved" | "unknown"; games: number; looked: number }[];
+    options: {
+      option: string;
+      recommended: string;
+      atStart: { value: string; games: number }[];
+      atEnd: { value: string; games: number }[];
+      changedLater: number;
+    }[];
+    timer: { seconds: number; games: number; turns: number; averageTurnSeconds: number | null; overTimerShare: number | null }[];
+  };
 }
 
 export interface StatsSummary {
@@ -378,7 +408,7 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
 
     /** Who is signed in on this browser, if anyone. */
     async session(): Promise<Session | undefined> {
-      if (demoPlayer !== undefined) return { email: "", feedbackOk: false, tipNoteRead: false, admin: false };
+      if (demoPlayer !== undefined) return { email: "", feedbackOk: false, tipNoteRead: false, admin: false, myOptions: null, alwaysMyOptions: false };
       const res = await fetchFn("/api/session");
       if (res.status === 401) return undefined;
       if (!res.ok) throw new Error(`session check failed: ${res.status}`);
@@ -512,13 +542,16 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
       await postJson("/api/auth/sign-out");
     },
 
-    async createGame(settings: GameSettings, name?: string, rosterMode?: RosterMode, turnSeconds?: number, orgId?: string, demo = false): Promise<string> {
+    async createGame({ name, orgId, options, start, looked, remember, demo }: NewGameRequest): Promise<string> {
+      const { activeSlots, maxSteals, ...rest } = options;
       const res = await postJson("/api/games", {
-        settings,
+        settings: { activeSlots, maxSteals },
+        ...rest,
         ...(name === undefined ? {} : { name }),
-        ...(rosterMode ? { rosterMode } : {}),
-        ...(turnSeconds === undefined ? {} : { turnSeconds }),
         ...(orgId ? { orgId } : {}),
+        ...(start ? { start } : {}),
+        ...(looked ? { looked } : {}),
+        ...(remember === undefined ? {} : { remember }),
         ...(demo ? { demo } : {}),
       });
       if (res.status !== 201) throw new Error(`creating a Game failed: ${res.status}`);

@@ -1,3 +1,4 @@
+import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
@@ -24,8 +25,9 @@ describe("Joining a Game from a phone", () => {
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: /new game/i }));
 
+    await user.click(screen.getByRole("button", { name: /customize settings/i }));
     await user.click(screen.getByRole("radio", { name: /players sign up on their phones/i }));
-    await user.click(screen.getByRole("button", { name: /create game/i }));
+    await user.click(screen.getByRole("button", { name: /create the game/i }));
 
     expect(await screen.findByText(/players can sign up on their phones/i)).toBeInTheDocument();
   });
@@ -33,7 +35,7 @@ describe("Joining a Game from a phone", () => {
   it("lets a signed-in person add themselves as a Player, and the Host sees them arrive", async () => {
     const { signedIn } = await startServer();
     const host = await signedIn("host@example.com");
-    const id = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Troop swap", "self");
+    const id = await host.createGame({ name: "Troop swap", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3, rosterMode: "self" } });
     await host.command(id, { type: "AddPlayer", playerId: "ann", name: "Ann" });
     const hostScreen = openApp(host, `/games/${id}`);
     await screen.findByText("Ann");
@@ -54,7 +56,7 @@ describe("Joining a Game from a phone", () => {
   it("remembers who they are after a reload, and doesn't offer to join again", async () => {
     const { signedIn } = await startServer();
     const host = await signedIn("host@example.com");
-    const id = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Troop swap", "self");
+    const id = await host.createGame({ name: "Troop swap", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3, rosterMode: "self" } });
     const dan = await signedIn("dan@example.com");
     const first = openApp(dan, `/games/${id}`);
     await joinAs("Dan");
@@ -71,7 +73,7 @@ describe("Joining a Game from a phone", () => {
   it("signs in someone who arrived from the QR code and brings them back to the Game", async () => {
     const { origin, signedIn, linkFor } = await startServer();
     const host = await signedIn("host@example.com");
-    const id = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Troop swap", "self");
+    const id = await host.createGame({ name: "Troop swap", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3, rosterMode: "self" } });
     const phone = browser(origin);
     const first = openApp(phone, `/games/${id}`);
     const user = userEvent.setup();
@@ -93,7 +95,7 @@ describe("Joining a Game from a phone", () => {
   it("lets someone join after the Game has started, as a Late Arrival", async () => {
     const { signedIn } = await startServer();
     const host = await signedIn("host@example.com");
-    const id = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Troop swap", "self");
+    const id = await host.createGame({ name: "Troop swap", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3, rosterMode: "self" } });
     for (const name of ["Ann", "Bob"]) await host.command(id, { type: "AddPlayer", playerId: name, name });
     await host.command(id, { type: "StartGame" });
     openApp(await signedIn("dan@example.com"), `/games/${id}`);
@@ -107,7 +109,7 @@ describe("Joining a Game from a phone", () => {
   it("isn't offered when the Host enters the Players", async () => {
     const { signedIn } = await startServer();
     const host = await signedIn("host@example.com");
-    const id = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Office swap");
+    const id = await host.createGame({ name: "Office swap", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
     await host.command(id, { type: "AddPlayer", playerId: "ann", name: "Ann" });
 
     openApp(await signedIn("dan@example.com"), `/games/${id}`);

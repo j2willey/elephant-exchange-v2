@@ -1,3 +1,4 @@
+import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
@@ -14,7 +15,7 @@ describe("My Games", () => {
     await user.click(await screen.findByRole("button", { name: /new game/i }));
     await user.clear(screen.getByLabelText(/name of the game/i));
     await user.type(screen.getByLabelText(/name of the game/i), "OA Holiday Party");
-    await user.click(screen.getByRole("button", { name: /create game/i }));
+    await user.click(screen.getByRole("button", { name: /use recommended settings/i }));
 
     expect(await screen.findByRole("heading", { name: "OA Holiday Party" })).toBeInTheDocument();
     const gameLink = screen.getByRole("link", { name: /link for guests/i }).getAttribute("href");
@@ -28,10 +29,10 @@ describe("My Games", () => {
   it("lists the newest first, with each Game's progress", async () => {
     const { signedIn } = await startServer();
     const host = await signedIn("host@example.com");
-    const older = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Office swap");
+    const older = await host.createGame({ name: "Office swap", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
     for (const name of ["Ann", "Bob"]) await host.command(older, { type: "AddPlayer", playerId: name, name });
     await host.command(older, { type: "StartGame" });
-    await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Family swap");
+    await host.createGame({ name: "Family swap", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
 
     openApp(host);
 
@@ -45,9 +46,9 @@ describe("My Games", () => {
   it("includes Games the person is a Co-host of, but not other people's", async () => {
     const { signedIn } = await startServer();
     const host = await signedIn("host@example.com");
-    const shared = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Troop swap");
+    const shared = await host.createGame({ name: "Troop swap", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
     await host.addCohost(shared, "bob@example.com");
-    await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Host's own swap");
+    await host.createGame({ name: "Host's own swap", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
 
     openApp(await signedIn("bob@example.com"));
 

@@ -85,6 +85,10 @@ export const users = sqliteTable("users", {
   feedbackOk: integer("feedback_ok", { mode: "boolean" }).notNull().default(false),
   /** They ticked that they've read and considered Jim's tip note, so New Game no longer shows it. */
   tipNoteRead: integer("tip_note_read", { mode: "boolean" }).notNull().default(false),
+  /** Their own Game options (a whole GameOptions, JSON), saved with "Always start with these settings". */
+  myOptions: text("my_options"),
+  /** New Game uses `myOptions` straight away; unticking the box keeps them, to start from next time. */
+  alwaysMyOptions: integer("always_my_options", { mode: "boolean" }).notNull().default(false),
 });
 
 /** Emailed sign-in links. Only a hash of each token is kept, so a leaked database can't sign anyone in. */
@@ -312,6 +316,17 @@ export const gameStats = sqliteTable("game_stats", {
   selfSignup: integer("self_signup", { mode: "boolean" }).notNull().default(false),
   /** The most screens (phones, the scoreboard, the console) watching the Game live at once. */
   peakScreens: integer("peak_screens").notNull().default(0),
+  /** How the Host chose the options at creation: "recommended", "customized" or "saved"; null from before it was asked. */
+  startChoice: text("start_choice"),
+  /** They opened the full list of options at creation, whatever they then chose. */
+  lookedAtOptions: integer("looked_at_options", { mode: "boolean" }).notNull().default(false),
+  /** The options the Game was created with, and as they are now (both GameOptions, JSON). */
+  optionsAtStart: text("options_at_start"),
+  options: text("options"),
+  /** Turns taken (called up, or stolen from, until their Pick), their total time, and how many outran the timer. */
+  turns: integer("turns").notNull().default(0),
+  turnMs: integer("turn_ms").notNull().default(0),
+  turnsOverTimer: integer("turns_over_timer").notNull().default(0),
   deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
 });

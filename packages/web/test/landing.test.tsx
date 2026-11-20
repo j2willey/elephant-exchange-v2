@@ -1,3 +1,4 @@
+import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { cleanup, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
@@ -38,7 +39,7 @@ describe("The landing page", () => {
     it(`opens a Game from ${what} the Host sent`, async () => {
       const { origin, signedIn } = await startServer();
       const host = await signedIn("host@example.com");
-      const id = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Acme Holiday Party");
+      const id = await host.createGame({ name: "Acme Holiday Party", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
       const user = userEvent.setup();
       openApp(browser(origin));
 
@@ -98,7 +99,7 @@ describe("The tip jar", () => {
   it("is never shown in a Game", async () => {
     const { signedIn } = await startServer();
     const host = await signedIn("host@example.com");
-    const id = await host.createGame({ activeSlots: 1, maxSteals: 3 }, "Acme Holiday Party");
+    const id = await host.createGame({ name: "Acme Holiday Party", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
     openApp(host, `/games/${id}`);
     await screen.findByText(/acme holiday party/i);
 

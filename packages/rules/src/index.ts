@@ -421,3 +421,32 @@ export function gifts(
     frozen: isFrozen(state, g.id),
   }));
 }
+
+/**
+ * Everything a Host can choose when creating a Game: its two rules plus how it's run. A Host may save their own set
+ * and start every Game with it; a saved set is kept whole, so a later change to the recommendations never changes a
+ * Host's Games without them knowing.
+ */
+export interface GameOptions extends GameSettings {
+  /** The countdown each Turn shows, as a nudge; 0 for none. Nobody is skipped when it runs out. */
+  turnSeconds: number;
+  /** Who adds the Players: the Host and Co-hosts only ("host"), or people themselves from their phones too ("self"). */
+  rosterMode: "host" | "self";
+  /** A name someone picks for themselves waits for a Host or Co-host to approve it. */
+  approveNames: boolean;
+  /** Posts appear at once ("open"), wait for a Host ("approval"), or nobody can post ("paused"). */
+  moderation: "open" | "approval" | "paused";
+}
+
+/** What a Host gets with "Use recommended settings". */
+export const RECOMMENDED_OPTIONS: Readonly<GameOptions> = Object.freeze({
+  activeSlots: 1,
+  maxSteals: 3,
+  turnSeconds: 60,
+  rosterMode: "host",
+  approveNames: false,
+  moderation: "open",
+});
+
+/** The options, in the order they're shown and counted. */
+export const OPTION_NAMES = ["activeSlots", "maxSteals", "turnSeconds", "rosterMode", "approveNames", "moderation"] as const satisfies readonly (keyof GameOptions)[];

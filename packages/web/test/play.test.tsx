@@ -1,3 +1,4 @@
+import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
@@ -7,7 +8,7 @@ import { drawInOrder, openApp, startServer } from "./harness.js";
 async function startedGame(settings = { activeSlots: 1, maxSteals: 3 }, players = ["Ann", "Bob", "Cat"]) {
   const { signedIn } = await startServer({ draw: drawInOrder });
   const host = await signedIn("host@example.com");
-  const id = await host.createGame(settings);
+  const id = await host.createGame({ options: { ...RECOMMENDED_OPTIONS, ...settings } });
   for (const name of players) await host.command(id, { type: "AddPlayer", playerId: name.toLowerCase(), name });
   await host.command(id, { type: "StartGame" });
   openApp(host, `/games/${id}`);
