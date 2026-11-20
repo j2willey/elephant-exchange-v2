@@ -403,6 +403,11 @@ export const feedback = sqliteTable(
     /** A guest's thumbs. */
     thumbs: text("thumbs", { enum: ["up", "down"] }),
     comment: text("comment"),
+    /** They said their comment may be quoted on the website, under `quoteName` (as they wrote it). */
+    quoteOk: integer("quote_ok", { mode: "boolean" }).notNull().default(false),
+    quoteName: text("quote_name"),
+    /** Jim chose to show it on the front page. Cleared if they change the words or take back their OK. */
+    published: integer("published", { mode: "boolean" }).notNull().default(false),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
   },

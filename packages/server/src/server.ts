@@ -48,6 +48,7 @@ import {
   command,
   createGameBody,
   feedbackBody,
+  publishBody,
   gameOptions,
   gameOptionsEdit,
   gameOrgBody,
@@ -562,7 +563,11 @@ export function createServer({
     if (!email) return c.json({ error: "Sign in first" }, 401);
     if (!load(id)) return c.json({ error: "Game not found" }, 404);
     const { asked, as, given } = feedbackFor(id, email);
-    return c.json({ asked, as, given: given && { rating: given.rating, again: given.again, thumbs: given.thumbs, comment: given.comment } });
+    return c.json({
+      asked,
+      as,
+      given: given && { rating: given.rating, again: given.again, thumbs: given.thumbs, comment: given.comment, quoteOk: given.quoteOk, quoteName: given.quoteName },
+    });
   });
 
   app.post("/api/games/:id/feedback", async (c) => {
@@ -574,14 +579,24 @@ export function createServer({
     if (!load(id)) return c.json({ error: "Game not found" }, 404);
     const { asked, as } = feedbackFor(id, email);
     if (!asked) return c.json({ error: "Not until the Game is over" }, 409);
-    const { rating, again, thumbs, comment } = body.data;
+    const { rating, again, thumbs, comment, quoteOk, quoteName } = body.data;
     // A Host gives stars; a guest gives thumbs.
     if (as === "host" ? rating === undefined || thumbs !== undefined : thumbs === undefined || rating !== undefined || again !== undefined) {
       return c.json({ error: as === "host" ? "Give 1 to 5 stars" : "Give a thumbs up or down" }, 400);
     }
-    said.give(id, email, as, { ...(rating ? { rating } : {}), ...(again ? { again } : {}), ...(thumbs ? { thumbs } : {}), ...(comment ? { comment } : {}) });
+    said.give(id, email, as, {
+      ...(rating ? { rating } : {}),
+      ...(again ? { again } : {}),
+      ...(thumbs ? { thumbs } : {}),
+      ...(comment ? { comment } : {}),
+      ...(quoteOk ? { quoteOk } : {}),
+      ...(quoteName ? { quoteName } : {}),
+    });
     return c.body(null, 204);
   });
+
+  /** Testimonials Jim chose for the front page: anyone may see them. */
+  app.get("/api/testimonials", (c) => c.json(said.testimonials()));
 
   /** An idea from anyone signed in, from the home screen. */
   app.post("/api/feedback/suggestions", async (c) => {
@@ -1777,6 +1792,14 @@ export function createServer({
 
   /** What Hosts and guests said, newest first, with the averages. */
   app.get("/api/admin/feedback", (c) => c.json(said.summary()));
+
+  /** Puts a testimonial on the front page, or takes it down: only one its writer said may be quoted. */
+  app.post("/api/admin/feedback/:id/published", async (c) => {
+    const body = await parseBody(c, publishBody);
+    if (!body.ok) return body.res;
+    if (!said.setPublished(c.req.param("id"), body.data.published)) return c.json({ error: "Not something that may be quoted" }, 409);
+    return c.body(null, 204);
+  });
 
   /** Leaves a Game out of the statistics (Jim's trial runs), or puts it back. */
   app.post("/api/admin/stats/games/:id", async (c) => {

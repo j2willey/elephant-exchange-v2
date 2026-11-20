@@ -2415,3 +2415,35 @@ button.info {
 .settings-explained dd {
   margin: 4px 0 0;
 }
+
+/* Testimonials: the front page's "What people say", and the consent under a feedback comment. */
+.testimonial {
+  margin: 0;
+}
+
+.testimonial blockquote {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+}
+
+.testimonial-stars {
+  margin: 0 0 4px;
+  color: var(--brand);
+}
+
+.quote-ok {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The Stats page's Records. */
+.records {
+  margin: 0;
+  padding-left: 1.4em;
+}
+
+.records li {
+  margin: 4px 0;
+}

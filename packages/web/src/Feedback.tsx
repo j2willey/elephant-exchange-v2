@@ -39,17 +39,48 @@ export function FeedbackCard({ game }: { game: GameView }) {
   return ask.as === "host" ? <HostAsk gameId={game.id} onDone={() => setThanked(true)} /> : <GuestAsk gameId={game.id} />;
 }
 
+/**
+ * "May we quote you?", under someone's comment: their OK, and the name to show with it. Nothing goes on the
+ * website until Jim chooses it, and changing the words later takes it down until he looks again.
+ */
+function QuoteConsent({ ok, name, onOk, onName, id }: { ok: boolean; name: string; onOk: (ok: boolean) => void; onName: (name: string) => void; id: string }) {
+  return (
+    <div className="stack quote-consent">
+      <label className="check">
+        <input type="checkbox" checked={ok} onChange={(e) => onOk(e.target.checked)} /> You may quote this on the Elephant Exchange website
+      </label>
+      {ok && (
+        <>
+          <label htmlFor={id}>Name to show with it (optional)</label>
+          <input id={id} maxLength={80} autoComplete="off" placeholder="Ann R., office manager" value={name} onChange={(e) => onName(e.target.value)} />
+          <p className="muted hint">Just your words and this name: never your email. Leave it blank to be quoted without a name.</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+const consent = (comment: string, quoteOk: boolean, quoteName: string) =>
+  comment.trim() && quoteOk ? { quoteOk: true, ...(quoteName.trim() ? { quoteName: quoteName.trim() } : {}) } : {};
+
 function HostAsk({ gameId, onDone }: { gameId: string; onDone: () => void }) {
   const api = useApi();
   const [rating, setRating] = useState(0);
   const [again, setAgain] = useState<"yes" | "maybe" | "no" | null>(null);
   const [comment, setComment] = useState("");
+  const [quoteOk, setQuoteOk] = useState(false);
+  const [quoteName, setQuoteName] = useState("");
   const [state, setState] = useState<"asking" | "sending" | "sent" | "failed">("asking");
 
   async function send(e: FormEvent) {
     e.preventDefault();
     setState("sending");
-    const ok = await api.giveFeedback(gameId, { rating, ...(again ? { again } : {}), ...(comment.trim() ? { comment: comment.trim() } : {}) });
+    const ok = await api.giveFeedback(gameId, {
+      rating,
+      ...(again ? { again } : {}),
+      ...(comment.trim() ? { comment: comment.trim() } : {}),
+      ...consent(comment, quoteOk, quoteName),
+    });
     setState(ok ? "sent" : "failed");
     if (ok) onDone();
   }
@@ -90,6 +121,7 @@ function HostAsk({ gameId, onDone }: { gameId: string; onDone: () => void }) {
       </fieldset>
       <label htmlFor="feedback-comment">Anything to add? (optional)</label>
       <textarea id="feedback-comment" rows={3} maxLength={1000} value={comment} onChange={(e) => setComment(e.target.value)} />
+      {comment.trim() && <QuoteConsent id="host-quote-name" ok={quoteOk} name={quoteName} onOk={setQuoteOk} onName={setQuoteName} />}
       <button type="submit" disabled={rating === 0 || state === "sending"}>
         Send
       </button>
@@ -106,6 +138,8 @@ function GuestAsk({ gameId }: { gameId: string }) {
   const api = useApi();
   const [thumbs, setThumbs] = useState<"up" | "down" | null>(null);
   const [comment, setComment] = useState("");
+  const [quoteOk, setQuoteOk] = useState(false);
+  const [quoteName, setQuoteName] = useState("");
   const [done, setDone] = useState(false);
 
   async function choose(choice: "up" | "down") {
@@ -113,7 +147,7 @@ function GuestAsk({ gameId }: { gameId: string }) {
   }
   async function add(e: FormEvent) {
     e.preventDefault();
-    if (thumbs && (await api.giveFeedback(gameId, { thumbs, comment: comment.trim() }))) setDone(true);
+    if (thumbs && (await api.giveFeedback(gameId, { thumbs, comment: comment.trim(), ...consent(comment, quoteOk, quoteName) }))) setDone(true);
   }
 
   if (done) {
@@ -142,6 +176,7 @@ function GuestAsk({ gameId }: { gameId: string }) {
     <form className="card feedback stack" aria-label="Did you enjoy it?" onSubmit={add}>
       <p role="status">Thanks! Anything to add? (optional)</p>
       <textarea aria-label="Anything to add?" rows={2} maxLength={1000} value={comment} onChange={(e) => setComment(e.target.value)} />
+      {comment.trim() && <QuoteConsent id="guest-quote-name" ok={quoteOk} name={quoteName} onOk={setQuoteOk} onName={setQuoteName} />}
       <div className="inline">
         <button type="submit" disabled={!comment.trim()}>
           Send
@@ -199,6 +234,11 @@ export function FeedbackPage() {
     api.adminFeedback().then(setSaid, () => setSaid("failed"));
   }, [api]);
 
+  async function publish(id: string, published: boolean) {
+    if (await api.publishFeedback(id, published))
+      setSaid((s) => (typeof s === "object" ? { ...s, items: s.items.map((i) => (i.id === id ? { ...i, published } : i)) } : s));
+  }
+
   if (said === "loading") return <p className="muted">Loading…</p>;
   if (said === "notFound") return <p>There's nothing here.</p>;
   if (said === "failed") return <p className="error">The feedback couldn't be loaded. Please reload the page.</p>;
@@ -209,6 +249,7 @@ export function FeedbackPage() {
     ["Would use again", `${said.again.yes} yes · ${said.again.maybe} maybe · ${said.again.no} no`],
     ["Guests", `${said.thumbs.up} 👍 · ${said.thumbs.down} 👎`],
     ["Suggestions", said.suggestions],
+    ["May be quoted", `${said.items.filter((i) => i.quoteOk).length} · ${said.items.filter((i) => i.published).length} on the website`],
   ];
 
   return (
@@ -246,6 +287,17 @@ export function FeedbackPage() {
                   {f.thumbs && <span>{f.thumbs === "up" ? "👍" : "👎"} </span>}
                 </p>
                 {f.comment && <blockquote>{f.comment}</blockquote>}
+                {f.quoteOk && (
+                  <p className="quote-ok">
+                    <span>
+                      ✅ May be quoted{f.quoteName ? <> as “{f.quoteName}”</> : " (no name)"}
+                      {f.published && <strong> · on the website</strong>}
+                    </span>{" "}
+                    <button type="button" className={f.published ? "link danger" : "secondary"} onClick={() => void publish(f.id, !f.published)}>
+                      {f.published ? "Take it off the website" : "Put it on the website"}
+                    </button>
+                  </p>
+                )}
               </li>
             ))}
           </ul>

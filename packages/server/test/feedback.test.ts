@@ -9,7 +9,7 @@ type Summary = {
   again: Record<string, number>;
   thumbs: Record<string, number>;
   suggestions: number;
-  items: { kind: string; game: string | null; from: string | null; rating: number | null; thumbs: string | null; comment: string | null }[];
+  items: { id: string; quoteOk: boolean; quoteName: string | null; published: boolean; kind: string; game: string | null; from: string | null; rating: number | null; thumbs: string | null; comment: string | null }[];
 };
 
 async function setup() {
@@ -18,11 +18,13 @@ async function setup() {
   const server = createServer({ dbPath: ":memory:", mailer, baseUrl: "https://elephantexchange.app", now: () => new Date(ms), adminEmails: ["boss@willey.test"], draw: (w) => w[0]! });
   const { app } = server;
   const as = (email: string) => signIn(app, sent, email);
+  let boss: string | undefined;
+  const bossCookie = async () => (boss ??= await as("boss@willey.test"));
   const hours = (n: number) => (ms += n * 60 * 60_000);
   const send = (id: string, cookie: string, cmd: unknown) => app.request(`/api/games/${id}/commands`, post(cmd, cookie));
   const mine = async (id: string, cookie: string) => (await (await app.request(`/api/games/${id}/feedback`, { headers: { cookie } })).json()) as Mine;
   const answer = (id: string, cookie: string, body: unknown) => app.request(`/api/games/${id}/feedback`, post(body, cookie));
-  const admin = async () => (await (await app.request("/api/admin/feedback", { headers: { cookie: await as("boss@willey.test") } })).json()) as Summary;
+  const admin = async () => (await (await app.request("/api/admin/feedback", { headers: { cookie: await bossCookie() } })).json()) as Summary;
 
   /** Ann's party, played and ended; Gus is a guest who signed up as a Player on his phone. */
   async function party({ feedbackOk = true, end = true } = {}) {
@@ -36,7 +38,9 @@ async function setup() {
     if (end) await send(id, ann, { type: "EndGame" });
     return { id, ann, gus };
   }
-  return { app, server, as, hours, send, mine, answer, admin, asked, party };
+  const publish = async (id: string, published: boolean) => app.request(`/api/admin/feedback/${id}/published`, post({ published }, await bossCookie()));
+  const shown = async () => (await (await app.request("/api/testimonials")).json()) as { quote: string; name: string | null; kind: string; rating: number | null }[];
+  return { app, server, as, hours, send, mine, answer, admin, asked, party, publish, shown };
 }
 
 describe("Asking how a Game went", () => {
@@ -133,5 +137,51 @@ describe("The follow-up email", () => {
     // A busy day: half the cap of 100 already went on sign-in links.
     for (let i = 0; i < 50; i++) await app.request("/api/auth/link", post({ email: `guest${i}@willey.test` }));
     expect(await server.followUps()).toBe(0);
+  });
+});
+
+describe("Testimonials", () => {
+  it("go on the front page only when the writer said they may be quoted and Jim publishes them", async () => {
+    const { party, answer, admin, publish, shown } = await setup();
+    const { id, ann, gus } = await party();
+    await answer(id, ann, { rating: 5, comment: "Our best party yet!", quoteOk: true, quoteName: "Ann R., office manager" });
+    await answer(id, gus, { thumbs: "up", comment: "So fun", quoteOk: false });
+    expect(await shown()).toEqual([]); // nothing until Jim chooses
+
+    const items = (await admin()).items;
+    const annSaid = items.find((i) => i.comment === "Our best party yet!")!;
+    const gusSaid = items.find((i) => i.comment === "So fun")!;
+    expect(annSaid).toMatchObject({ quoteOk: true, quoteName: "Ann R., office manager", published: false });
+    expect((await publish(gusSaid.id, true)).status).toBe(409); // Gus didn't say it may be quoted
+    expect((await publish(annSaid.id, true)).status).toBe(204);
+
+    expect(await shown()).toEqual([{ quote: "Our best party yet!", name: "Ann R., office manager", kind: "host", rating: 5 }]);
+    expect((await publish(annSaid.id, false)).status).toBe(204);
+    expect(await shown()).toEqual([]);
+  });
+
+  it("come down if the writer changes their words or takes back their OK, until Jim publishes them again", async () => {
+    const { party, answer, admin, publish, shown } = await setup();
+    const { id, ann } = await party();
+    await answer(id, ann, { rating: 5, comment: "Great", quoteOk: true, quoteName: "Ann" });
+    await publish((await admin()).items[0]!.id, true);
+
+    await answer(id, ann, { rating: 5, comment: "Great", quoteOk: true, quoteName: "Ann" }); // the same: stays up
+    expect(await shown()).toHaveLength(1);
+    await answer(id, ann, { rating: 5, comment: "Great, mostly", quoteOk: true, quoteName: "Ann" });
+    expect(await shown()).toEqual([]);
+
+    await publish((await admin()).items[0]!.id, true);
+    await answer(id, ann, { rating: 5, comment: "Great, mostly" }); // OK taken back
+    expect(await shown()).toEqual([]);
+    expect((await publish((await admin()).items[0]!.id, true)).status).toBe(409);
+  });
+
+  it("can't be published by anyone but the admin", async () => {
+    const { app, party, answer, admin } = await setup();
+    const { id, ann } = await party();
+    await answer(id, ann, { rating: 5, comment: "Great", quoteOk: true });
+    const fid = (await admin()).items[0]!.id;
+    expect((await app.request(`/api/admin/feedback/${fid}/published`, post({ published: true }, ann))).status).toBe(404);
   });
 });

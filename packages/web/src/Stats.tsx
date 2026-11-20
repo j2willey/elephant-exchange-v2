@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
-import type { StatsSummary } from "./api.js";
+import type { GameRecord, StatsSummary } from "./api.js";
 import { useApi } from "./ApiContext.js";
 import { Insights } from "./Insights.js";
 
@@ -70,6 +70,8 @@ export function StatsPage() {
           ))}
         </dl>
       </section>
+
+      <Records records={stats.records} />
 
       <Insights insights={stats.insights} />
 
@@ -215,5 +217,50 @@ export function StatsPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+const RECORDS: Record<GameRecord["record"], { title: string; unit: (n: number) => string }> = {
+  players: { title: "Most Players", unit: (n) => `${n} Players` },
+  longest: { title: "Longest (play time, breaks left out)", unit: (n) => `${n} min` },
+  steals: { title: "Most Steals", unit: (n) => `${n} Steals` },
+  peakScreens: { title: "Most screens at once", unit: (n) => `${n} screens` },
+  photos: { title: "Most Photos", unit: (n) => `${n} Photos` },
+};
+
+/** The record holders: "the biggest party so far had 60 Players and took 1 h 40 min". Played Games only. */
+function Records({ records }: { records: GameRecord[] }) {
+  const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  return (
+    <section className="card" aria-label="Records">
+      <h2>Records</h2>
+      <p className="muted hint">The top 5 played Games for each. Length is from the first Pick to End Game; "play" leaves out breaks.</p>
+      {records.every((r) => r.top.length === 0) ? (
+        <p className="muted">No played Games yet.</p>
+      ) : (
+        records.map((r) => (
+          <div key={r.record} className="stack">
+            <h3>{RECORDS[r.record].title}</h3>
+            {r.top.length === 0 ? (
+              <p className="muted">None yet.</p>
+            ) : (
+              <ol className="records" aria-label={RECORDS[r.record].title}>
+                {r.top.map((g) => (
+                  <li key={g.id}>
+                    <strong>{RECORDS[r.record].unit(g.value)}</strong> · {g.name} · {day(g.playedAt)}
+                    <span className="muted">
+                      {" "}
+                      · {g.players} Players
+                      {g.minutes !== null && <> · {g.minutes} min ({g.activeMinutes} min play)</>}
+                      {g.host && <> · {g.host}</>}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+        ))
+      )}
+    </section>
   );
 }

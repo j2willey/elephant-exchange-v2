@@ -1,6 +1,8 @@
 import { RECOMMENDED_OPTIONS, type GameOptions } from "@elephant/rules";
 import { OPTION_HELP } from "./GameOptionFields.js";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import type { Testimonial } from "./api.js";
+import { useApi } from "./ApiContext.js";
 import { Link, useNavigate } from "react-router";
 import scoreboard from "./assets/scoreboard.webp";
 import { SignInForm } from "./SignIn.js";
@@ -115,6 +117,8 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
         </p>
       </section>
 
+      <Testimonials />
+
       <section className="card landing-again" aria-label="Try it">
         <h2>See it in two minutes</h2>
         <p>The demo sets up a whole party with made-up guests, ready to start. Open gifts, steal, and watch the TV keep up.</p>
@@ -227,6 +231,37 @@ function OpenGame() {
         Open the Game
       </button>
     </form>
+  );
+}
+
+/** What Hosts and guests said, in their own words: only those Jim published, with their OK. Hidden until there's one. */
+function Testimonials() {
+  const api = useApi();
+  const [said, setSaid] = useState<Testimonial[]>([]);
+  useEffect(() => {
+    let current = true;
+    api.testimonials().then((t) => current && setSaid(t));
+    return () => {
+      current = false;
+    };
+  }, [api]);
+  if (said.length === 0) return null;
+  return (
+    <section aria-label="What people say">
+      <h2 className="landing-section-title">What people say</h2>
+      <div className="landing-points testimonials">
+        {said.slice(0, 6).map((t, i) => (
+          <figure key={i} className="card testimonial">
+            {t.rating !== null && <p className="testimonial-stars" aria-label={`${t.rating} stars`}>{"★".repeat(t.rating)}</p>}
+            <blockquote>“{t.quote}”</blockquote>
+            <figcaption className="muted">
+              — {t.name ?? (t.kind === "host" ? "A Host" : "A guest")}
+              {t.name && <>, {t.kind === "host" ? "Host" : "guest"}</>}
+            </figcaption>
+          </figure>
+        ))}
+      </div>
+    </section>
   );
 }
 

@@ -20,6 +20,7 @@ type Summary = {
   hosts: { email: string | null; games: number; averageMinutes: number | null }[];
   organizations: { name: string; deleted: boolean; games: number }[];
   sources: { ref: string; visits: number; signUps: number }[];
+  records: { record: string; top: { name: string; value: number; players: number; minutes: number | null; activeMinutes: number | null; host: string | null }[] }[];
   games: { id: string; name: string; minutes: number | null; activeMinutes: number | null; played: boolean; counted: boolean; deleted: boolean; excluded: boolean }[];
 };
 
@@ -213,5 +214,24 @@ describe("Usage statistics", () => {
   it("are for the admin only", async () => {
     const { app, as } = await setup();
     expect((await app.request("/api/admin/stats", { headers: { cookie: await as("ann@willey.test") } })).status).toBe(404);
+  });
+});
+
+describe("Records", () => {
+  it("name the biggest, longest and busiest played Games, top 5 each, leaving out demos, tests and try-outs", async () => {
+    const { as, stats, party } = await setup();
+    const ann = await as("ann@willey.test");
+    for (const [name, players] of [["Small", 4], ["Medium", 8], ["Big", 12], ["Bigger", 16], ["Biggest", 20], ["Huge", 24]] as const) await party(ann, name, players);
+    await party(ann, "Demo", 40, { demo: true });
+    await party(await as("smoke-9@example.com"), "Smoke", 40);
+
+    const { records } = await stats();
+    const players = records.find((r) => r.record === "players")!.top;
+    expect(players.map((g) => [g.name, g.value])).toEqual([["Huge", 24], ["Biggest", 20], ["Bigger", 16], ["Big", 12], ["Medium", 8]]);
+    expect(players[0]).toMatchObject({ host: "ann@willey.test", players: 24, minutes: expect.any(Number), activeMinutes: expect.any(Number) });
+    // Longest: play time without the dinner break; more Players, more minutes of opening.
+    const longest = records.find((r) => r.record === "longest")!.top;
+    expect(longest[0]).toMatchObject({ name: "Huge", value: longest[0]!.activeMinutes });
+    expect(records.map((r) => r.record)).toEqual(["players", "longest", "steals", "peakScreens", "photos"]);
   });
 });

@@ -80,6 +80,24 @@ export interface SetupInsights {
   timer: { seconds: number; games: number; turns: number; averageTurnSeconds: number | null; overTimerShare: number | null }[];
 }
 
+export type RecordKind = "players" | "longest" | "steals" | "peakScreens" | "photos";
+
+export interface GameRecord {
+  record: RecordKind;
+  top: {
+    id: string;
+    name: string;
+    host: string | null;
+    /** When it was played: its first Pick. */
+    playedAt: string;
+    value: number;
+    players: number;
+    /** First Pick to End Game, and the same without breaks; null if it never ended. */
+    minutes: number | null;
+    activeMinutes: number | null;
+  }[];
+}
+
 export interface StatsSummary {
   totals: {
     /** People who hosted at least one played Game. */
@@ -104,6 +122,8 @@ export interface StatsSummary {
   organizations: { name: string; deleted: boolean; games: number }[];
   sources: { ref: string; visits: number; signUps: number }[];
   insights: Insights;
+  /** The record holders among played Games: the top 5 for each, for "the biggest party so far had 60 Players". */
+  records: GameRecord[];
   games: {
     id: string;
     name: string;
@@ -463,8 +483,39 @@ export function createStats(db: Db, now: () => Date) {
       setup: setupInsights(real, counted, used, share),
     };
 
+    const holders = (record: RecordKind, valueOf: (s: (typeof counted)[number]) => number | null): GameRecord => ({
+      record,
+      top: counted
+        .flatMap((s) => {
+          const value = valueOf(s);
+          return value === null || value <= 0 ? [] : [{ s, value }];
+        })
+        // Ties go to the Game that got there first.
+        .sort((a, b) => b.value - a.value || a.s.g.firstPickAt!.getTime() - b.s.g.firstPickAt!.getTime())
+        .slice(0, 5)
+        .map(({ s, value }) => ({
+          id: s.g.gameId,
+          name: s.g.name,
+          host: emailOf.get(s.g.hostKey) ?? null,
+          playedAt: s.g.firstPickAt!.toISOString(),
+          value,
+          players: s.g.players,
+          minutes: s.length === null ? null : minutes(s.length),
+          activeMinutes: s.length === null ? null : minutes(s.g.activeMs),
+        })),
+    });
+    const records = [
+      holders("players", (s) => s.g.players),
+      // Play time, breaks left out, of Games that ended: one left open overnight isn't a long party.
+      holders("longest", (s) => (s.length === null ? null : minutes(s.g.activeMs))),
+      holders("steals", (s) => s.g.steals),
+      holders("peakScreens", (s) => s.g.peakScreens),
+      holders("photos", (s) => s.g.photos),
+    ];
+
     return {
       insights,
+      records,
       totals: {
         hosts: byHost.size,
         hostsWhoCreated: new Set(real.map((s) => s.g.hostKey)).size,

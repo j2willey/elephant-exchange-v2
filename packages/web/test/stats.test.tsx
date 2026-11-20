@@ -109,3 +109,19 @@ describe("How Games are set up, on the Stats page", () => {
     expect(timer[1]).toHaveTextContent(/^90 s1/);
   });
 });
+
+describe("Records, on the Stats page", () => {
+  it("name the biggest played Game with its length", async () => {
+    const server = await startServer({ draw: drawInOrder, adminEmails: ["boss@example.org"] });
+    const ann = await server.signedIn("ann@example.org");
+    const id = await ann.createGame({ name: "Office party", options: { ...RECOMMENDED_OPTIONS } });
+    for (const p of ["a", "b", "c", "d", "e"]) await ann.command(id, { type: "AddPlayer", playerId: p, name: p.toUpperCase() });
+    await ann.command(id, { type: "StartGame" });
+    for (const [p, g] of [["a", "g1"], ["b", "g2"], ["c", "g3"], ["d", "g4"], ["e", "g5"]] as const) await ann.command(id, { type: "OpenGift", playerId: p, giftId: g, name: g });
+    await ann.command(id, { type: "EndGame" });
+    openApp(await server.signedIn("boss@example.org"), "/admin/stats");
+
+    const most = await screen.findByRole("list", { name: /most players/i });
+    expect(within(most).getAllByRole("listitem")[0]).toHaveTextContent(/5 players · office party.*min/i);
+  });
+});

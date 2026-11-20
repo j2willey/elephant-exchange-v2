@@ -126,7 +126,11 @@ export const answerBody = z.object({
   again: z.enum(["yes", "maybe", "no"]).optional(),
   thumbs: z.enum(["up", "down"]).optional(),
   comment: z.string().max(1000).optional(),
+  /** "You may quote this on the website", with the name to show beside it ("Ann R., office manager"). */
+  quoteOk: z.boolean().optional(),
+  quoteName: z.string().trim().max(80).optional(),
 });
+export const publishBody = z.object({ published: z.boolean() });
 export const suggestionBody = z.object({ comment: z.string().trim().min(1).max(2000) });
 export const feedbackBody = z.object({ ok: z.boolean() });
 export const linkRedemption = z.object({ token: z.string().min(1).max(100) });

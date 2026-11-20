@@ -126,9 +126,38 @@ export interface AdminPerson {
 export interface FeedbackAsk {
   asked: boolean;
   as: "host" | "guest";
-  given: { rating: number | null; again: "yes" | "maybe" | "no" | null; thumbs: "up" | "down" | null; comment: string | null } | null;
+  given: {
+    rating: number | null;
+    again: "yes" | "maybe" | "no" | null;
+    thumbs: "up" | "down" | null;
+    comment: string | null;
+    quoteOk: boolean;
+    quoteName: string | null;
+  } | null;
 }
-export type FeedbackAnswer = { rating?: number; again?: "yes" | "maybe" | "no"; thumbs?: "up" | "down"; comment?: string };
+export type FeedbackAnswer = {
+  rating?: number;
+  again?: "yes" | "maybe" | "no";
+  thumbs?: "up" | "down";
+  comment?: string;
+  /** "You may quote this on the website", under this name. */
+  quoteOk?: boolean;
+  quoteName?: string;
+};
+
+/** Someone's own words on the front page, published by Jim with their OK. */
+export interface Testimonial {
+  quote: string;
+  name: string | null;
+  kind: "host" | "guest";
+  rating: number | null;
+}
+
+export type RecordKind = "players" | "longest" | "steals" | "peakScreens" | "photos";
+export interface GameRecord {
+  record: RecordKind;
+  top: { id: string; name: string; host: string | null; playedAt: string; value: number; players: number; minutes: number | null; activeMinutes: number | null }[];
+}
 
 /** What Hosts and guests said, for the admin. */
 export interface FeedbackSummary {
@@ -138,6 +167,10 @@ export interface FeedbackSummary {
   thumbs: { up: number; down: number };
   suggestions: number;
   items: {
+    id: string;
+    quoteOk: boolean;
+    quoteName: string | null;
+    published: boolean;
     kind: "host" | "guest" | "suggestion";
     game: string | null;
     from: string | null;
@@ -180,6 +213,7 @@ export interface StatsInsights {
 
 export interface StatsSummary {
   insights: StatsInsights;
+  records: GameRecord[];
   totals: {
     hosts: number;
     hostsWhoCreated: number;
@@ -493,6 +527,21 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
 
     async suggest(comment: string): Promise<boolean> {
       return (await postJson("/api/feedback/suggestions", { comment })).ok;
+    },
+
+    /** The testimonials on the front page. Empty if they can't be loaded: the page simply goes without. */
+    async testimonials(): Promise<Testimonial[]> {
+      try {
+        const res = await fetchFn("/api/testimonials");
+        return res.ok ? ((await res.json()) as Testimonial[]) : [];
+      } catch {
+        return [];
+      }
+    },
+
+    /** The admin puts a testimonial on the front page, or takes it down. */
+    async publishFeedback(id: string, published: boolean): Promise<boolean> {
+      return (await postJson(`/api/admin/feedback/${encodeURIComponent(id)}/published`, { published })).ok;
     },
 
     async adminFeedback(): Promise<FeedbackSummary | "notFound"> {

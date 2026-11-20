@@ -2,7 +2,7 @@ import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { drawInOrder, onTab, openApp, startServer } from "./harness.js";
+import { browser, drawInOrder, onTab, openApp, startServer } from "./harness.js";
 
 /** A laptop: wide enough for the two-column Host console. */
 function screenWidth(wide: boolean) {
@@ -77,5 +77,50 @@ describe("Asking how it went", () => {
     openApp(await signedIn("boss@example.org"), "/admin/feedback");
     const list = await screen.findByRole("list", { name: /what people said/i });
     expect(list).toHaveTextContent(/suggestion.*ann@example.org.*a dark mode, please/i);
+  });
+});
+
+describe("Testimonials", () => {
+  it("asks a Host who wrote a comment whether it may be quoted, and under what name", async () => {
+    const { host, id, user, signedIn } = await finishedParty();
+    await host.command(id, { type: "EndGame" });
+    openApp(host, `/games/${id}`);
+    const ask = await screen.findByRole("form", { name: /how did it go/i });
+    expect(within(ask).queryByRole("checkbox", { name: /quote this/i })).not.toBeInTheDocument(); // nothing to quote yet
+
+    await user.click(within(ask).getByRole("radio", { name: /^5 stars/i }));
+    await user.type(within(ask).getByLabelText(/anything to add/i), "Best party in years");
+    await user.click(within(ask).getByRole("checkbox", { name: /you may quote this on the elephant exchange website/i }));
+    await user.type(within(ask).getByLabelText(/name to show with it/i), "Ann R., office manager");
+    await user.click(within(ask).getByRole("button", { name: /send/i }));
+    await screen.findByText(/jim reads every answer/i);
+
+    const said = await (await signedIn("boss@example.org")).adminFeedback();
+    expect(said !== "notFound" && said.items[0]).toMatchObject({ quoteOk: true, quoteName: "Ann R., office manager", published: false });
+  });
+
+  it("go on the front page once the admin puts them there, and come off again", async () => {
+    const { host, id, user, signedIn, origin } = await finishedParty();
+    await host.command(id, { type: "EndGame" });
+    await host.giveFeedback(id, { rating: 5, comment: "Best party in years", quoteOk: true, quoteName: "Ann R." });
+    const admin = await signedIn("boss@example.org");
+    openApp(admin, "/admin/feedback");
+
+    const item = (await screen.findByText(/best party in years/i)).closest("li")!;
+    expect(item).toHaveTextContent(/may be quoted as “ann r\.”/i);
+    await user.click(within(item).getByRole("button", { name: /put it on the website/i }));
+    await within(item).findByRole("button", { name: /take it off the website/i });
+    expect(await admin.testimonials()).toEqual([{ quote: "Best party in years", name: "Ann R.", kind: "host", rating: 5 }]);
+
+    openApp(browser(origin), "/about");
+    const shown = await screen.findByRole("region", { name: /what people say/i });
+    expect(shown).toHaveTextContent(/“best party in years”.*ann r\., host/i);
+  });
+
+  it("aren't on the front page until one is published", async () => {
+    const { origin } = await startServer();
+    openApp(browser(origin), "/about");
+    await screen.findByRole("region", { name: /how it works/i });
+    expect(screen.queryByRole("region", { name: /what people say/i })).not.toBeInTheDocument();
   });
 });

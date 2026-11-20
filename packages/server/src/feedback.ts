@@ -11,10 +11,11 @@ export const FOLLOW_UP_SHARE = 0.5;
 /** And never more than this many in one go. */
 export const FOLLOW_UP_BATCH = 10;
 
-export type Answer = { rating?: number; again?: "yes" | "maybe" | "no"; thumbs?: "up" | "down"; comment?: string };
+export type Answer = { rating?: number; again?: "yes" | "maybe" | "no"; thumbs?: "up" | "down"; comment?: string; quoteOk?: boolean; quoteName?: string };
 type Row = typeof feedback.$inferSelect;
 
 export interface FeedbackItem {
+  id: string;
   kind: Row["kind"];
   game: string | null;
   /** Their email while they're still a user; null after. */
@@ -23,7 +24,19 @@ export interface FeedbackItem {
   again: Row["again"];
   thumbs: Row["thumbs"];
   comment: string | null;
+  /** They said it may be quoted on the website, under this name; and whether Jim has put it there. */
+  quoteOk: boolean;
+  quoteName: string | null;
+  published: boolean;
   at: string;
+}
+
+/** A testimonial on the front page: someone's own words, under the name they gave. */
+export interface Testimonial {
+  quote: string;
+  name: string | null;
+  kind: "host" | "guest";
+  rating: number | null;
 }
 
 export interface FeedbackSummary {
@@ -49,11 +62,20 @@ export function createFeedback(db: Db, now: () => Date, keyOf: (email: string) =
   /** Records an answer, or changes the one they gave before. */
   function give(gameId: string, email: string, kind: "host" | "guest", answer: Answer) {
     const at = now();
+    const before = mine(gameId, email, kind);
+    const comment = answer.comment?.trim() || null;
+    const quoteOk = Boolean(answer.quoteOk && comment);
+    const quoteName = (quoteOk && answer.quoteName?.trim()) || null;
+    // Published words stay up only while they're the very words, name and OK Jim approved.
+    const published = Boolean(before?.published && quoteOk && before.comment === comment && before.quoteName === quoteName);
     const values = {
       rating: answer.rating ?? null,
       again: answer.again ?? null,
       thumbs: answer.thumbs ?? null,
-      comment: answer.comment?.trim() || null,
+      comment,
+      quoteOk,
+      quoteName,
+      published,
       updatedAt: at,
     };
     db.insert(feedback)
@@ -92,6 +114,7 @@ export function createFeedback(db: Db, now: () => Date, keyOf: (email: string) =
       thumbs: tally("thumbs", ["up", "down"] as const),
       suggestions: real.filter((r) => r.kind === "suggestion").length,
       items: rows.map((r) => ({
+        id: r.id,
         kind: r.kind,
         game: r.gameId ? (nameOf.get(r.gameId) ?? "(deleted Game)") : null,
         from: emailOf.get(r.personKey) ?? null,
@@ -99,6 +122,9 @@ export function createFeedback(db: Db, now: () => Date, keyOf: (email: string) =
         again: r.again,
         thumbs: r.thumbs,
         comment: r.comment,
+        quoteOk: r.quoteOk,
+        quoteName: r.quoteName,
+        published: r.published,
         at: r.updatedAt.toISOString(),
       })),
     };
@@ -142,5 +168,26 @@ export function createFeedback(db: Db, now: () => Date, keyOf: (email: string) =
     db.insert(feedbackEmails).values({ gameId, sentAt: now() }).onConflictDoNothing().run();
   }
 
-  return { mine, give, suggest, hostRatings, summary, dueForFollowUp, followedUp };
+  /** Jim shows a testimonial on the front page, or takes it down. Only words someone said may be quoted. */
+  function setPublished(id: string, published: boolean): boolean {
+    const row = db.select().from(feedback).where(eq(feedback.id, id)).get();
+    if (!row || (published && !(row.quoteOk && row.comment))) return false;
+    db.update(feedback).set({ published }).where(eq(feedback.id, id)).run();
+    return true;
+  }
+
+  /** What the front page shows: published testimonials, newest first. */
+  function testimonials(): Testimonial[] {
+    return db
+      .select()
+      .from(feedback)
+      .where(and(eq(feedback.published, true), eq(feedback.quoteOk, true)))
+      .orderBy(desc(feedback.updatedAt))
+      .all()
+      .flatMap((r) =>
+        r.comment && r.kind !== "suggestion" ? [{ quote: r.comment, name: r.quoteName, kind: r.kind, rating: r.kind === "host" ? r.rating : null }] : [],
+      );
+  }
+
+  return { mine, give, suggest, hostRatings, summary, dueForFollowUp, followedUp, setPublished, testimonials };
 }

@@ -33,3 +33,9 @@ What's recorded for it: undos, skips, frozen Gifts, vote use and self sign-up ar
 - **"Suggest something"** on the Host's home page, for ideas at any time.
 - **The admin's Feedback page** (`/admin/feedback`): the average Host rating, "would use again" and guest thumbs, the number of suggestions, then every answer, newest first. Each Game's rating also shows in the Stats page's Games table.
 - **Kept like the statistics:** nothing is cleared when a Game is deleted, and people are stored only as a keyed hash of their email (shown by email on the admin pages while they're still users). Test accounts' answers are left out of the figures.
+
+## Phase 4: how Games are set up, records and testimonials (built 2026-11-20)
+
+- **How Games are set up** (Stats page): Games by recommended, customized or saved settings (and who opened the full list first); each setting's values at creation and in played Games, and how many played Games changed it afterwards; the turn timer against real Turn times (call-up to Pick, breaks left out) and how often Turns ran past it.
+- **Records** (Stats page): the top 5 played Games for most Players, longest play time (ended Games, breaks left out), most Steals, most screens at once and most Photos, each with its date, Players and length. For lines like "the biggest party so far had 60 Players".
+- **Testimonials:** under a Host's or guest's comment, "You may quote this on the Elephant Exchange website" and an optional name to show with it. Nothing is public until the admin chooses "Put it on the website" on the Feedback page; the front page then shows it under "What people say" (hidden while there are none). Changing the words or the name, or unticking the OK, takes it down until the admin publishes it again. Only the words and the name given are ever shown, never an email.
