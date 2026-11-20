@@ -35,7 +35,7 @@ describe("A demo Game", () => {
     await user.click(await screen.findByRole("button", { name: /try a demo game/i }));
     const players = screen.getByLabelText(/how many players/i);
     expect(players).toHaveAttribute("min", "2");
-    expect(players).toHaveAttribute("max", "40");
+    expect(players).toHaveAttribute("max", "50");
   });
 });
 

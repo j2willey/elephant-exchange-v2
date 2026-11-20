@@ -138,6 +138,8 @@ interface LoadedGame {
   name: string;
   /** Made with "Try a demo game": its Host console offers the demo view. */
   demo: boolean;
+  /** The line under the name; "" for none. */
+  tagline: string;
   rosterMode: "host" | "self";
   moderation: "open" | "approval" | "paused";
   approveNames: boolean;
@@ -206,10 +208,11 @@ function tally(ballots: ReadonlyMap<string, string>): Record<string, number> {
 
 /** What screens are shown about a Game: answers from the rules module, never its internal state. */
 function view(id: string, game: LoadedGame, now: Date) {
-  const { name, demo, rosterMode, moderation, approveNames, turnSeconds, postsPerMinute, repitchMinutes, clocks, state, seq, vote, screen } = game;
+  const { name, tagline, demo, rosterMode, moderation, approveNames, turnSeconds, postsPerMinute, repitchMinutes, clocks, state, seq, vote, screen } = game;
   return {
     id,
     name,
+    tagline,
     demo,
     theme: resolveTheme(id, game.theme),
     rosterMode,
@@ -327,6 +330,7 @@ export function createServer({
         ballots: new Map(ballots.map((b) => [b.email, b.giftId])),
       },
       name: row.name,
+      tagline: row.tagline,
       demo: row.demo,
       rosterMode: row.rosterMode,
       moderation: row.moderation,
@@ -1634,8 +1638,9 @@ export function createServer({
     const game = load(id);
     if (!game) return c.json({ error: "Game not found" }, 404);
     if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can change this Game" }, 403);
-    const { name, turnSeconds, rosterMode, approveNames, postsPerMinute, repitchMinutes } = body.data;
+    const { name, tagline, turnSeconds, rosterMode, approveNames, postsPerMinute, repitchMinutes } = body.data;
     const set = {
+      ...(tagline !== undefined ? { tagline } : {}),
       ...(postsPerMinute !== undefined ? { postsPerMinute } : {}),
       ...(repitchMinutes !== undefined ? { repitchMinutes } : {}),
       ...(approveNames !== undefined ? { approveNames } : {}),

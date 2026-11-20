@@ -12,6 +12,7 @@ const demoNames = [
   "Kai", "Lena", "Max", "Nia", "Omar", "Pia", "Quinn", "Rosa", "Sam", "Tess",
   "Uma", "Vic", "Wren", "Xavi", "Yara", "Zed", "Abe", "Bea", "Cole", "Dina",
   "Eli", "Fay", "Gabe", "Holly", "Ike", "Joy", "Kit", "Lou", "Mia", "Ned",
+  "Ola", "Pete", "Rae", "Stan", "Tara", "Ugo", "Val", "Will", "Yoko", "Zoe",
 ];
 export const MAX_DEMO_PLAYERS = demoNames.length;
 

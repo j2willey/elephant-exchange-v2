@@ -134,6 +134,7 @@ export function LaptopConsole({
         <ThemeLogo theme={game.theme} />
         <div>
           <h2>{game.name}</h2>
+          {game.tagline && <p className="game-tagline">{game.tagline}</p>}
           <p>
             {game.settings.activeSlots === 1 ? "1 player takes a turn at once" : `${game.settings.activeSlots} players take a turn at once`} ·{" "}
             {game.settings.maxSteals === 0 ? "no steals" : `Gifts are frozen after ${game.settings.maxSteals} steals`}

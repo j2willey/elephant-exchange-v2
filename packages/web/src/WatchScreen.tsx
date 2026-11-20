@@ -27,6 +27,7 @@ export function WatchScreen() {
       <header className="screen-banner" role="banner">
         <ThemeLogo theme={game.theme} className="screen-logo" />
         <h2>{game.name}</h2>
+        {game.tagline && <p className="screen-tagline">{game.tagline}</p>}
       </header>
       {game.screen === "rules" ? (
         <Rules game={game} />

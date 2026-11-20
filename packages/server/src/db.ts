@@ -9,6 +9,8 @@ export const games = sqliteTable("games", {
   id: text("id").primaryKey(),
   /** What the Host calls it, such as "OA Holiday Party". */
   name: text("name").notNull().default("Gift exchange"),
+  /** A line under the name on the big screen and the Host's banner, such as "It's going to be a gas!"; "" for none. */
+  tagline: text("tagline").notNull().default(""),
   /** Who adds Players: only the Host and Co-hosts ("host"), or people themselves from their phones too ("self"). */
   rosterMode: text("roster_mode", { enum: ["host", "self"] }).notNull().default("host"),
   /** The Game's rule for Posts: "open" (they appear at once), "approval" (each waits for a Host) or "paused" (no posting). */

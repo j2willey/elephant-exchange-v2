@@ -6,7 +6,7 @@ import { createServer } from "../src/server.js";
 import { capturingMailer, hostGame, post, signIn } from "./support.js";
 
 const patch = (body: unknown, cookie?: string) => ({ ...post(body, cookie), method: "PATCH" });
-type Shown = { name: string; rosterMode: string; clock: { turnSeconds: number } };
+type Shown = { name: string; tagline: string; rosterMode: string; clock: { turnSeconds: number } };
 
 async function setup() {
   const { sent, mailer } = capturingMailer();
@@ -24,6 +24,18 @@ describe("A Game's options", () => {
 
     expect(res.status).toBe(200);
     expect(await shown()).toMatchObject({ name: "OA Holiday Party", rosterMode: "self", clock: { turnSeconds: 90 } });
+  });
+
+  it("include a tagline under the name, none to start with, which can be taken off again", async () => {
+    const { app, id, host, shown } = await setup();
+    expect(await shown()).toMatchObject({ tagline: "" });
+
+    await app.request(`/api/games/${id}/options`, patch({ tagline: "  It's going to be a gas!  " }, host));
+    expect(await shown()).toMatchObject({ tagline: "It's going to be a gas!" });
+
+    expect((await app.request(`/api/games/${id}/options`, patch({ tagline: "x".repeat(101) }, host))).status).toBe(400);
+    await app.request(`/api/games/${id}/options`, patch({ tagline: "" }, host));
+    expect(await shown()).toMatchObject({ tagline: "" });
   });
 
   it("can be changed one at a time", async () => {

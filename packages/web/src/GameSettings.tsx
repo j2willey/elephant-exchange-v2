@@ -53,6 +53,7 @@ export function GameSettings() {
 function GameOptions({ game, onSaved }: { game: GameView; onSaved: (game: SharedGame) => void }) {
   const api = useApi();
   const [name, setName] = useState(game.name);
+  const [tagline, setTagline] = useState(game.tagline);
   const [slots, setSlots] = useState(String(game.settings.activeSlots));
   const [steals, setSteals] = useState(String(game.settings.maxSteals));
   const [turnSeconds, setTurnSeconds] = useState(String(game.clock.turnSeconds));
@@ -74,6 +75,7 @@ function GameOptions({ game, onSaved }: { game: GameView; onSaved: (game: Shared
     }
     const options = {
       ...(name.trim() !== game.name ? { name: name.trim() } : {}),
+      ...(tagline.trim() !== game.tagline ? { tagline: tagline.trim() } : {}),
       ...(Number(turnSeconds) !== game.clock.turnSeconds ? { turnSeconds: Number(turnSeconds) } : {}),
       ...(rosterMode !== game.rosterMode ? { rosterMode } : {}),
       ...(approveNames !== game.approveNames ? { approveNames } : {}),
@@ -92,6 +94,19 @@ function GameOptions({ game, onSaved }: { game: GameView; onSaved: (game: Shared
         <h2>Game options</h2>
         <label htmlFor="opt-name">Name of the Game</label>
         <input id="opt-name" required maxLength={100} autoComplete="off" value={name} onChange={(e) => setName(e.target.value)} />
+        <label htmlFor="opt-tagline">Tagline (optional)</label>
+        <input
+          id="opt-tagline"
+          maxLength={100}
+          autoComplete="off"
+          placeholder="It's going to be a gas!"
+          aria-describedby="opt-tagline-hint"
+          value={tagline}
+          onChange={(e) => setTagline(e.target.value)}
+        />
+        <p id="opt-tagline-hint" className="muted hint">
+          A line under the name on the big screen and everyone's phone.
+        </p>
         <label htmlFor="opt-slots">Players taking a turn at once</label>
         <input id="opt-slots" type="number" inputMode="numeric" min={1} max={10} required value={slots} onChange={(e) => setSlots(e.target.value)} />
         <label htmlFor="opt-steals">Steals before a Gift is Frozen</label>

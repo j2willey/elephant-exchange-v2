@@ -205,7 +205,7 @@ export function TipNoteDialog({ onContinue, onClose }: { onContinue: (read: bool
         <TipLink />
         <label className="check">
           <input type="checkbox" checked={read} onChange={(e) => setRead(e.target.checked)} />
-          I've read and considered this
+          I've read and considered this <span className="muted">(this note won't show again)</span>
         </label>
         <div className="inline">
           <button type="button" className="secondary" onClick={onClose}>

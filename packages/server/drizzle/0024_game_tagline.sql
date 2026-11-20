@@ -1,0 +1,1 @@
+ALTER TABLE `games` ADD `tagline` text DEFAULT '' NOT NULL;

@@ -166,6 +166,7 @@ export function GamePage({ gameId }: { gameId?: string } = {}) {
         <ThemeLogo theme={game.theme} />
         <p className="eyebrow">Host console</p>
         <h2>{game.name}</h2>
+        {game.tagline && <p className="game-tagline">{game.tagline}</p>}
         <Settings game={game} />
         <nav className="console-links" aria-label="This Game">
           {/* A new tab, to drag onto the TV; it's read-only, for everyone to watch. */}
@@ -297,6 +298,7 @@ function GuestView({
       <header className="guest-head">
         <ThemeLogo theme={game.theme} />
         <h2>{game.name}</h2>
+        {game.tagline && <p className="game-tagline">{game.tagline}</p>}
       </header>
 
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className="stack">
@@ -735,7 +737,8 @@ interface Stars {
 }
 
 /**
- * The Gifts in the order they were opened; with `stars`, Starred ones come first and each has a Star button.
+ * The Gifts in the order they were opened, or A–Z by Gift or by holder; with `stars`, Starred ones come first and
+ * each has a Star button.
  * With `posts`, each Gift shows its newest Post and Photo, and a count that opens them all. With `reload`, anyone
  * who can post can add a Photo right from a Gift. With `onEdit` (for the Host), each Gift can be corrected in place.
  */
@@ -762,10 +765,40 @@ export function Gifts({
   const viewed = game.gifts.find((g) => g.id === viewing);
   const holderName = (id: string | null) => (id === null ? "on the table" : (game.players.find((p) => p.id === id)?.name ?? "?"));
   const isStarred = (giftId: string) => stars?.starred.has(giftId) ?? false;
-  const shown = [...game.gifts.filter((g) => isStarred(g.id)), ...game.gifts.filter((g) => !isStarred(g.id))];
+  // In a big Game there are often two of the same Gift, and people look for what a friend has: so A–Z by Gift, or
+  // by holder (Gifts on the table last), as well as the order they were opened.
+  const [order, setOrder] = useState<"opened" | "gift" | "holder">("opened");
+  const az = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: "base", numeric: true });
+  const holderKey = (id: string | null) => (id === null ? null : (game.players.find((p) => p.id === id)?.name ?? "?"));
+  const sorted =
+    order === "gift"
+      ? [...game.gifts].sort((a, b) => az(a.name, b.name) || az(holderKey(a.holderId) ?? "", holderKey(b.holderId) ?? ""))
+      : order === "holder"
+        ? [...game.gifts].sort((a, b) => {
+            const [ha, hb] = [holderKey(a.holderId), holderKey(b.holderId)];
+            return (ha === null ? 1 : 0) - (hb === null ? 1 : 0) || az(ha ?? "", hb ?? "") || az(a.name, b.name);
+          })
+        : game.gifts;
+  const shown = [...sorted.filter((g) => isStarred(g.id)), ...sorted.filter((g) => !isStarred(g.id))];
   return (
     <section className="card">
       <h2>Gifts</h2>
+      {game.gifts.length > 3 && (
+        <div className="gift-order" role="group" aria-label="Sort the Gifts">
+          <span className="muted">Sort:</span>
+          {(
+            [
+              ["opened", "Opened"],
+              ["gift", "Gift A–Z"],
+              ["holder", "Holder A–Z"],
+            ] as const
+          ).map(([value, label]) => (
+            <button key={value} type="button" className="toggle" aria-pressed={order === value} onClick={() => setOrder(value)}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
       <ul className="gifts" aria-label="Gifts">
         {shown.map((g) => (
           <li key={g.id} id={`gift-${g.id}`} tabIndex={-1} aria-label={g.name} className={isStarred(g.id) ? "starred" : undefined}>

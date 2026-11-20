@@ -62,6 +62,7 @@ export const gameOrgBody = z.object({ orgId: id.nullable() });
 /** A Game's options besides its rules: each optional, so one can be changed at a time. */
 export const gameOptionsEdit = z.object({
   name: name.optional(),
+  tagline: z.string().trim().max(100).optional(),
   turnSeconds: turnSeconds.optional(),
   rosterMode: rosterMode.optional(),
   approveNames: z.boolean().optional(),

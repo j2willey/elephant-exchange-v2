@@ -6,6 +6,8 @@ export interface GameView {
   id: string;
   /** What the Host calls it. */
   name: string;
+  /** A line under the name on the big screen and the Host's banner, such as "It's going to be a gas!"; "" for none. */
+  tagline: string;
   /** Made with "Try a demo game": its Host console links to the demo view. */
   demo: boolean;
   /** Who adds Players: only the Host and Co-hosts, or people themselves from their phones too. */
@@ -546,7 +548,7 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
     /** Changes a Game's name, turn timer or who adds the Players; only those given. */
     async setGameOptions(
       gameId: string,
-      options: { name?: string; turnSeconds?: number; rosterMode?: RosterMode; approveNames?: boolean; postsPerMinute?: number; repitchMinutes?: number },
+      options: { name?: string; tagline?: string; turnSeconds?: number; rosterMode?: RosterMode; approveNames?: boolean; postsPerMinute?: number; repitchMinutes?: number },
     ): Promise<SharedGame | undefined> {
       const res = await sendJson("PATCH", `/api/games/${encodeURIComponent(gameId)}/options`, options);
       return res.ok ? ((await res.json()) as SharedGame) : undefined;

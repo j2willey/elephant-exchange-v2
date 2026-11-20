@@ -2,7 +2,7 @@ import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { drawInOrder, openApp, startServer } from "./harness.js";
+import { browser, drawInOrder, openApp, startServer } from "./harness.js";
 
 async function hosting() {
   const server = await startServer({ draw: drawInOrder });
@@ -62,6 +62,20 @@ describe("A Game's options, on its Settings", () => {
     expect(await screen.findByRole("heading", { name: "OA Holiday Party" })).toBeInTheDocument();
     expect(screen.getByText(/2 players take a turn at once/i)).toHaveTextContent(/frozen after 2 steals/i);
   });
+
+  it("has a tagline the Host can add, shown under the name on the big screen", async () => {
+    const { host, id, user, origin } = await hosting();
+    openApp(host, `/games/${id}/settings`);
+    const card = await options();
+
+    await user.type(within(card).getByLabelText(/tagline/i), "It's going to be a gas!");
+    await user.click(within(card).getByRole("button", { name: /save options/i }));
+    expect(await within(card).findByText(/saved/i)).toBeInTheDocument();
+
+    openApp(browser(origin), `/games/${id}/screen`);
+    const banner = (await screen.findAllByRole("banner")).at(-1)!;
+    await waitFor(() => expect(banner).toHaveTextContent(/gift exchange.*it's going to be a gas!/i));
+  });
 });
 
 describe("The home screen", () => {
@@ -90,4 +104,5 @@ describe("A demo Game's Host console", () => {
     await screen.findByText(/host console/i);
     expect(screen.queryByRole("link", { name: /demo view/i })).not.toBeInTheDocument();
   });
+
 });
