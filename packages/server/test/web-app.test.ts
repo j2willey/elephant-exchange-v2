@@ -49,3 +49,24 @@ describe("The web app", () => {
     }
   });
 });
+
+/** After a deploy, a page still running the old build should find out, so it can offer to reload. */
+describe("Saying which build is current", () => {
+  it("names the build, from the page's main script, on every API answer", async () => {
+    const webRoot = mkdtempSync(join(tmpdir(), "elephant-web-"));
+    try {
+      writeFileSync(join(webRoot, "index.html"), '<!doctype html><script type="module" crossorigin src="/assets/index-B7x_q2-a.js"></script>');
+      const { app } = createServer({ dbPath: ":memory:", webRoot });
+      for (const path of ["/api/health", "/api/session", "/api/nothing-here"]) {
+        expect((await app.request(path)).headers.get("x-app-build"), path).toBe("B7x_q2-a");
+      }
+    } finally {
+      rmSync(webRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("says nothing in development, where there's no build", async () => {
+    const { app } = createServer({ dbPath: ":memory:" });
+    expect((await app.request("/api/health")).headers.get("x-app-build")).toBeNull();
+  });
+});

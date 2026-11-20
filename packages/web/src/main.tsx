@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router";
-import { createApi } from "./api.js";
+import { buildOfPage, createApi } from "./api.js";
 import { ApiProvider } from "./ApiContext.js";
 import { AppRoutes } from "./App.js";
 import "./styles.css";
@@ -11,9 +11,11 @@ import "./styles.css";
 if (window.self !== window.top) document.documentElement.dataset.embedded = "";
 const demoPlayer = new URLSearchParams(window.location.search).get("demoPlayer") ?? undefined;
 
+const build = buildOfPage();
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ApiProvider api={createApi(undefined, demoPlayer === undefined ? {} : { demoPlayer })}>
+    <ApiProvider api={createApi(undefined, { ...(demoPlayer === undefined ? {} : { demoPlayer }), ...(build === undefined ? {} : { build }) })}>
       <BrowserRouter>
         <AppRoutes />
       </BrowserRouter>

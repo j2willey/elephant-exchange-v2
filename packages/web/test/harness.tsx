@@ -37,7 +37,7 @@ export const clock = {
 };
 
 /** Starts the real server, in memory on a free port. Sign-in links are kept in `sent` instead of emailed. */
-export async function startServer(options: { draw?: DrawFn; adminEmails?: string[] } = {}) {
+export async function startServer(options: { draw?: DrawFn; adminEmails?: string[]; build?: string } = {}) {
   const sent: { email: string; url: string }[] = [];
   const mailer: Mailer = {
     async sendSignInLink(email, url) {
@@ -122,7 +122,10 @@ async function toMultipart(form: FormData): Promise<{ body: Uint8Array; type: st
  * One person's browser: requests go to the server and cookies are kept between them, as a browser would.
  * Rendering the app again with the same browser is like reloading the page; its Stars are kept too.
  */
-export function browser(origin: string, { clockWrongBy = 0, demoPlayer }: { clockWrongBy?: number; demoPlayer?: string } = {}): Api {
+export function browser(
+  origin: string,
+  { clockWrongBy = 0, demoPlayer, build, reload }: { clockWrongBy?: number; demoPlayer?: string; build?: string; reload?: () => void } = {},
+): Api {
   const jar = new Map<string, string>();
   const fetchWithCookies: typeof fetch = (input, init) => {
     const request = send(input, init);
@@ -160,6 +163,8 @@ export function browser(origin: string, { clockWrongBy = 0, demoPlayer }: { cloc
     storage,
     now: () => clock.ms + clockWrongBy * 1000,
     ...(demoPlayer === undefined ? {} : { demoPlayer }),
+    ...(build === undefined ? {} : { build }),
+    ...(reload === undefined ? {} : { reload }),
   });
 }
 

@@ -1,5 +1,5 @@
 import { CohostsPage } from "./Cohosts.js";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Link, Route, Routes, useLocation, useNavigate, useSearchParams } from "react-router";
 import { isReturnPath, type MyGame, type Session } from "./api.js";
 import { useApi } from "./ApiContext.js";
@@ -33,6 +33,7 @@ export function AppRoutes() {
         </h1>
         <SignOutLink />
       </div>
+      <NewVersionNotice />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/sign-in" element={<RedeemLink />} />
@@ -54,6 +55,39 @@ export function AppRoutes() {
         <Route path="/admin/feedback" element={<FeedbackPage />} />
       </Routes>
     </main>
+  );
+}
+
+/**
+ * After a deploy, a page still running the old app says a new version is ready, with a button to reload. It never
+ * reloads a phone or laptop by itself: someone may be halfway through typing a Post or a Gift's name. The TV's
+ * screen is different, since nobody types there and nobody is near it to tap: it reloads itself, once per new build
+ * (should the reload somehow bring back the old app, it doesn't go round and round).
+ */
+function NewVersionNotice() {
+  const api = useApi();
+  const newBuild = useSyncExternalStore(api.onNewBuild, api.newBuild);
+  const tv = /^\/games\/[^/]+\/screen$/.test(useLocation().pathname);
+  useEffect(() => {
+    if (!newBuild || !tv) return;
+    const key = "ee-reloaded-for";
+    try {
+      if (sessionStorage.getItem(key) === newBuild) return;
+      sessionStorage.setItem(key, newBuild);
+    } catch {
+      return; // can't remember having reloaded, so don't risk reloading forever
+    }
+    api.reloadPage();
+  }, [api, newBuild, tv]);
+
+  if (!newBuild || tv) return null;
+  return (
+    <div className="new-version" role="status">
+      <span>A new version of Elephant Exchange is ready.</span>
+      <button type="button" onClick={() => api.reloadPage()}>
+        Reload
+      </button>
+    </div>
   );
 }
 

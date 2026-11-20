@@ -384,6 +384,19 @@ export interface ApiOptions {
    * Player of a demo Game the Host runs. It counts as signed in, as that Player.
    */
   demoPlayer?: string;
+  /** The build of the app running here (see buildOfPage); left out, as in development, it never asks to reload. */
+  build?: string;
+  /** Loads the page afresh; window.location.reload when left out. */
+  reload?: () => void;
+}
+
+/** The build this page is running: the hash in its main script's name (index-<hash>.js), as the server works it out. */
+export function buildOfPage(doc: Document = document): string | undefined {
+  for (const script of doc.querySelectorAll<HTMLScriptElement>("script[src]")) {
+    const hash = /\/assets\/index-([\w-]+)\.js/.exec(script.src)?.[1];
+    if (hash) return hash;
+  }
+  return undefined;
 }
 
 export type DeviceStorage = Pick<Storage, "getItem" | "setItem">;
@@ -424,6 +437,22 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
       return plain(input, { ...init, headers });
     };
   }
+  // Every answer names the server's current build: once it isn't this page's, a newer app is out (a deploy).
+  let newBuild: string | null = null;
+  const newBuildWatchers = new Set<() => void>();
+  if (options.build !== undefined) {
+    const ours = options.build;
+    const plain = fetchFn;
+    fetchFn = async (input, init) => {
+      const res = await plain(input, init);
+      const live = res.headers.get("x-app-build");
+      if (live && live !== ours && live !== newBuild) {
+        newBuild = live;
+        for (const watcher of newBuildWatchers) watcher();
+      }
+      return res;
+    };
+  }
   const storage = options.storage ?? browserStorage();
   const starsKey = (gameId: string) => `stars:${gameId}`;
   const now = options.now ?? (() => Date.now());
@@ -448,6 +477,16 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
   return {
     /** This device's clock. */
     now,
+
+    /** The newer build the server has, once an answer shows this page is out of date; null until then. */
+    newBuild: () => newBuild,
+    /** Calls `watcher` when a newer build turns up; returns how to stop. */
+    onNewBuild(watcher: () => void): () => void {
+      newBuildWatchers.add(watcher);
+      return () => newBuildWatchers.delete(watcher);
+    },
+    /** Loads the page afresh, which picks up the newest build. */
+    reloadPage: options.reload ?? (() => window.location.reload()),
 
     /** Who is signed in on this browser, if anyone. */
     async session(): Promise<Session | undefined> {

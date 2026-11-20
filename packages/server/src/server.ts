@@ -113,6 +113,11 @@ export interface ServerOptions {
    * where Vite serves the app and passes /api through.
    */
   webRoot?: string;
+  /**
+   * Which build of the web app this server hands out. Every API answer says so (X-App-Build), and a page running an
+   * older build offers to reload. Worked out from webRoot's index.html when left out; with neither, nothing is said.
+   */
+  build?: string;
   /** Where Photos are stored. Left out (as in most tests), they go to a fresh temporary folder. */
   photosDir?: string;
   /** Where Theme logos and backgrounds are stored; likewise a temporary folder if left out. */
@@ -120,6 +125,11 @@ export interface ServerOptions {
   /** Who may use the admin pages (from ADMIN_EMAILS). Left out, there are none and those pages don't exist. */
   adminEmails?: readonly string[];
 }
+
+/** The header every API answer carries naming the web app's current build. */
+export const BUILD_HEADER = "x-app-build";
+/** A build's name: the content hash in its main script's file name (index-<hash>.js), which changes with any change. */
+export const buildOf = (indexHtml: string) => /\/assets\/index-([\w-]+)\.js/.exec(indexHtml)?.[1];
 
 const randomDraw: DrawFn = (candidates) => candidates[randomInt(candidates.length)]!;
 
@@ -262,6 +272,7 @@ export function createServer({
   limits = {},
   trustProxy = false,
   webRoot,
+  build = webRoot ? buildOf(readFileSync(join(webRoot, "index.html"), "utf8")) : undefined,
   adminEmails = [],
 }: ServerOptions) {
   const db = openDb(dbPath);
@@ -490,6 +501,14 @@ export function createServer({
   let io: SocketServer | undefined;
 
   const app = new Hono();
+
+  // After a deploy, pages still open on the old build see this differ from their own, and offer to reload.
+  if (build) {
+    app.use("/api/*", async (c, next) => {
+      await next();
+      c.res.headers.set(BUILD_HEADER, build);
+    });
+  }
 
   // The demo page's sample phone (Demo.tsx) is one of a demo Game's made-up Players. It runs in the Host's own
   // browser, so it carries the Host's sign-in, and names the Player in a header. Only in a demo Game, only for

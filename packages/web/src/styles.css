@@ -52,6 +52,33 @@ body {
   margin: 8px 0 20px;
 }
 
+/* After a deploy: a new version is ready. Stays in view while scrolling, without covering what's being read. */
+.new-version {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--brand);
+  color: var(--brand-ink);
+  font-weight: 600;
+}
+
+.new-version button {
+  flex: none;
+  background: var(--brand-ink);
+  color: var(--brand);
+}
+
+[data-embedded] .new-version {
+  display: none;
+}
+
 .brand {
   margin: 0;
   font-size: 1.5rem;
