@@ -15,6 +15,7 @@ import { RosterPaste } from "./RosterPaste.js";
 import { ScreenSwitch } from "./WatchScreen.js";
 import { VotePanel } from "./Vote.js";
 import { FeedbackCard } from "./Feedback.js";
+import { GiftPostsViewer } from "./GiftPosts.js";
 
 /** `gameId`: the Game to show, when it isn't the one in the address (the front page's sample phone). */
 export function GamePage({ gameId }: { gameId?: string } = {}) {
@@ -225,6 +226,7 @@ export function GamePage({ gameId }: { gameId?: string } = {}) {
           game={game}
           stars={stars}
           posts={posts}
+          reload={reloadFeed}
           onEdit={runs ? (giftId, { name, description }) => send({ type: "DescribeGift", giftId, name, description }) : undefined}
         />
       )}
@@ -296,7 +298,7 @@ function GuestView({
               </button>
             )}
             {game.gifts.length > 0 ? (
-              <Gifts game={game} stars={stars} posts={posts} />
+              <Gifts game={game} stars={stars} posts={posts} reload={reloadFeed} />
             ) : (
               <p className="card muted">No Gifts opened yet. They'll show up here as they're opened.</p>
             )}
@@ -675,20 +677,30 @@ interface Stars {
 
 /**
  * The Gifts in the order they were opened; with `stars`, Starred ones come first and each has a Star button.
- * With `posts`, each Gift shows the Posts about it. With `onEdit` (for the Host), each Gift can be corrected in place.
+ * With `posts`, each Gift shows its newest Post and Photo, and a count that opens them all. With `reload`, anyone
+ * who can post can add a Photo right from a Gift. With `onEdit` (for the Host), each Gift can be corrected in place.
  */
 export function Gifts({
   game,
   stars,
   posts = [],
+  reload,
   onEdit,
 }: {
-  game: Pick<GameView, "gifts" | "players">;
+  game: GameView;
   stars?: Stars;
   posts?: Post[];
+  reload?: () => void;
   onEdit?: ((giftId: string, gift: { name: string; description: string }) => Promise<void>) | undefined;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<string | null>(null);
+  const [adding, setAdding] = useState<string | null>(null);
+  const signedIn = useSignedIn() === true;
+  const canAdd = reload !== undefined && signedIn && game.phase !== "ended" && game.moderation !== "paused" && !game.muted;
+  // Newest first, as in the Feed.
+  const about = (giftId: string) => posts.filter((p) => p.giftId === giftId && p.status === "visible");
+  const viewed = game.gifts.find((g) => g.id === viewing);
   const holderName = (id: string | null) => (id === null ? "on the table" : (game.players.find((p) => p.id === id)?.name ?? "?"));
   const isStarred = (giftId: string) => stars?.starred.has(giftId) ?? false;
   const shown = [...game.gifts.filter((g) => isStarred(g.id)), ...game.gifts.filter((g) => !isStarred(g.id))];
@@ -727,15 +739,28 @@ export function Gifts({
                   }}
                 />
               )}
-              {posts
-                .filter((p) => p.giftId === g.id && p.status === "visible")
-                .map((p) => (
-                  <span key={p.id} className="gift-post">
-                    {p.author}
-                    {p.text && `: ${p.text}`}
-                    <PostPhoto post={p} className="gift-photo" />
-                  </span>
-                ))}
+              <GiftNewest posts={about(g.id)} giftName={g.name} onOpen={() => setViewing(g.id)} />
+              {canAdd && adding !== g.id && (
+                <button type="button" className="link" aria-label={`Add a photo of ${g.name}`} onClick={() => setAdding(g.id)}>
+                  📷 Add a photo
+                </button>
+              )}
+              {canAdd && adding === g.id && (
+                <>
+                  <Composer
+                    game={game}
+                    gift={g}
+                    offerSignIn={false}
+                    onPosted={() => {
+                      setAdding(null);
+                      reload();
+                    }}
+                  />
+                  <button type="button" className="link" onClick={() => setAdding(null)}>
+                    Cancel
+                  </button>
+                </>
+              )}
             </span>
             <span className="muted">
               {g.steals > 0 && `${g.steals} ${g.steals === 1 ? "steal" : "steals"}`}
@@ -744,7 +769,33 @@ export function Gifts({
           </li>
         ))}
       </ul>
+      {viewed && <GiftPostsViewer giftName={viewed.name} posts={about(viewed.id)} onClose={() => setViewing(null)} />}
     </section>
+  );
+}
+
+/** Under a Gift: its newest Post's words and newest Photo, and how many Posts there are, which opens them all. */
+function GiftNewest({ posts, giftName, onOpen }: { posts: Post[]; giftName: string; onOpen: () => void }) {
+  const newest = posts[0];
+  const photo = posts.find((p) => p.photo);
+  if (!newest) return null;
+  return (
+    <span className="gift-post">
+      {newest.author}
+      {newest.text && `: ${newest.text}`}
+      <span className="gift-post-row">
+        {photo && (
+          <button type="button" className="gift-thumb" aria-label={`See the posts about ${giftName}`} onClick={onOpen}>
+            <PostPhoto post={photo} className="gift-photo" />
+          </button>
+        )}
+        {posts.length > 1 && (
+          <button type="button" className="secondary gift-count" aria-label={`See all ${posts.length} posts about ${giftName}`} onClick={onOpen}>
+            📷 {posts.length}
+          </button>
+        )}
+      </span>
+    </span>
   );
 }
 

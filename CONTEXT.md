@@ -112,7 +112,7 @@ Reversing the most recent Pick, done only by the Host or a Co-host to correct a 
 ### Sharing
 
 **Post**:
-Something a signed-in Player or Guest shares during a Game: a few words, a Photo, or both. Every Post appears in the Game's Feed; the poster may also say which Gift it's about, and it then shows under that Gift too.
+Something a signed-in Player or Guest shares during a Game: a few words, a Photo, or both. Every Post appears in the Game's Feed; the poster may also say which Gift it's about (or post right from the Gift, with **Add a photo**), and it then shows under that Gift too: its newest Post and Photo, and a count that opens every Post about it, one at a time.
 _Avoid_: Comment (as a separate thing), message
 
 **Photo**:

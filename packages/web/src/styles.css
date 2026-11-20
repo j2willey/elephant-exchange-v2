@@ -2255,3 +2255,56 @@ a.button.secondary-button {
   border-radius: 999px;
   min-height: 0;
 }
+
+/* Under a Gift: the newest Photo, tappable, beside how many Posts there are. */
+.gift-post-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gift-thumb {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.gift-count {
+  padding: 6px 12px;
+}
+
+/* A Gift's Posts, one at a time, over the page. */
+.viewer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 0.7);
+}
+.viewer {
+  width: min(560px, 100%);
+  max-height: 100%;
+  overflow: auto;
+}
+.viewer-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.viewer-top .link {
+  font-size: 1.4rem;
+}
+.viewer-photo {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 60vh;
+  object-fit: contain;
+  border-radius: 8px;
+}
+.viewer-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}

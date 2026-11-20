@@ -277,14 +277,29 @@ const postErrors = {
   failed: "That didn't post. Please try again.",
 };
 
-/** The form for a new Post or, given `replyTo`, a reply to that one (which isn't about a Gift of its own). */
-export function Composer({ game, onPosted, offerSignIn, replyTo }: { game: GameView; onPosted: () => void; offerSignIn: boolean; replyTo?: Post }) {
+/**
+ * The form for a new Post; given `replyTo`, a reply to that one (which isn't about a Gift of its own); given `gift`,
+ * a Post about that Gift, added right from it (so there's no Gift to pick).
+ */
+export function Composer({
+  game,
+  onPosted,
+  offerSignIn,
+  replyTo,
+  gift,
+}: {
+  game: GameView;
+  onPosted: () => void;
+  offerSignIn: boolean;
+  replyTo?: Post;
+  gift?: { id: string; name: string };
+}) {
   const api = useApi();
   const { pathname } = useLocation();
   const signedIn = useSignedIn();
   const [name, setName] = useState(() => game.myName?.name ?? api.guestName());
   const [text, setText] = useState("");
-  const [giftId, setGiftId] = useState("");
+  const [giftId, setGiftId] = useState(gift?.id ?? "");
   const [photo, setPhoto] = useState<File | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -324,7 +339,7 @@ export function Composer({ game, onPosted, offerSignIn, replyTo }: { game: GameV
     if (result === "posted") {
       if (asks) api.setGuestName(name.trim());
       setText("");
-      setGiftId("");
+      setGiftId(gift?.id ?? "");
       setPhoto(null);
       setError(null);
       onPosted();
@@ -334,7 +349,11 @@ export function Composer({ game, onPosted, offerSignIn, replyTo }: { game: GameV
   }
 
   return (
-    <form className={replyTo ? "stack reply-form" : "stack"} aria-label={replyTo ? `Reply to ${replyTo.author}` : "Post to the Feed"} onSubmit={submit}>
+    <form
+      className={replyTo || gift ? "stack reply-form" : "stack"}
+      aria-label={replyTo ? `Reply to ${replyTo.author}` : gift ? `Add a photo of ${gift.name}` : "Post to the Feed"}
+      onSubmit={submit}
+    >
       {locked && (
         <p className="muted hint">
           Posting as <strong>{locked}</strong>. Your Host set this name.
@@ -346,7 +365,7 @@ export function Composer({ game, onPosted, offerSignIn, replyTo }: { game: GameV
           <input id={`${ids}-name`} autoComplete="given-name" maxLength={100} required value={name} onChange={(e) => setName(e.target.value)} />
         </>
       )}
-      <label htmlFor={`${ids}-text`}>{replyTo ? "Your reply" : "What's happening?"}</label>
+      <label htmlFor={`${ids}-text`}>{replyTo ? "Your reply" : gift ? "Say something (optional)" : "What's happening?"}</label>
       <textarea id={`${ids}-text`} rows={2} maxLength={500} value={text} onChange={(e) => setText(e.target.value)} />
       {photo ? (
         <div className="photo-to-post">
@@ -372,7 +391,7 @@ export function Composer({ game, onPosted, offerSignIn, replyTo }: { game: GameV
           />
         </>
       )}
-      {game.gifts.length > 0 && !replyTo && (
+      {game.gifts.length > 0 && !replyTo && !gift && (
         <>
           <label htmlFor={`${ids}-gift`}>About a Gift? (optional)</label>
           <select id={`${ids}-gift`} value={giftId} onChange={(e) => setGiftId(e.target.value)}>
