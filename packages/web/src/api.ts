@@ -80,7 +80,7 @@ export type ColorChange = { color?: string | null; page?: string | null };
 
 export type VoteStatus = "none" | "open" | "closed";
 export type VoteDisplay = "live" | "hidden" | "parade";
-export type ScreenMode = "gifts" | "rules" | "qr" | "catalog";
+export type ScreenMode = "gifts" | "rules" | "qr" | "catalog" | "highlights";
 
 export type RosterMode = "host" | "self";
 export type Moderation = "open" | "approval" | "paused";

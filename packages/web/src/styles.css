@@ -566,6 +566,11 @@ select {
   display: none;
 }
 
+/* On a guest's phone in a Game, the party's own name and logo lead, not the app's. */
+.page:has(.guest) > .top-bar {
+  display: none;
+}
+
 .screen {
   display: grid;
   gap: 16px;
@@ -2688,4 +2693,184 @@ button.info {
   justify-self: start;
   margin-top: -4px;
   font-size: 0.9rem;
+}
+
+/*
+ * The night's highlights: random collages on a 12-by-6 grid that fills the screen. Tiles slide in from either
+ * side; Photos slowly zoom and drift; a full screen fades away before the next one fills.
+ */
+.highlights {
+  min-height: 70vh;
+}
+
+@media (min-width: 60rem) {
+  .highlights {
+    min-height: 0;
+  }
+}
+
+.highlights-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-rows: repeat(6, minmax(0, 1fr));
+  gap: 14px;
+  height: 100%;
+  min-height: inherit;
+  transition: opacity 0.8s ease;
+}
+
+.highlights-grid.clearing {
+  opacity: 0;
+}
+
+.hl-tile {
+  position: relative;
+  container-type: size;
+  display: grid;
+  align-content: center;
+  gap: 0.4em;
+  min-height: 0;
+  padding: 1em 1.2em;
+  overflow: hidden;
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 18%);
+}
+
+.hl-tile.from-left {
+  animation: hl-in-left 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.hl-tile.from-right {
+  animation: hl-in-right 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes hl-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-60px) scale(0.96);
+  }
+}
+
+@keyframes hl-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(60px) scale(0.96);
+  }
+}
+
+/* A Photo fills its tile and drifts, with what was said over its foot. */
+.hl-photo {
+  padding: 0;
+  background: #111;
+}
+
+.hl-photo img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  animation: hl-drift 16s ease-in-out infinite alternate;
+}
+
+@keyframes hl-drift {
+  from {
+    transform: scale(1) translate(0, 0);
+  }
+  to {
+    transform: scale(1.15) translate(-3%, -2%);
+  }
+}
+
+.hl-caption {
+  position: absolute;
+  inset: auto 0 0;
+  display: grid;
+  gap: 0.15em;
+  margin: 0;
+  padding: 2em 1em 0.8em;
+  color: #fff;
+  font-weight: 600;
+  background: linear-gradient(transparent, rgb(0 0 0 / 75%));
+}
+
+.hl-caption .hl-by {
+  color: rgb(255 255 255 / 85%);
+}
+
+.hl-quote {
+  margin: 0;
+  /* Sized to its tile, not the screen: a small tile gets smaller words, so they fit. */
+  font-size: clamp(1rem, min(9cqi, 25cqh), 5rem);
+  font-weight: 700;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+.hl-by {
+  margin: 0;
+  font-size: clamp(0.85rem, min(4.5cqi, 9cqh), 2rem);
+  color: var(--muted);
+}
+
+.hl-reactions {
+  margin-left: 0.3em;
+  font-size: 1.2em;
+}
+
+.hl-label {
+  margin: 0;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.hl-tagline {
+  margin: 0;
+  font-size: clamp(1.1rem, min(11cqi, 22cqh), 6rem);
+  font-weight: 800;
+  line-height: 1.15;
+  color: var(--brand-text);
+  text-wrap: balance;
+}
+
+.hl-fact {
+  margin: 0;
+  font-size: clamp(1.1rem, min(11cqi, 24cqh), 6.5rem);
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--brand-text);
+  text-wrap: balance;
+}
+
+.hl-detail {
+  margin: 0;
+  font-size: clamp(0.9rem, min(5cqi, 10cqh), 2.2rem);
+  color: var(--muted);
+}
+
+.hl-quote,
+.hl-tagline,
+.hl-fact {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hl-tile.from-left,
+  .hl-tile.from-right {
+    animation: hl-fade 0.6s ease both;
+  }
+
+  .hl-photo img {
+    animation: none;
+  }
+
+  @keyframes hl-fade {
+    from {
+      opacity: 0;
+    }
+  }
 }

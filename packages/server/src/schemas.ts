@@ -180,6 +180,6 @@ export const voteStatusBody = z.object({
   winner: id.optional(),
 });
 /** What the big screen shows. */
-export const screenModeBody = z.object({ mode: z.enum(["gifts", "rules", "qr", "catalog"]) });
+export const screenModeBody = z.object({ mode: z.enum(["gifts", "rules", "qr", "catalog", "highlights"]) });
 export const voteDisplayBody = z.object({ display: z.enum(["live", "hidden", "parade"]) });
 export const voteBody = z.object({ giftId: id });

@@ -483,6 +483,11 @@ export function Playbook() {
           past as a reminder.
         </p>
         <p>When you close the vote, the big screen reveals the winner, the top five and a Photo of the winning Gift.</p>
+        <p>
+          Then switch the big screen to <strong>✨ Highlights</strong>: a slideshow of the night, made up as it goes from
+          the Photos, the Posts that got the most laughs, the Pitch taglines and the most-stolen Gift. It keeps going
+          as long as the party does.
+        </p>
         <div className="tip">
           <strong>Tip: the consolation prize.</strong> Keep one or two small, genuinely good gifts hidden, like chocolate
           or a gift card. The Worst Gift's holder picks a prize, so a loss becomes a win and the night ends on a laugh.
