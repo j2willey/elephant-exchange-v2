@@ -146,6 +146,24 @@ export const gameVisitors = sqliteTable(
 );
 
 /**
+ * Each person's name in a Game, beyond a Player's (which the Game's own log keeps): a Guest's name, which they post
+ * as, and whether the Host or a Co-host has locked the name they set, so its owner can't change it back.
+ */
+export const gameNames = sqliteTable(
+  "game_names",
+  {
+    gameId: text("game_id")
+      .notNull()
+      .references(() => games.id),
+    email: text("email").notNull(),
+    /** A Guest's name; null for a Player, whose name is on the roster. */
+    name: text("name"),
+    locked: integer("locked", { mode: "boolean" }).notNull().default(false),
+  },
+  (t) => [primaryKey({ columns: [t.gameId, t.email] })],
+);
+
+/**
  * Players who signed up themselves, and which person each one is: only that person may post or vote as them.
  * One Player per person per Game. Players the Host entered have no row here.
  */

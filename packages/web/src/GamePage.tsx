@@ -1,3 +1,4 @@
+import { RenameButton } from "./Rename.js";
 import { StaffMark, useStaff } from "./Cohosts.js";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useLocation, useParams } from "react-router";
@@ -56,6 +57,7 @@ export function GamePage({ gameId }: { gameId?: string } = {}) {
           {game.players.map((p) => (
             <li key={p.id}>
               <span data-name>{p.name}</span> <StaffMark role={staffRole(p.id)} />
+              {runs && <RenameButton gameId={game.id} who={{ playerId: p.id }} name={p.name} />}
               {runs && game.phase === "setup" && (
                 <button className="link" aria-label={`Remove ${p.name}`} onClick={() => send({ type: "RemovePlayer", playerId: p.id })}>
                   Remove

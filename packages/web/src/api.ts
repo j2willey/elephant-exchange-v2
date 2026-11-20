@@ -35,6 +35,11 @@ export interface GameView {
   role: "host" | "cohost" | null;
   /** The Player the person looking signed up as, if they did. */
   me: { playerId: string } | null;
+  /**
+   * The name the person looking goes by here (a Player's, or the one a Guest posts as; null until they give one), and
+   * whether the Host or a Co-host has locked it. Null when nobody is signed in.
+   */
+  myName: { name: string | null; locked: boolean } | null;
   /** The Gift the person looking voted the worst, if they have. */
   myVote: string | null;
 }
@@ -255,7 +260,7 @@ export interface Post {
 export type Quote = Pick<Post, "id" | "author" | "text" | "photo"> | { id: string; removed: true };
 
 /** What only the person looking is told about a Game; live updates go to everyone, so they never carry it. */
-export type Viewer = Pick<GameView, "role" | "me" | "myVote">;
+export type Viewer = Pick<GameView, "role" | "me" | "myName" | "myVote">;
 export type SharedGame = Omit<GameView, keyof Viewer>;
 
 /**
@@ -654,6 +659,12 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
     },
 
     /** Approves a Pending Post or shows a Hidden one again ("visible"), or hides it. */
+    /** The Host or a Co-host renames a Player, or whoever wrote a Post, everywhere; `locked` keeps them from changing it. */
+    async rename(gameId: string, who: { playerId: string } | { postId: string }, name: string, locked: boolean): Promise<boolean> {
+      const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/names`, { ...who, name, locked });
+      return res.status === 204;
+    },
+
     async setPostStatus(gameId: string, postId: string, status: "visible" | "hidden"): Promise<boolean> {
       const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/posts/${encodeURIComponent(postId)}/status`, { status });
       return res.ok;

@@ -42,7 +42,7 @@ import {
   type ThemeImage,
 } from "./photos.js";
 import { zip } from "./zip.js";
-import { gameEvents, gameHosts, gamePlayers, games, gameVisitors, openDb, organizations, postReactions, posts, sessions, signInLinks, turnClocks, users, votes, type Tx } from "./db.js";
+import { gameEvents, gameHosts, gameNames, gamePlayers, games, gameVisitors, openDb, organizations, postReactions, posts, sessions, signInLinks, turnClocks, users, votes, type Tx } from "./db.js";
 import {
   cohostBody,
   command,
@@ -72,6 +72,7 @@ import {
   voteDisplayBody,
   screenModeBody,
   voteStatusBody,
+  renameBody,
 } from "./schemas.js";
 
 export type { Mailer } from "./auth.js";
@@ -333,6 +334,53 @@ export function createServer({
   }
 
   /** The Player this person signed up as, if they did and are still on the Roster. */
+  /** The person behind a Player who signed up themselves; none for a Player the Host typed in. */
+  function emailOfPlayer(gameId: string, playerId: string): string | undefined {
+    return db
+      .select({ email: gamePlayers.email })
+      .from(gamePlayers)
+      .where(and(eq(gamePlayers.gameId, gameId), eq(gamePlayers.playerId, playerId)))
+      .get()?.email;
+  }
+
+  function nameRow(gameId: string, email: string) {
+    return db
+      .select()
+      .from(gameNames)
+      .where(and(eq(gameNames.gameId, gameId), eq(gameNames.email, email)))
+      .get();
+  }
+
+  /** The name someone goes by in a Game (a Player's roster name, or a Guest's), and whether it's locked. */
+  function nameIn(gameId: string, email: string, game: LoadedGame): { name: string | null; locked: boolean } {
+    const playerId = playerOf(gameId, email, game);
+    const row = nameRow(gameId, email);
+    const name = playerId ? (roster(game.state).find((p) => p.id === playerId)?.name ?? null) : (row?.name ?? null);
+    return { name, locked: row?.locked ?? false };
+  }
+
+  /**
+   * Gives someone a new name everywhere: on the roster if they're a Player, and on every Post they've made, so an
+   * unkind name doesn't linger in the Feed. `locked` (set by the Host or a Co-host) says whether its owner may change
+   * it again; left out, it stays as it was.
+   */
+  function renamePerson(id: string, game: LoadedGame, who: { email?: string; playerId?: string }, name: string, locked?: boolean) {
+    const playerId = who.playerId ?? (who.email ? playerOf(id, who.email, game) : undefined);
+    const email = who.email ?? (playerId ? emailOfPlayer(id, playerId) : undefined);
+    const write = (tx: Tx) => {
+      if (!email) return;
+      const guestName = playerId ? null : name;
+      tx.insert(gameNames)
+        .values({ gameId: id, email, name: guestName, locked: locked ?? false })
+        .onConflictDoUpdate({ target: [gameNames.gameId, gameNames.email], set: { name: guestName, ...(locked === undefined ? {} : { locked }) } })
+        .run();
+      tx.update(posts).set({ author: name }).where(and(eq(posts.gameId, id), eq(posts.email, email))).run();
+    };
+    if (playerId) run(id, game, { type: "RenamePlayer", playerId, name }, write);
+    else db.transaction(write);
+    if (email) postsChanged(id);
+  }
+
   function playerOf(gameId: string, email: string, game: LoadedGame): string | undefined {
     if (email.startsWith(DEMO_ACTOR)) {
       const playerId = email.slice(DEMO_ACTOR.length);
@@ -618,7 +666,7 @@ export function createServer({
   /** Everyone signed in whom the Game knows: its Hosts, those who joined, posted, reacted or voted, or just opened it. */
   function knownPeople(id: string): Set<string> {
     const emails = new Set<string>();
-    for (const table of [gameHosts, gameVisitors, gamePlayers, posts, postReactions, votes] as const)
+    for (const table of [gameHosts, gameVisitors, gameNames, gamePlayers, posts, postReactions, votes] as const)
       for (const r of db.selectDistinct({ email: table.email }).from(table).where(eq(table.gameId, id)).all()) emails.add(r.email);
     for (const e of emails) if (e.startsWith(DEMO_ACTOR)) emails.delete(e);
     return emails;
@@ -658,7 +706,7 @@ export function createServer({
         .get()?.author;
       return {
         key: personKey(id, who),
-        name: (playerId && names.get(playerId)) || posted || null,
+        name: (playerId && names.get(playerId)) || nameRow(id, who)?.name || posted || null,
         hint: emailHint(who),
         playerId,
         role: roles.get(who)?.role ?? null,
@@ -699,6 +747,32 @@ export function createServer({
   });
 
   /** Which Players are the Host or a Co-host, for their consoles to mark: they may need to step in on those turns. */
+  /** The Host or a Co-host renames someone, found by their Player or one of their Posts, and locks the name or not. */
+  app.post("/api/games/:id/names", async (c) => {
+    const id = c.req.param("id");
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const body = await parseBody(c, renameBody);
+    if (!body.ok) return body.res;
+    const game = load(id);
+    if (!game) return c.json({ error: "Game not found" }, 404);
+    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can rename people" }, 403);
+    const { playerId, postId, name, locked } = body.data;
+    if (playerId !== undefined) {
+      if (!roster(game.state).some((p) => p.id === playerId)) return c.json({ error: "No such Player in this Game" }, 404);
+      renamePerson(id, game, { playerId }, name, locked);
+    } else {
+      const by = db
+        .select({ email: posts.email })
+        .from(posts)
+        .where(and(eq(posts.gameId, id), eq(posts.id, postId!)))
+        .get();
+      if (!by) return c.json({ error: "No such Post in this Game" }, 404);
+      renamePerson(id, game, { email: by.email }, name, locked);
+    }
+    return c.body(null, 204);
+  });
+
   app.get("/api/games/:id/staff", (c) => {
     const id = c.req.param("id");
     const email = signedInAs(c);
@@ -782,6 +856,7 @@ export function createServer({
       ...view(id, game, now()),
       role: (email && roleIn(id, email)) ?? null,
       me: playerId ? { playerId } : null,
+      myName: email ? nameIn(id, email, game) : null,
       myVote: (email && game.vote.ballots.get(email)) ?? null,
     });
   });
@@ -916,13 +991,19 @@ export function createServer({
         .get()
     )
       return c.json({ error: "That Post can't be replied to" }, 400);
-    // A Player posts as their Player; anyone else (a Guest) as the name they give.
+    // A Player posts as their Player; a Guest as their name in this Game, which they give (or change) here unless
+    // the Host or a Co-host has locked it.
     const playerId = playerOf(id, email, game);
-    const author = playerId ? roster(game.state).find((p) => p.id === playerId)!.name : body.data.name;
+    const saved = playerId ? undefined : nameRow(id, email);
+    const fixed = saved?.locked && saved.name ? saved.name : undefined;
+    const author = playerId ? roster(game.state).find((p) => p.id === playerId)!.name : (fixed ?? body.data.name ?? saved?.name ?? undefined);
     if (!author) return c.json({ error: "Say what name to post as" }, 400);
 
     const photo = upload && (await preparePhoto(new Uint8Array(await upload.arrayBuffer())));
     if (upload && !photo) return c.json({ error: "That doesn't look like a photo we can use" }, 400);
+
+    // A Guest's new or changed name is theirs from now on, on their earlier Posts too.
+    if (!playerId && author !== saved?.name) renamePerson(id, game, { email }, author);
 
     const status = game.moderation === "approval" ? "pending" : "visible";
     const postId = randomBytes(12).toString("base64url");
@@ -1437,7 +1518,7 @@ export function createServer({
   function deleteGame(id: string) {
     stats.snapshotGame(id, true); // its last word in the statistics, which outlive it
     db.transaction((tx) => {
-      for (const table of [votes, postReactions, posts, gameVisitors, turnClocks, gamePlayers, gameHosts, gameEvents]) tx.delete(table).where(eq(table.gameId, id)).run();
+      for (const table of [votes, postReactions, posts, gameNames, gameVisitors, turnClocks, gamePlayers, gameHosts, gameEvents]) tx.delete(table).where(eq(table.gameId, id)).run();
       tx.delete(games).where(eq(games.id, id)).run();
     });
     cache.delete(id);

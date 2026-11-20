@@ -1,3 +1,4 @@
+import { RenameButton } from "./Rename.js";
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { useLocation } from "react-router";
 import { REACTIONS, type Emoji, type GameView, type Post, type Quote } from "./api.js";
@@ -114,6 +115,7 @@ export function Feed({
                     Hide
                   </button>
                 )}
+                <RenameButton gameId={game.id} who={{ postId: p.id }} name={p.author} onDone={reload} />
               </div>
             )}
           </article>
@@ -270,7 +272,7 @@ export function Composer({ game, onPosted, offerSignIn, replyTo }: { game: GameV
   const api = useApi();
   const { pathname } = useLocation();
   const signedIn = useSignedIn();
-  const [name, setName] = useState(() => api.guestName());
+  const [name, setName] = useState(() => game.myName?.name ?? api.guestName());
   const [text, setText] = useState("");
   const [giftId, setGiftId] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
@@ -284,8 +286,9 @@ export function Composer({ game, onPosted, offerSignIn, replyTo }: { game: GameV
   if (signedIn === "loading") return null;
   if (!signedIn) return offerSignIn ? <SignInForm next={pathname} heading="Sign in to post" /> : <p className="muted">Sign in above to post.</p>;
 
-  // A Player posts as their Player; anyone else says what name to show.
-  const asks = !game.me;
+  // A Player posts as their Player; anyone else says what name to show, unless the Host has locked theirs.
+  const locked = !game.me && game.myName?.locked && game.myName.name ? game.myName.name : undefined;
+  const asks = !game.me && !locked;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -321,6 +324,11 @@ export function Composer({ game, onPosted, offerSignIn, replyTo }: { game: GameV
 
   return (
     <form className={replyTo ? "stack reply-form" : "stack"} aria-label={replyTo ? `Reply to ${replyTo.author}` : "Post to the Feed"} onSubmit={submit}>
+      {locked && (
+        <p className="muted hint">
+          Posting as <strong>{locked}</strong>. Your Host set this name.
+        </p>
+      )}
       {asks && (
         <>
           <label htmlFor={`${ids}-name`}>Your name</label>

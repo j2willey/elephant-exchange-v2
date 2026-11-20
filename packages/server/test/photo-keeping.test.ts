@@ -83,7 +83,7 @@ describe("The album", () => {
     const { app, id, host, as, postPhoto, read } = await setup();
     const gus = await as("gus@example.com");
     await postPhoto(gus, "Gus", "First one");
-    await postPhoto(gus, "Ann/../Smith", "Second");
+    await postPhoto(await as("ann@example.com"), "Ann/../Smith", "Second");
     await postPhoto(gus, "Gus", "Rude");
     await app.request(`/api/games/${id}/posts`, post({ text: "Words, no Photo", name: "Gus" }, gus));
     const rude = (await read()).find((p) => p.text === "Rude")!;

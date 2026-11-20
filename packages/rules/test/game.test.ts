@@ -813,3 +813,36 @@ describe("Two people entering the same Turn", () => {
     expect(gifts(first)).toHaveLength(1);
   });
 });
+
+describe("Renaming a Player", () => {
+  const started = (): Command[] => [...addPlayers("ann", "bob", "cat"), { type: "StartGame" }];
+
+  it("changes the name everyone sees, even after the Game has ended", () => {
+    const state = play({ activeSlots: 1, maxSteals: 3 }, [...started(), { type: "EndGame" }, { type: "RenamePlayer", playerId: "bob", name: "Robert" }], scriptedDraw(["bob", "cat", "ann"]));
+    expect(roster(state).find((p) => p.id === "bob")!.name).toBe("Robert");
+  });
+
+  it("names a Gift opened without a name by the new name", () => {
+    const state = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [...started(), { type: "OpenGift", playerId: "bob", giftId: "g1", name: "" }, { type: "RenamePlayer", playerId: "bob", name: "Robert" }],
+      scriptedDraw(["bob", "cat", "ann"]),
+    );
+    expect(gifts(state)[0]!.name).toBe("Robert's gift");
+  });
+
+  it("isn't undone by an Undo, which still undoes the Pick", () => {
+    const state = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [...started(), { type: "OpenGift", playerId: "bob", giftId: "g1", name: "Mug" }, { type: "RenamePlayer", playerId: "bob", name: "Robert" }, { type: "Undo" }],
+      scriptedDraw(["bob", "cat", "ann", "cat"]),
+    );
+    expect(gifts(state)).toEqual([]);
+    expect(roster(state).find((p) => p.id === "bob")!.name).toBe("Robert");
+  });
+
+  it("refuses a Player who isn't in the Game", () => {
+    const state = play({ activeSlots: 1, maxSteals: 3 }, started(), scriptedDraw(["bob", "cat", "ann"]));
+    expect(decide(state, { type: "RenamePlayer", playerId: "zed", name: "Zed" }, scriptedDraw([]))).toMatchObject({ code: "NoSuchPlayer" });
+  });
+});

@@ -68,6 +68,10 @@ export const reactionBody = z.object({ emoji: z.enum(REACTIONS), on: z.boolean()
 export const postStatusBody = z.object({ status: z.enum(["visible", "hidden"]) });
 
 export const joinBody = z.object({ name });
+/** The Host or a Co-host renames someone, found by their Player or by one of their Posts, and locks the name or not. */
+export const renameBody = z
+  .object({ playerId: id.optional(), postId: id.optional(), name, locked: z.boolean() })
+  .refine((b) => (b.playerId === undefined) !== (b.postId === undefined), { message: "Say whose name: a playerId or a postId" });
 
 /**
  * A page of this app to return to after signing in: a path on this site only. "//host" and "/\\host" are

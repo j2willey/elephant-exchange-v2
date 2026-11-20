@@ -40,6 +40,10 @@ _Avoid_: Participant
 A signed-in person following a Game who did not bring a Gift and is not a Player.
 _Avoid_: Spectator, viewer
 
+**Name**:
+What a person goes by in a Game, for everyone to see: a Player's name on the Roster, or the one a Guest posts as. One per person per Game; changing it changes it on their earlier Posts too. The Host or a Co-host can rename anyone, from the Roster or from one of their Posts, and **lock** the name so its owner can't change it back (for an unkind name). Names go live at once.
+_Avoid_: Nickname, handle, display name
+
 **Late Arrival**:
 A Player added after the Game has started; they simply join the Players not yet called.
 

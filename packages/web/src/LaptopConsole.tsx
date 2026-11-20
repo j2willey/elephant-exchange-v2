@@ -1,3 +1,4 @@
+import { RenameButton } from "./Rename.js";
 import { StaffMark } from "./Cohosts.js";
 import { useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router";
@@ -311,7 +312,7 @@ function ParticipantRow({
   return (
     <li aria-label={`${player.name} — ${status}`} className={up ? "lc-up" : undefined}>
       <span className="lc-name">
-        {player.name} <StaffMark role={staff} />
+        {player.name} <StaffMark role={staff} /> <RenameButton gameId={game.id} who={{ playerId: player.id }} name={player.name} />
       </span>
       {up ? (
         <span className="lc-turn">

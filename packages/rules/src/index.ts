@@ -25,7 +25,8 @@ export type Command =
   | { type: "TakeReturnedGift"; playerId: PlayerId; giftId: GiftId }
   | { type: "EndGame" }
   /** Corrects what an opened Gift is called or adds detail; allowed at any time, even after the Game ends. */
-  | { type: "DescribeGift"; giftId: GiftId; name: string; description: string };
+  | { type: "DescribeGift"; giftId: GiftId; name: string; description: string }
+  | { type: "RenamePlayer"; playerId: PlayerId; name: string };
 
 /** What actually happened; these are what the Game's log stores. */
 export type Event =
@@ -42,9 +43,10 @@ export type Event =
   | { type: "GiftKept"; playerId: PlayerId }
   | { type: "ReturnedGiftTaken"; playerId: PlayerId; giftId: GiftId }
   | { type: "GameEnded" }
-  | { type: "GiftDescribed"; giftId: GiftId; name: string; description: string };
+  | { type: "GiftDescribed"; giftId: GiftId; name: string; description: string }
+  | { type: "PlayerRenamed"; playerId: PlayerId; name: string };
 
-export type RuleErrorCode = "NotActive" | "AlreadyPlayed" | "GiftOnTable" | "NotReturned" | "NoLeftoverGifts" | "TurnsInProgress" | "NothingToKeep" | "GameOver" | "NothingToUndo" | "GiftNotOpened" | "GiftFrozen" | "NoTakeBacks";
+export type RuleErrorCode = "NotActive" | "AlreadyPlayed" | "GiftOnTable" | "NotReturned" | "NoLeftoverGifts" | "TurnsInProgress" | "NothingToKeep" | "GameOver" | "NothingToUndo" | "GiftNotOpened" | "GiftFrozen" | "NoTakeBacks" | "NoSuchPlayer";
 
 export interface RuleError {
   code: RuleErrorCode;
@@ -101,6 +103,11 @@ export function decide(state: GameState, command: Command, draw: DrawFn): Event[
   if (command.type === "DescribeGift") {
     if (!state.gifts.some((g) => g.id === command.giftId)) return { code: "GiftNotOpened", message: `No opened Gift ${command.giftId}` };
     return [{ type: "GiftDescribed", giftId: command.giftId, name: command.name, description: command.description }];
+  }
+  if (command.type === "RenamePlayer") {
+    // Like correcting a Gift: allowed at any time, even after the Game ends, and never undone.
+    if (!state.players.some((p) => p.id === command.playerId)) return { code: "NoSuchPlayer", message: "There's no such Player in this Game" };
+    return [{ type: "PlayerRenamed", playerId: command.playerId, name: command.name }];
   }
   if (state.phase === "ended") return { code: "GameOver", message: "The Game has ended" };
   const isPick =
@@ -200,7 +207,8 @@ export function evolve(state: GameState, event: Event): GameState {
     event.type === "GiftStolen" ||
     event.type === "ReturnedGiftTaken" ||
     event.type === "PlayerDrawn" ||
-    event.type === "GiftDescribed";
+    event.type === "GiftDescribed" ||
+    event.type === "PlayerRenamed";
   return keepsUndo ? next : { ...next, beforeLastPick: null };
 }
 
@@ -266,6 +274,12 @@ function apply(state: GameState, event: Event): GameState {
       // An Undo after a correction keeps the correction.
       const before = state.beforeLastPick && { ...state.beforeLastPick, gifts: state.beforeLastPick.gifts.map(describe) };
       return { ...state, gifts: state.gifts.map(describe), beforeLastPick: before };
+    }
+    case "PlayerRenamed": {
+      const rename = (p: Player): Player => (p.id === event.playerId ? { ...p, name: event.name } : p);
+      // An Undo after a rename keeps the new name.
+      const before = state.beforeLastPick && { ...state.beforeLastPick, players: state.beforeLastPick.players.map(rename) };
+      return { ...state, players: state.players.map(rename), beforeLastPick: before };
     }
     case "GameEnded":
       return { ...state, phase: "ended", active: [], onDeck: [] };
