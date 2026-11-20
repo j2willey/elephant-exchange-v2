@@ -429,6 +429,12 @@ export function Playbook() {
           the Gift? The poster, you or a Co-host can attach it afterwards.
         </p>
         <p>
+          <strong>Get the Feed going.</strong> When you open the Game, tell the room:{" "}
+          <em>"Post a photo from your phone, and it goes up on the TV."</em> Then post the first one yourself, a selfie
+          with the Gift pile works. Once people see their own photo on the big screen, the rest follow. Guests browsing
+          the Gifts see a little bubble on the 💬 Feed tab counting the new Posts, so nobody misses the fun.
+        </p>
+        <p>
           <strong>You stay in charge.</strong> You and your Co-hosts have simple tools to keep the Feed, and the names
           people choose, right for your crowd, whether it's the office party or a room full of teenagers:
         </p>
