@@ -32,7 +32,8 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
         <p className="landing-tagline">The White Elephant gift swap that keeps the whole room in the game.</p>
         <p className="landing-lede">
           Run your party's gift exchange from a laptop or a phone. Every opened gift, who has it and how many times it's
-          been stolen goes up on the TV, and everyone follows along on their own phone.
+          been stolen goes up on the TV, and everyone follows along on their own phone, with the party's own photo feed
+          to post to, reply in and react to.
         </p>
         {ways}
         <p className="landing-party-link">
@@ -66,11 +67,16 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
             </p>
           </section>
           <section className="card">
-            <h3>📸 The whole room stays in it</h3>
+            <h3>📸 A party feed, not just a scoreboard</h3>
             <p>
-              Guests post photos and comments from their phones into the party's own feed, star the gifts they're after,
-              and vote for the Worst Gift at the end.
+              Guests post photos and comments from their phones into the party's own feed, reply to each other and react
+              with friendly emoji (yes, there's a leg lamp). Photos attach to the gift they show, so anyone can tap a gift
+              and see what it is, and who's grinning about it.
             </p>
+          </section>
+          <section className="card">
+            <h3>⭐ The whole room stays in it</h3>
+            <p>Guests star the gifts they're after, see who's on deck, and vote for the Worst Gift at the end.</p>
           </section>
           <section className="card">
             <h3>⚖️ The rules keep themselves</h3>
@@ -253,6 +259,11 @@ export function Playbook() {
           guests add themselves from their phones while they eat appetizers, by turning on sign-up in Settings and sending
           them the link.
         </p>
+        <p>
+          <strong>Recruit a Co-host or two.</strong> In a big group, a Co-host at your side can type in what each Gift is
+          while you call the next name, and keep an eye on the Feed. Open 🛡 Co-hosts from your console, find them by name
+          and switch them on. A Co-host can do everything you can at the party, from their own phone or laptop.
+        </p>
       </section>
 
       <section className="card">
@@ -276,7 +287,9 @@ export function Playbook() {
         <h3>🎁 Running the Game</h3>
         <p>
           Players are drawn at random, and the next one is shown On Deck so they can get ready. For each Player who's up,
-          open a Gift (type what's inside; you can add details or fix a typo later) or make a Steal. If someone stepped
+          open a Gift (type what's inside; you can add details or fix a typo later) or make a Steal. Moving fast? Tap{" "}
+          <strong>Name it later</strong>: the open is recorded at once as "Ann's gift", and you or a Co-host fill in what it
+          is a moment later. If someone stepped
           out, Skip them and they'll be called again later. Tapped the wrong thing? Undo takes back the last Pick.
         </p>
         <p>
@@ -295,6 +308,27 @@ export function Playbook() {
           <strong>The Final Round.</strong> Once everyone holds a Gift, the first few Players called get one last chance
           to steal, since they had little to steal from when they went. You choose how many.
         </p>
+      </section>
+
+      <section className="card">
+        <h3>📸 The party Feed</h3>
+        <p>
+          The Feed is the party's own social stream, on every phone and the TV. Guests post a few words, a Photo or both,
+          reply to each other's posts and react with friendly emoji: 👍 ❤️ 😂 🎉 🔥 😮, a ⛄ snowman and, of course, the leg
+          lamp. Only friendly ones, to keep it in good spirits.
+        </p>
+        <p>
+          <strong>Photos of the Gifts.</strong> A post can say which Gift it's about, and every Gift has its own{" "}
+          <strong>📷 Add a photo</strong> button. Each Gift then shows its newest Photo, and a tap opens all of them: the
+          Gift itself, the grin of the Player who opened it, or the frown that says "please steal this". Forgot to pick
+          the Gift? The poster, you or a Co-host can attach it afterwards.
+        </p>
+        <p>
+          <strong>You stay in charge.</strong> You and your Co-hosts have simple tools to keep the Feed, and the names
+          people choose, right for your crowd, whether it's the office party or a room full of teenagers. Settings has
+          stricter options if you know your audience will need them.
+        </p>
+        <p>After the party, download every Photo as a keepsake album. Photos are deleted 60 days after the Game.</p>
       </section>
 
       <section className="card">
