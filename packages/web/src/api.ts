@@ -42,6 +42,8 @@ export interface GameView {
    * whether the Host or a Co-host has locked it. Null when nobody is signed in.
    */
   myName: { name: string | null; locked: boolean; pending: string | null } | null;
+  /** Whether the Host or a Co-host has muted the person looking: they can't post or reply here. */
+  muted: boolean;
   /** The Gift the person looking voted the worst, if they have. */
   myVote: string | null;
 }
@@ -256,6 +258,8 @@ export interface Post {
   replyTo: Quote | null;
   /** How many replies to it everyone can see. */
   replies: number;
+  /** For the Host and Co-hosts only: whether its poster is muted. */
+  authorMuted?: boolean;
 }
 
 /** Whose name the Host or a Co-host is changing: a Player, whoever wrote a Post, or someone whose name is waiting. */
@@ -273,7 +277,7 @@ export interface PendingName {
 export type Quote = Pick<Post, "id" | "author" | "text" | "photo"> | { id: string; removed: true };
 
 /** What only the person looking is told about a Game; live updates go to everyone, so they never carry it. */
-export type Viewer = Pick<GameView, "role" | "me" | "myName" | "myVote">;
+export type Viewer = Pick<GameView, "role" | "me" | "myName" | "muted" | "myVote">;
 export type SharedGame = Omit<GameView, keyof Viewer>;
 
 /**
@@ -646,7 +650,7 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
     async post(
       gameId: string,
       { photo, ...post }: { text: string; name?: string; giftId?: string; replyTo?: string; photo?: Blob },
-    ): Promise<"posted" | "paused" | "notPhoto" | "tooBig" | "failed"> {
+    ): Promise<"posted" | "paused" | "muted" | "notPhoto" | "tooBig" | "failed"> {
       const path = `/api/games/${encodeURIComponent(gameId)}/posts`;
       let res: Response;
       if (photo) {
@@ -658,7 +662,7 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
         res = await postJson(path, post);
       }
       if (res.status === 201) return "posted";
-      if (res.status === 409) return "paused";
+      if (res.status === 409) return ((await res.json().catch(() => ({}))) as { code?: string }).code === "Muted" ? "muted" : "paused";
       if (res.status === 413) return "tooBig";
       if (res.status === 400 && photo) return "notPhoto";
       return "failed";
@@ -675,6 +679,11 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
     },
 
     /** Approves a Pending Post or shows a Hidden one again ("visible"), or hides it. */
+    /** Mutes or unmutes whoever wrote a Post; muting can hide all their Posts too, which unmuting brings back. */
+    async mute(gameId: string, postId: string, muted: boolean, hidePosts = false): Promise<boolean> {
+      return (await postJson(`/api/games/${encodeURIComponent(gameId)}/mute`, { postId, muted, ...(hidePosts ? { hidePosts } : {}) })).status === 204;
+    },
+
     /** Changes the name the person looking goes by in this Game, unless the Host has locked it. */
     async changeMyName(gameId: string, name: string): Promise<"ok" | "waiting" | "locked" | "failed"> {
       const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/me/name`, { name });
@@ -698,8 +707,12 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
       return res.status === 204;
     },
 
-    async setPostStatus(gameId: string, postId: string, status: "visible" | "hidden"): Promise<boolean> {
-      const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/posts/${encodeURIComponent(postId)}/status`, { status });
+    /** Hides a Post (with every reply under it, given `thread`), or shows it again with whatever was hidden with it. */
+    async setPostStatus(gameId: string, postId: string, status: "visible" | "hidden", thread = false): Promise<boolean> {
+      const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/posts/${encodeURIComponent(postId)}/status`, {
+        status,
+        ...(thread ? { thread } : {}),
+      });
       return res.ok;
     },
 

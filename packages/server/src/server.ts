@@ -74,6 +74,7 @@ import {
   voteStatusBody,
   renameBody,
   approveNameBody,
+  muteBody,
 } from "./schemas.js";
 
 export type { Mailer } from "./auth.js";
@@ -945,6 +946,7 @@ export function createServer({
       role: (email && roleIn(id, email)) ?? null,
       me: playerId ? { playerId } : null,
       myName: email ? nameIn(id, email, game) : null,
+      muted: (email && nameRow(id, email)?.muted) ?? false,
       myVote: (email && game.vote.ballots.get(email)) ?? null,
     });
   });
@@ -1018,6 +1020,16 @@ export function createServer({
     for (const p of rows) if (p.replyTo && p.status === "visible") replies.set(p.replyTo, (replies.get(p.replyTo) ?? 0) + 1);
     const photoOf = (p: (typeof rows)[number]) =>
       p.photoWidth && p.photoHeight ? { url: `/api/games/${id}/posts/${p.id}/photo`, width: p.photoWidth, height: p.photoHeight } : null;
+    const mutedPeople = new Set(
+      hosting
+        ? db
+            .select({ email: gameNames.email })
+            .from(gameNames)
+            .where(and(eq(gameNames.gameId, id), eq(gameNames.muted, true)))
+            .all()
+            .map((r) => r.email)
+        : [],
+    );
     const quote = (replyTo: string | null) => {
       if (!replyTo) return null;
       const o = seenById.get(replyTo);
@@ -1036,6 +1048,8 @@ export function createServer({
         reactions: reactionsOf(p.id),
         replyTo: quote(p.replyTo),
         replies: replies.get(p.id) ?? 0,
+        // For the Host and Co-hosts: whether its poster is muted, so they can unmute from here.
+        ...(hosting ? { authorMuted: mutedPeople.has(p.email) } : {}),
       })),
     );
   });
@@ -1068,6 +1082,7 @@ export function createServer({
     const game = load(id);
     if (!game) return c.json({ error: "Game not found" }, 404);
     if (game.moderation === "paused") return c.json({ code: "Paused", message: "The Host has paused posting" }, 409);
+    if (nameRow(id, email)?.muted) return c.json({ code: "Muted", message: "The Host has paused your posting" }, 409);
     const { text, giftId, replyTo } = body.data;
     if (giftId !== undefined && !gifts(game.state).some((g) => g.id === giftId)) return c.json({ error: "No such Gift in this Game" }, 400);
     if (
@@ -1503,12 +1518,73 @@ export function createServer({
     if (!body.ok) return body.res;
     if (!load(id)) return c.json({ error: "Game not found" }, 404);
     if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can moderate this Game" }, 403);
-    const changed = db
-      .update(posts)
-      .set({ status: body.data.status })
+    const all = db.select({ id: posts.id, replyTo: posts.replyTo, status: posts.status }).from(posts).where(eq(posts.gameId, id)).all();
+    if (!all.some((p) => p.id === postId)) return c.json({ error: "Post not found" }, 404);
+    db.transaction((tx) => {
+      const at = and(eq(posts.gameId, id), eq(posts.id, postId));
+      if (body.data.status === "visible") {
+        tx.update(posts).set({ status: "visible", hiddenWith: null }).where(at).run();
+        // Whatever was hidden along with it (its thread) comes back too; a reply hidden on its own stays hidden.
+        tx.update(posts)
+          .set({ status: "visible", hiddenWith: null })
+          .where(and(eq(posts.gameId, id), eq(posts.hiddenWith, postId)))
+          .run();
+        return;
+      }
+      tx.update(posts).set({ status: "hidden" }).where(at).run();
+      if (!body.data.thread) return;
+      // Every visible reply under it, however deep, goes with it.
+      const under = new Set([postId]);
+      for (let grew = true; grew; ) {
+        grew = false;
+        for (const p of all) if (p.replyTo && under.has(p.replyTo) && !under.has(p.id)) (under.add(p.id), (grew = true));
+      }
+      under.delete(postId);
+      const replies = all.filter((p) => under.has(p.id) && p.status === "visible").map((p) => p.id);
+      if (replies.length > 0)
+        tx.update(posts)
+          .set({ status: "hidden", hiddenWith: postId })
+          .where(and(eq(posts.gameId, id), inArray(posts.id, replies)))
+          .run();
+    });
+    postsChanged(id);
+    return c.body(null, 204);
+  });
+
+  /** The Host or a Co-host mutes whoever wrote a Post (they can't post or reply), or unmutes them. */
+  app.post("/api/games/:id/mute", async (c) => {
+    const id = c.req.param("id");
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const body = await parseBody(c, muteBody);
+    if (!body.ok) return body.res;
+    if (!load(id)) return c.json({ error: "Game not found" }, 404);
+    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can moderate this Game" }, 403);
+    const { postId, muted, hidePosts } = body.data;
+    const by = db
+      .select({ email: posts.email })
+      .from(posts)
       .where(and(eq(posts.gameId, id), eq(posts.id, postId)))
-      .run();
-    if (changed.changes === 0) return c.json({ error: "Post not found" }, 404);
+      .get();
+    if (!by) return c.json({ error: "Post not found" }, 404);
+    const theirs = and(eq(posts.gameId, id), eq(posts.email, by.email));
+    db.transaction((tx) => {
+      tx.insert(gameNames)
+        .values({ gameId: id, email: by.email, muted })
+        .onConflictDoUpdate({ target: [gameNames.gameId, gameNames.email], set: { muted } })
+        .run();
+      if (muted && hidePosts)
+        tx.update(posts)
+          .set({ status: "hidden", hiddenWith: "mute" })
+          .where(and(theirs, eq(posts.status, "visible")))
+          .run();
+      // Unmuting brings back what the mute hid, and nothing hidden for another reason.
+      if (!muted)
+        tx.update(posts)
+          .set({ status: "visible", hiddenWith: null })
+          .where(and(theirs, eq(posts.hiddenWith, "mute")))
+          .run();
+    });
     postsChanged(id);
     return c.body(null, 204);
   });

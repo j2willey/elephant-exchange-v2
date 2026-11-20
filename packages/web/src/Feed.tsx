@@ -51,7 +51,7 @@ export function Feed({
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const giftName = (id: string | null) => game.gifts.find((g) => g.id === id)?.name;
   // Replying is posting, so it goes when posting does: once the Game ends, or while the Host has it Paused.
-  const canReply = signedIn && game.phase !== "ended" && game.moderation !== "paused";
+  const canReply = signedIn && game.phase !== "ended" && game.moderation !== "paused" && !game.muted;
 
   /** Brings the Post a reply answers into view, and moves focus to it so it's clear which one it is. */
   function showOriginal(postId: string) {
@@ -60,8 +60,8 @@ export function Feed({
     original?.focus({ preventScroll: true });
   }
 
-  async function setStatus(post: Post, status: "visible" | "hidden") {
-    if (await api.setPostStatus(game.id, post.id, status)) reload();
+  async function setStatus(post: Post, status: "visible" | "hidden", thread = false) {
+    if (await api.setPostStatus(game.id, post.id, status, thread)) reload();
   }
 
   return (
@@ -74,6 +74,7 @@ export function Feed({
           <article key={p.id} id={`feed-post-${p.id}`} tabIndex={-1} aria-label={`Post from ${p.author}`} className={`post ${p.status}`}>
             <p className="post-meta">
               <strong>{p.author}</strong>
+              {p.authorMuted && <span className="badge">Muted</span>}
               {p.giftId && giftName(p.giftId) && <span className="muted"> · about {giftName(p.giftId)}</span>}
               {p.replies > 0 && <span className="muted"> · {p.replies === 1 ? "1 reply" : `${p.replies} replies`}</span>}
             </p>
@@ -111,10 +112,18 @@ export function Feed({
                     Show again
                   </button>
                 ) : (
-                  <button className="link danger" onClick={() => void setStatus(p, "hidden")}>
-                    Hide
-                  </button>
+                  <>
+                    <button className="link danger" onClick={() => void setStatus(p, "hidden")}>
+                      Hide
+                    </button>
+                    {p.replies > 0 && (
+                      <button className="link danger" onClick={() => void setStatus(p, "hidden", true)}>
+                        Hide with replies
+                      </button>
+                    )}
+                  </>
                 )}
+                <MuteButton gameId={game.id} post={p} onDone={reload} />
                 <RenameButton gameId={game.id} who={{ postId: p.id }} name={p.author} onDone={reload} />
               </div>
             )}
@@ -261,6 +270,7 @@ export function PostPhoto({ post, className = "post-photo" }: { post: Post; clas
 
 const postErrors = {
   paused: "The Host has paused posting.",
+  muted: "The Host has paused your posting.",
   notPhoto: "That doesn't look like a photo we can use. Try another?",
   tooBig: "That Photo is too big to send. Try another?",
   unshrinkable: "This photo couldn't be made smaller on this phone. Try taking a screenshot of it and posting that.",
@@ -283,6 +293,7 @@ export function Composer({ game, onPosted, offerSignIn, replyTo }: { game: GameV
   const ids = useId();
 
   if (game.moderation === "paused") return <p className="muted">The Host has paused posting for now.</p>;
+  if (game.muted) return <p className="muted">The Host has paused your posting.</p>;
   if (signedIn === "loading") return null;
   if (!signedIn) return offerSignIn ? <SignInForm next={pathname} heading="Sign in to post" /> : <p className="muted">Sign in above to post.</p>;
 
@@ -397,4 +408,52 @@ function usePreview(file: File | null): string | undefined {
     return () => URL.revokeObjectURL(made);
   }, [file]);
   return url;
+}
+
+/**
+ * For the Host and Co-hosts: mutes whoever wrote a Post, so they can't post or reply (asking first, with the choice
+ * to hide all their Posts too), or unmutes them, bringing back what the mute hid.
+ */
+function MuteButton({ gameId, post, onDone }: { gameId: string; post: Post; onDone: () => void }) {
+  const api = useApi();
+  const [asking, setAsking] = useState(false);
+  const [hidePosts, setHidePosts] = useState(false);
+
+  async function mute(muted: boolean, e?: FormEvent) {
+    e?.preventDefault();
+    if (await api.mute(gameId, post.id, muted, muted && hidePosts)) {
+      setAsking(false);
+      setHidePosts(false);
+      onDone();
+    }
+  }
+
+  if (post.authorMuted)
+    return (
+      <button type="button" className="link" aria-label={`Unmute ${post.author}`} onClick={() => void mute(false)}>
+        🔊 Unmute
+      </button>
+    );
+  if (!asking)
+    return (
+      <button type="button" className="link danger" aria-label={`Mute ${post.author}`} onClick={() => setAsking(true)}>
+        🔇 Mute
+      </button>
+    );
+  return (
+    <form className="stack mute-form" aria-label={`Mute ${post.author}`} onSubmit={(e) => void mute(true, e)}>
+      <p className="muted hint">{post.author} won't be able to post or reply in this Game until unmuted. They can still react.</p>
+      <label className="check">
+        <input type="checkbox" checked={hidePosts} onChange={(e) => setHidePosts(e.target.checked)} /> Also hide their posts
+      </label>
+      <div className="inline">
+        <button type="submit" className="danger">
+          Mute
+        </button>
+        <button type="button" className="secondary" onClick={() => setAsking(false)}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
 }

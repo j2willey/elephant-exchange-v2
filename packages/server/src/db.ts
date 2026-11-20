@@ -163,6 +163,8 @@ export const gameNames = sqliteTable(
     locked: integer("locked", { mode: "boolean" }).notNull().default(false),
     /** Under Approve names, the name they asked for, waiting for a Host or Co-host to approve it. */
     pending: text("pending"),
+    /** Muted by the Host or a Co-host: they can't post or reply in this Game (they can still react). */
+    muted: integer("muted", { mode: "boolean" }).notNull().default(false),
   },
   (t) => [primaryKey({ columns: [t.gameId, t.email] })],
 );
@@ -222,6 +224,11 @@ export const posts = sqliteTable(
     photoWidth: integer("photo_width"),
     photoHeight: integer("photo_height"),
     status: text("status", { enum: ["visible", "pending", "hidden"] }).notNull(),
+    /**
+     * Why a Hidden Post went with another action, so undoing that brings back only what it hid: the id of the Post
+     * whose thread was hidden, or "mute" when its poster was muted with their Posts hidden. Null when hidden by itself.
+     */
+    hiddenWith: text("hidden_with"),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   },
   (t) => [index("posts_game").on(t.gameId, t.createdAt), check("posts_status", sql`${t.status} IN ('visible', 'pending', 'hidden')`)],

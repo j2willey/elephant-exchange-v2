@@ -66,7 +66,10 @@ export const moderationBody = z.object({ mode: z.enum(["open", "approval", "paus
 export const REACTIONS = ["👍", "❤️", "😂", "🎉", "🔥", "😮", "⛄", "leg-lamp"] as const;
 /** Puts a Reaction on a Post (`on`) or takes it back. */
 export const reactionBody = z.object({ emoji: z.enum(REACTIONS), on: z.boolean() });
-export const postStatusBody = z.object({ status: z.enum(["visible", "hidden"]) });
+/** Hides a Post (with every reply under it, if `thread`) or shows it again (with whatever was hidden with it). */
+export const postStatusBody = z.object({ status: z.enum(["visible", "hidden"]), thread: z.boolean().optional() });
+/** Mutes or unmutes whoever wrote a Post; muting may hide all their Posts too, which unmuting brings back. */
+export const muteBody = z.object({ postId: z.string().min(1).max(64), muted: z.boolean(), hidePosts: z.boolean().optional() });
 
 export const joinBody = z.object({ name });
 /** The Host or a Co-host renames someone, found by their Player or by one of their Posts, and locks the name or not. */

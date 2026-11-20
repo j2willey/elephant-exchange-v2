@@ -131,7 +131,7 @@ A friendly emoji anyone signed in puts on a visible Post: 👍 Like, ❤️ Love
 _Avoid_: Like (as the general name), vote, rating
 
 **Moderation**:
-The Game's rule for Posts, which the Host or a Co-host can switch at any moment: **Open** (Posts appear at once), **Approval** (each waits for the Host or a Co-host to approve it) or **Paused** (nobody can post). In any mode the Host or a Co-host can hide a single Post.
+The Game's rule for Posts, which the Host or a Co-host can switch at any moment: **Open** (Posts appear at once), **Approval** (each waits for the Host or a Co-host to approve it) or **Paused** (nobody can post). In any mode the Host or a Co-host can hide a single Post, or a Post with every reply under it (**Hide with replies**); showing it again brings back what was hidden with it. They can also **Mute** whoever wrote a Post: a Muted person can't post or reply in that Game (they can still react), and muting can hide all their Posts too, which unmuting brings back.
 
 **Pending Post**:
 A Post made under Approval that the Host or a Co-host hasn't approved yet; only they and its poster can see it.

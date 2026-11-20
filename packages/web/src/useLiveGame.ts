@@ -25,7 +25,7 @@ export function useLiveGame(
         const known = prev !== "loading" && prev !== null ? prev : undefined;
         // Something new about the viewer only (such as their vote): the Game itself comes from live updates.
         if (next === null) return known ? { ...known, ...viewer } : prev;
-        const who: Viewer = { role: known?.role ?? null, me: known?.me ?? null, myName: known?.myName ?? null, myVote: known?.myVote ?? null, ...viewer };
+        const who: Viewer = { role: known?.role ?? null, me: known?.me ?? null, myName: known?.myName ?? null, muted: known?.muted ?? false, myVote: known?.myVote ?? null, ...viewer };
         if (known && known.version > next.version) return { ...known, ...who };
         return { ...next, ...who };
       }),
