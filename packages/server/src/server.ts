@@ -897,9 +897,18 @@ export function createServer({
     if (!email) return c.json({ error: "Sign in first" }, 401);
     const body = await parseBody(c, cohostBody);
     if (!body.ok) return body.res;
-    if (!load(id)) return c.json({ error: "Game not found" }, 404);
+    const game = load(id);
+    if (!game) return c.json({ error: "Game not found" }, 404);
     if (roleIn(id, email) !== "host") return c.json({ error: "Only the Host can appoint Co-hosts" }, 403);
-    db.insert(gameHosts).values({ gameId: id, email: body.data.email, role: "cohost" }).onConflictDoNothing().run();
+    const { email: who, playsAs } = body.data;
+    if (playsAs !== undefined && !roster(game.state).some((p) => p.id === playsAs)) return c.json({ error: "No such Player in this Game" }, 400);
+    const row = { gameId: id, email: who, role: "cohost" as const, ...(playsAs ? { playerId: playsAs } : {}) };
+    if (playsAs)
+      db.insert(gameHosts)
+        .values(row)
+        .onConflictDoUpdate({ target: [gameHosts.gameId, gameHosts.email], set: { playerId: playsAs } })
+        .run();
+    else db.insert(gameHosts).values(row).onConflictDoNothing().run();
     staffChanged(id);
     return c.body(null, 204);
   });

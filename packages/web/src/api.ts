@@ -540,8 +540,9 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
       return (await res.json()) as GameView;
     },
 
-    async addCohost(gameId: string, email: string): Promise<void> {
-      const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/cohosts`, { email });
+    /** Makes an email a Co-host; `playsAs` links it to a Player the Host typed in, who hasn't signed in yet. */
+    async addCohost(gameId: string, email: string, playsAs?: string): Promise<void> {
+      const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/cohosts`, { email, ...(playsAs ? { playsAs } : {}) });
       if (res.status !== 204) throw new Error(`adding a Co-host failed: ${res.status}`);
     },
 

@@ -107,7 +107,8 @@ export const answerBody = z.object({
 export const suggestionBody = z.object({ comment: z.string().trim().min(1).max(2000) });
 export const feedbackBody = z.object({ ok: z.boolean() });
 export const linkRedemption = z.object({ token: z.string().min(1).max(100) });
-export const cohostBody = z.object({ email });
+/** A Co-host by email; `playsAs` links them to a Player the Host typed in, who hasn't signed in yet. */
+export const cohostBody = z.object({ email, playsAs: id.optional() });
 /** From the Co-hosts panel: switch someone's Co-host role on or off, and/or say which Player they play as. */
 export const personBody = z
   .object({ cohost: z.boolean().optional(), playsAs: id.nullable().optional() })

@@ -75,6 +75,22 @@ describe("The Co-hosts panel", () => {
     await waitFor(async () => expect(await zed.staff(id)).toEqual([]));
   });
 
+  it("finds a Player the Host typed in, and makes them a Co-host once given an email", async () => {
+    const { host, id, user } = await party();
+    openApp(host, `/games/${id}/cohosts`);
+
+    await user.type(within(await panel()).getByLabelText(/find someone/i), "pa");
+    const pat = await within(await panel()).findByRole("listitem", { name: /^pat\b/i });
+    expect(pat).toHaveTextContent(/typed in/i);
+    expect(await panel()).not.toHaveTextContent(/nobody by that name/i);
+
+    await user.type(within(pat).getByLabelText(/pat's email/i), "pat@example.com");
+    await user.click(within(pat).getByRole("button", { name: /make co-host/i }));
+
+    await waitFor(async () => expect(await host.staff(id)).toEqual([{ playerId: "pat", role: "cohost" }]));
+    await waitFor(async () => expect(within(await person(/^pat$/i)).getByRole("switch", { name: /co-host/i })).toBeChecked());
+  });
+
   it("isn't offered to a Co-host", async () => {
     const { host, tess, id } = await party();
     await host.addCohost(id, "tess@example.com");

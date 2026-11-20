@@ -111,3 +111,21 @@ describe("Which Player a Host or Co-host plays as", () => {
     expect((await set(host, (await find("Gus")).key, { playsAs: "pat" })).status).toBe(400);
   });
 });
+
+describe("Adding a Co-host by email for a Player the Host typed in", () => {
+  it("makes that email a Co-host who plays as that Player", async () => {
+    const { app, id, host, staff, as } = await setup();
+    const res = await app.request(`/api/games/${id}/cohosts`, post({ email: "pat@example.com", playsAs: "pat" }, host));
+    expect(res.status).toBe(204);
+    expect(await staff(host)).toEqual([{ playerId: "pat", role: "cohost" }]);
+
+    // Once Pat signs in with it, Pat co-hosts.
+    const pat = await as("pat@example.com");
+    expect((await app.request(`/api/games/${id}/commands`, post({ type: "AddPlayer", playerId: "x", name: "X" }, pat))).status).toBe(200);
+  });
+
+  it("refuses a Player who isn't in the Game", async () => {
+    const { app, id, host } = await setup();
+    expect((await app.request(`/api/games/${id}/cohosts`, post({ email: "pat@example.com", playsAs: "nobody" }, host))).status).toBe(400);
+  });
+});

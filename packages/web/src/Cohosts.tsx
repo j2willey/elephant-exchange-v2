@@ -70,6 +70,10 @@ function Panel({ game, changes }: { game: GameView; changes: number }) {
 
   const words = find.trim().toLowerCase();
   const shown = (people ?? []).filter((p) => !words || `${p.name ?? ""} ${p.hint}`.toLowerCase().includes(words));
+  // Players the Host typed in have no email, so they aren't among the people above. Found by name too, so a search
+  // for one isn't a dead end: they can be made a Co-host once given an email.
+  const linked = new Set((people ?? []).map((p) => p.playerId).filter((x) => x !== null));
+  const typedIn = words ? game.players.filter((pl) => !linked.has(pl.id) && pl.name.toLowerCase().includes(words)) : [];
   const label = (p: Person) => (p.you ? `You${p.name ? ` (${p.name})` : ""}` : (p.name ?? p.hint));
 
   return (
@@ -77,15 +81,16 @@ function Panel({ game, changes }: { game: GameView; changes: number }) {
       <h2>{game.name}: Co-hosts</h2>
       <p className="muted hint">
         A Co-host can do everything at the party that you can: enter opens and steals, moderate the Feed, run the vote.
-        Only you add Co-hosts or delete the Game. Everyone below has signed in and opened this Game.
+        Only you add Co-hosts or delete the Game. Co-hosts must sign in, so they're found here by the name they joined
+        with. Players you typed in are found too, and need an email added.
       </p>
       <label htmlFor="cohosts-find">Find someone</label>
       <input id="cohosts-find" type="search" autoComplete="off" placeholder="Start typing a name" value={find} onChange={(e) => setFind(e.target.value)} />
       {people === null ? (
         <p className="muted">Loading…</p>
-      ) : shown.length === 0 ? (
-        <p className="muted">{people.length === 0 ? "Nobody has opened this Game yet." : "Nobody by that name."}</p>
-      ) : (
+      ) : shown.length === 0 && typedIn.length === 0 ? (
+        <p className="muted">{people.length === 0 && !words ? "Nobody has opened this Game yet." : "Nobody by that name."}</p>
+      ) : shown.length === 0 ? null : (
         <ul className="people" aria-label="People in this Game">
           {shown.map((p) => (
             <li key={p.key} aria-label={label(p)} className={p.role ? "staff" : undefined}>
@@ -123,6 +128,13 @@ function Panel({ game, changes }: { game: GameView; changes: number }) {
           ))}
         </ul>
       )}
+      {typedIn.length > 0 && (
+        <ul className="people" aria-label="Players you typed in">
+          {typedIn.map((pl) => (
+            <TypedInPlayer key={pl.id} gameId={game.id} player={pl} onAdded={() => setAsked((n) => n + 1)} />
+          ))}
+        </ul>
+      )}
       {error && (
         <p className="error" role="alert">
           {error}
@@ -130,6 +142,51 @@ function Panel({ game, changes }: { game: GameView; changes: number }) {
       )}
       <AddByEmail gameId={game.id} onAdded={() => setAsked((n) => n + 1)} />
     </section>
+  );
+}
+
+/**
+ * A Player the Host typed in, found by name: they have no email, so they can't be a Co-host until given one. Adding
+ * it makes that email a Co-host who plays as this Player; no email is sent, and it counts once they sign in with it.
+ */
+function TypedInPlayer({ gameId, player, onAdded }: { gameId: string; player: { id: string; name: string }; onAdded: () => void }) {
+  const api = useApi();
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const field = `typed-in-${player.id}`;
+
+  async function add(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    try {
+      await api.addCohost(gameId, email.trim(), player.id);
+      onAdded();
+    } catch {
+      setError("That didn't work. Check the email and try again.");
+    }
+  }
+
+  return (
+    <li aria-label={player.name}>
+      <span className="person">
+        <strong>{player.name}</strong>
+        <span className="muted"> a Player you typed in, who hasn't signed in</span>
+      </span>
+      <form className="inline" onSubmit={add}>
+        <label htmlFor={field} className="visually-hidden">
+          {player.name}'s email
+        </label>
+        <input id={field} type="email" required autoComplete="off" placeholder={`${player.name}'s email`} value={email} onChange={(e) => setEmail(e.target.value)} />
+        <button type="submit" className="secondary">
+          Make co-host
+        </button>
+      </form>
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+    </li>
   );
 }
 
