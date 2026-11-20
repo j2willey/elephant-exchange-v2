@@ -134,15 +134,15 @@ describe("Starting a new Game", () => {
   });
 });
 
-describe("The Host's Playbook, up front", () => {
+describe("The Host's Guide, up front", () => {
   it("is offered on the home screen and in New Game, every time", async () => {
     const { signedIn } = await startServer();
     openApp(await signedIn("host@example.com"));
 
-    const card = await screen.findByRole("heading", { name: /host's playbook/i });
-    expect(within(card.closest("section")!).getByRole("link", { name: /read the host's playbook/i })).toHaveAttribute("href", "/playbook");
+    const card = await screen.findByRole("heading", { name: /host's guide/i });
+    expect(within(card.closest("section")!).getByRole("link", { name: /read the host's guide/i })).toHaveAttribute("href", "/guide");
     await newGame();
-    expect(within(screen.getByRole("heading", { name: /new game/i }).closest("form")!).getByRole("link", { name: /host's playbook/i })).toBeInTheDocument();
+    expect(within(screen.getByRole("heading", { name: /new game/i }).closest("form")!).getByRole("link", { name: /host's guide/i })).toBeInTheDocument();
   });
 
   it("is pointed out on the console until the Game starts", async () => {

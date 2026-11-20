@@ -8,7 +8,7 @@ This is v2, a full rewrite of [v1](https://github.com/j2willey/Elephant-Exchange
 
 ## What works today
 
-- **Landing page and Host's Playbook:** a signed-out visitor sees what the app is for and v1's three reasons, signs in to host, or opens a Game from the link or code their Host sent. The Playbook (`/playbook`) is v1's hosting guide, brought up to date.
+- **Landing page and Host's Guide:** a signed-out visitor sees what the app is for and v1's three reasons, signs in to host, or opens a Game from the link or code their Host sent. The Guide (`/guide`; the old `/playbook` still works) is v1's hosting guide, brought up to date.
 - **Sign-in by emailed link:** there are no passwords. Links are sent through [Resend](https://resend.com), last 15 minutes and work once. The server stores only a hash of each token, and requests for links are rate-limited by address, by IP and per day.
 - **Setting up a Game:** the Host names the Game, picks how many Players take a Turn at once and how many Steals freeze a Gift, then adds Players, one at a time or by pasting the guest list (one name per line, straight from an email or a spreadsheet; anyone already added is skipped). Co-hosts can help run it.
 - **The play screen:** the Host or a Co-host opens a Gift, makes a Steal or Skips an absent Player for each active Player, and can Undo. A Gift gets optional details when it's opened, and the Host can correct its name or details at any time, even after the Game ends. The app enforces No Take-Backs and Frozen Gifts. Players are called at random, and the next one is shown On Deck so they can get ready.

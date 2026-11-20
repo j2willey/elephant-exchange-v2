@@ -87,7 +87,7 @@ describe("Signing out", () => {
   it("is at the top of the page for someone signed in, and signs them out", async () => {
     const { signedIn } = await startServer();
     const host = await signedIn("host@example.com");
-    openApp(host, "/playbook");
+    openApp(host, "/guide");
 
     await userEvent.setup().click(await screen.findByRole("button", { name: /sign out/i }));
 
@@ -108,8 +108,8 @@ describe("Signing out", () => {
 
   it("isn't there for someone signed out", async () => {
     const { origin } = await startServer();
-    openApp(browser(origin), "/playbook");
-    await screen.findByRole("heading", { name: /host's playbook/i });
+    openApp(browser(origin), "/guide");
+    await screen.findByRole("heading", { name: /host's guide/i });
 
     expect(screen.queryByRole("button", { name: /sign out/i })).not.toBeInTheDocument();
   });

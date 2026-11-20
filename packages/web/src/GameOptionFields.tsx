@@ -3,7 +3,7 @@ import type { GameOptions } from "@elephant/rules";
 
 /**
  * What each option is for, in a Host's words: shown under a tap on its ⓘ (a tap, not a hover, so it works on phones).
- * Drawn from the Host's Playbook; first drafts for Jim and friends to review.
+ * Drawn from the Host's Guide; first drafts for Jim and friends to review.
  */
 export const OPTION_HELP: Record<keyof GameOptions, ReactNode> = {
   activeSlots: (

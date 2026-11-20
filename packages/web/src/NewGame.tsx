@@ -95,7 +95,7 @@ export function NewGame({
     <form className="card stack new-game" onSubmit={customizing ? submitCustom : (e) => e.preventDefault()}>
       <h2>New Game</h2>
       <p className="playbook-nudge">
-        📖 New to hosting, or want a refresher? The <Link to="/playbook">Host's Playbook</Link> explains how the game
+        📖 New to hosting, or want a refresher? The <Link to="/guide">Host's Guide</Link> explains how the game
         works and how to run a smooth party.
       </p>
       <label htmlFor="game-name">Name of the Game</label>

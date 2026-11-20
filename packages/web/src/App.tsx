@@ -36,6 +36,8 @@ export function AppRoutes() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/sign-in" element={<RedeemLink />} />
+        <Route path="/guide" element={<Playbook />} />
+        {/* Its old name, still on links already shared. */}
         <Route path="/playbook" element={<Playbook />} />
         <Route path="/about" element={<About />} />
         <Route path="/try" element={<TryDemo />} />
@@ -167,12 +169,12 @@ function Home() {
         onOptionsSaved={(myOptions, alwaysMyOptions) => setSession({ ...session, myOptions, alwaysMyOptions })}
       />
       <section className="card playbook-card">
-        <h2>📖 Host's Playbook</h2>
+        <h2>📖 Host's Guide</h2>
         <p>
           How the game works and how to run a smooth party: why several Players can go at once, how to use the turn timer,
           the rules, and what every setting is for. A five-minute read, worth it before your first party.
         </p>
-        <Link to="/playbook">Read the Host's Playbook</Link>
+        <Link to="/guide">Read the Host's Guide</Link>
       </section>
       <DemoGame />
       <MyGames />

@@ -111,7 +111,7 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
         </ol>
         <p className="muted">
           Made for office holiday parties, family reunions, troops and clubs: 20, 50 or more people.{" "}
-          <Link to="/playbook">Read the Host's Playbook</Link> for running a smooth one.
+          <Link to="/guide">Read the Host's Guide</Link> for running a smooth one.
         </p>
       </section>
 
@@ -255,7 +255,7 @@ const RECOMMENDED_WORDS: Record<keyof GameOptions, string> = {
   moderation: { open: "Open", approval: "Approval", paused: "Paused" }[RECOMMENDED_OPTIONS.moderation],
 };
 
-/** v1's Host's Playbook, brought up to date: how to run a smooth 20+ person exchange with this app. */
+/** v1's Host's Guide, brought up to date: how to run a smooth 20+ person exchange with this app. */
 export function Playbook() {
   return (
     <article className="stack playbook">
@@ -263,7 +263,7 @@ export function Playbook() {
         ← Home
       </Link>
       <header>
-        <h2>Host's Playbook</h2>
+        <h2>Host's Guide</h2>
         <p className="muted">
           How the game works, and how to run a smooth exchange for 20 people or more. A five-minute read; every setting is
           explained at the end.
