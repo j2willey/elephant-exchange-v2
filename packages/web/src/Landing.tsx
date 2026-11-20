@@ -1,3 +1,5 @@
+import { RECOMMENDED_OPTIONS, type GameOptions } from "@elephant/rules";
+import { OPTION_HELP } from "./GameOptionFields.js";
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import scoreboard from "./assets/scoreboard.webp";
@@ -236,6 +238,23 @@ function gameIdFrom(text: string): string | null {
   return /^[A-Za-z0-9_-]{4,64}$/.test(trimmed) ? trimmed : null;
 }
 
+const SETTINGS_EXPLAINED: [keyof GameOptions, string][] = [
+  ["activeSlots", "Players taking a turn at once"],
+  ["maxSteals", "Steals before a Gift is Frozen"],
+  ["turnSeconds", "Seconds per turn"],
+  ["rosterMode", "Who adds the Players?"],
+  ["approveNames", "Approve names"],
+  ["moderation", "Feed posting"],
+];
+const RECOMMENDED_WORDS: Record<keyof GameOptions, string> = {
+  activeSlots: String(RECOMMENDED_OPTIONS.activeSlots),
+  maxSteals: String(RECOMMENDED_OPTIONS.maxSteals),
+  turnSeconds: `${RECOMMENDED_OPTIONS.turnSeconds} seconds`,
+  rosterMode: RECOMMENDED_OPTIONS.rosterMode === "host" ? "I'll enter them" : "Players sign up on their phones",
+  approveNames: RECOMMENDED_OPTIONS.approveNames ? "on" : "off",
+  moderation: { open: "Open", approval: "Approval", paused: "Paused" }[RECOMMENDED_OPTIONS.moderation],
+};
+
 /** v1's Host's Playbook, brought up to date: how to run a smooth 20+ person exchange with this app. */
 export function Playbook() {
   return (
@@ -245,14 +264,41 @@ export function Playbook() {
       </Link>
       <header>
         <h2>Host's Playbook</h2>
-        <p className="muted">How to run a smooth exchange for 20 people or more.</p>
+        <p className="muted">
+          How the game works, and how to run a smooth exchange for 20 people or more. A five-minute read; every setting is
+          explained at the end.
+        </p>
       </header>
+
+      <section className="card">
+        <h3>🐘 How the game works</h3>
+        <p>
+          Everyone brings one wrapped gift, and the gifts go in a pile. Players are called in a random order. On your turn
+          you either <strong>open</strong> a gift from the pile or <strong>steal</strong> one that's already been opened.
+        </p>
+        <p>
+          If your gift is stolen, you go again straight away: open a new gift or steal a different one. That's where the
+          fun is: a good gift can change hands several times while the room cheers or groans.
+        </p>
+        <p>
+          Two rules keep it fair and moving. <strong>The Steal limit:</strong> after a set number of Steals (three is
+          classic) a Gift is <strong>Frozen</strong>, and whoever holds it keeps it. <strong>No take-backs:</strong> you
+          can't steal back the Gift that was just taken from you. When everyone has had a turn and holds one Gift, the
+          game is over.
+        </p>
+        <p>
+          The app keeps track of all of it: whose turn it is, who holds what, how many Steals each Gift has had. You call
+          the names and enjoy the party.
+        </p>
+      </section>
 
       <section className="card">
         <h3>📋 Before the party</h3>
         <p>
-          Start a Game and name it after your party. In its Settings, choose how many Players take a turn at once (two
-          or three keeps a big group moving) and how many Steals Freeze a Gift. Three is the classic limit.
+          Start a Game and name it after your party. Use the recommended settings, or customize them: each one has an ⓘ
+          that explains it, and they're all explained at the end of this page too. Tick{" "}
+          <strong>Always start with these settings</strong> and your next Game starts with them in one tap. Nothing is
+          fixed: you can change any setting later in the Game's Settings, even mid-party.
         </p>
         <p>
           Then get the names in. Paste the guest list straight from an email or a spreadsheet, one name per line; or let
@@ -284,6 +330,26 @@ export function Playbook() {
       </section>
 
       <section className="card">
+        <h3>⏱ Keeping it moving</h3>
+        <p>
+          The classic game calls one Player at a time, and the whole room watches every Pick. That's perfect for a dozen
+          people. With 30, it can take two hours, and the people waiting near the end lose interest.
+        </p>
+        <p>
+          <strong>Several Players at once.</strong> Set "Players taking a turn at once" to 2 or 3. While one Player is
+          unwrapping and the room is reacting, the next one is already choosing. Everyone still gets exactly one turn;
+          there's just less waiting between them. The scoreboard shows everyone who's up, and who's On Deck next.
+        </p>
+        <p>
+          <strong>The turn timer.</strong> In the middle turns, with lots of Gifts open, Players can stall while they
+          decide what to steal. The timer counts down on the scoreboard (a minute by default), turns amber, then red. It's
+          a friendly nudge, not a rule: nobody loses their turn when it runs out, and the Player keeps choosing until you
+          move on. If you stop to explain the rules to someone, restart their timer. Set it to 0 if your crowd doesn't
+          need it.
+        </p>
+      </section>
+
+      <section className="card">
         <h3>🎁 Running the Game</h3>
         <p>
           Players are drawn at random, and the next one is shown On Deck so they can get ready. For each Player who's up,
@@ -299,10 +365,6 @@ export function Playbook() {
         <p>
           <strong>No take-backs.</strong> If Ann steals from Bob, Bob can't steal that Gift straight back. He steals
           something else or opens a new Gift. The app won't allow it, so there's nothing to argue about.
-        </p>
-        <p>
-          <strong>The turn timer.</strong> In the middle turns a big game can stall. The timer (a minute by default) goes
-          amber, then red. It's a friendly nudge, not a rule: the Player keeps their turn until you move on.
         </p>
         <p>
           <strong>The Final Round.</strong> Once everyone holds a Gift, the first few Players called get one last chance
@@ -325,9 +387,22 @@ export function Playbook() {
         </p>
         <p>
           <strong>You stay in charge.</strong> You and your Co-hosts have simple tools to keep the Feed, and the names
-          people choose, right for your crowd, whether it's the office party or a room full of teenagers. Settings has
-          stricter options if you know your audience will need them.
+          people choose, right for your crowd, whether it's the office party or a room full of teenagers:
         </p>
+        <ul>
+          <li>
+            <strong>Hide</strong> any Post (or a Post with all its replies), and <strong>Mute</strong> someone so they can
+            no longer post.
+          </li>
+          <li>
+            <strong>Rename</strong> anyone and lock the name, so they can't change it back. Guests can change their own
+            name until you lock it.
+          </li>
+          <li>
+            For a tough crowd, choose <strong>Approve names</strong>, or have each Post wait for your approval, or pause
+            posting altogether. You can switch any of these at any time in Settings.
+          </li>
+        </ul>
         <p>After the party, download every Photo as a keepsake album. Photos are deleted 60 days after the Game.</p>
       </section>
 
@@ -344,6 +419,21 @@ export function Playbook() {
           <strong>Tip: the consolation prize.</strong> Keep one or two small, genuinely good gifts hidden, like chocolate
           or a gift card. The Worst Gift's holder picks a prize, so a loss becomes a win and the night ends on a laugh.
         </div>
+      </section>
+
+      <section className="card" aria-label="Every setting explained">
+        <h3>⚙️ Every setting explained</h3>
+        <p className="muted">The recommended value comes first. You can change any of them later in the Game's Settings.</p>
+        <dl className="settings-explained">
+          {SETTINGS_EXPLAINED.map(([key, label]) => (
+            <div key={key}>
+              <dt>
+                {label} <span className="muted">(recommended: {RECOMMENDED_WORDS[key]})</span>
+              </dt>
+              <dd>{OPTION_HELP[key]}</dd>
+            </div>
+          ))}
+        </dl>
       </section>
 
       <p>
