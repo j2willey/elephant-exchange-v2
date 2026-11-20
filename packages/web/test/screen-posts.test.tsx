@@ -65,7 +65,8 @@ describe("Posts on the big screen", () => {
   });
 
   it("keeps to the newest six, so the room can read them", async () => {
-    const { gus, id } = await onTheBigScreen();
+    const { host, gus, id } = await onTheBigScreen();
+    await host.setGameOptions(id, { postsPerMinute: 0 }); // eight Posts at once, which the Feed limit would stop
     for (let n = 1; n <= 8; n++) await gus.post(id, { text: `Post ${n}`, name: "Gus" });
 
     await waitFor(async () => expect(await shown()).toHaveLength(6));

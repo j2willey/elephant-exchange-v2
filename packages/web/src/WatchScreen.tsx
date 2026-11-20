@@ -185,7 +185,9 @@ function CatalogPitch({ part }: { part: Post | undefined }) {
   if (!part) return null;
   return (
     <span className="catalog-pitch">
-      🎤 “{part.text}” <span className="muted">— {part.author}</span>
+      {part.tagline && <strong className="pitch-tagline">{part.tagline}</strong>}
+      {part.text && <>🎤 “{part.text}” </>}
+      <span className="muted">— {part.author}</span>
     </span>
   );
 }

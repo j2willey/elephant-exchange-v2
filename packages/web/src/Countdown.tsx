@@ -6,7 +6,7 @@ import { useApi } from "./ApiContext.js";
  * How far this device's clock is from the server's, worked out from the newest copy of the Game: a phone set a few
  * minutes wrong still counts down with everyone else. (The copy's time in transit is too small to matter for a guide.)
  */
-function useServerTime(serverNowWhenSent: number): () => number {
+export function useServerTime(serverNowWhenSent: number): () => number {
   const api = useApi();
   // Worked out when a new copy arrives (its server time changes), not on every redraw.
   const skew = useMemo(() => serverNowWhenSent - api.now(), [serverNowWhenSent, api]);

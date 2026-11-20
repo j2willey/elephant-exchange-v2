@@ -14,6 +14,9 @@ export interface GameView {
   moderation: Moderation;
   /** For a tough crowd: names people pick for themselves wait for the Host or a Co-host to approve them. */
   approveNames: boolean;
+  /** Against flooding the Feed: the most Posts a guest makes in a minute, and minutes between pitching a Gift again (0: no limit). */
+  postsPerMinute: number;
+  repitchMinutes: number;
   /** The turn timer: the server's time when sent, the countdown's length (0: no timer), and when each Player up was called. */
   clock: { now: number; turnSeconds: number; startedAt: Record<string, number> };
   /** Rises with every change; the newest copy wins. */
@@ -326,6 +329,10 @@ export interface Post {
   authorMuted?: boolean;
   /** Set when it's a part of its Gift's Pitch: the Player whose part it is. */
   pitchFor: string | null;
+  /** A Pitch part's bold headline. */
+  tagline?: string | null;
+  /** When a Pitch part was last sent to the top of the Feed again. */
+  bumpedAt?: number | null;
 }
 
 /** Whose name the Host or a Co-host is changing: a Player, whoever wrote a Post, or someone whose name is waiting. */
@@ -490,7 +497,7 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
     /** Changes a Game's name, turn timer or who adds the Players; only those given. */
     async setGameOptions(
       gameId: string,
-      options: { name?: string; turnSeconds?: number; rosterMode?: RosterMode; approveNames?: boolean },
+      options: { name?: string; turnSeconds?: number; rosterMode?: RosterMode; approveNames?: boolean; postsPerMinute?: number; repitchMinutes?: number },
     ): Promise<SharedGame | undefined> {
       const res = await sendJson("PATCH", `/api/games/${encodeURIComponent(gameId)}/options`, options);
       return res.ok ? ((await res.json()) as SharedGame) : undefined;
@@ -735,7 +742,7 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
     async post(
       gameId: string,
       { photo, ...post }: { text: string; name?: string; giftId?: string; replyTo?: string; photo?: Blob },
-    ): Promise<"posted" | "paused" | "muted" | "notPhoto" | "tooBig" | "failed"> {
+    ): Promise<"posted" | "paused" | "muted" | "tooSoon" | "notPhoto" | "tooBig" | "failed"> {
       const path = `/api/games/${encodeURIComponent(gameId)}/posts`;
       let res: Response;
       if (photo) {
@@ -748,6 +755,7 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
       }
       if (res.status === 201) return "posted";
       if (res.status === 409) return ((await res.json().catch(() => ({}))) as { code?: string }).code === "Muted" ? "muted" : "paused";
+      if (res.status === 429) return "tooSoon";
       if (res.status === 413) return "tooBig";
       if (res.status === 400 && photo) return "notPhoto";
       return "failed";
@@ -800,12 +808,34 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
 
     /** Hides a Post (with every reply under it, given `thread`), or shows it again with whatever was hidden with it. */
     /** Writes, changes or (with empty text) removes a part of a Gift's Pitch: the viewer's own, or for a Host, `playerId`'s. */
-    async setPitch(gameId: string, giftId: string, text: string, playerId?: string): Promise<boolean> {
-      const res = await sendJson("PUT", `/api/games/${encodeURIComponent(gameId)}/gifts/${encodeURIComponent(giftId)}/pitch`, {
-        text,
-        ...(playerId ? { playerId } : {}),
-      });
-      return res.ok;
+    async setPitch(
+      gameId: string,
+      giftId: string,
+      { tagline = "", text = "", photo, removePhoto }: { tagline?: string; text?: string; photo?: Blob; removePhoto?: boolean },
+      playerId?: string,
+    ): Promise<"saved" | "notPhoto" | "tooBig" | "failed"> {
+      const path = `/api/games/${encodeURIComponent(gameId)}/gifts/${encodeURIComponent(giftId)}/pitch`;
+      let res: Response;
+      if (photo) {
+        const form = new FormData();
+        for (const [k, v] of Object.entries({ tagline, text, playerId })) if (v) form.append(k, v);
+        form.append("photo", photo, "photo.jpg");
+        res = await fetchFn(path, { method: "PUT", body: form });
+      } else {
+        res = await sendJson("PUT", path, { tagline, text, ...(removePhoto ? { removePhoto } : {}), ...(playerId ? { playerId } : {}) });
+      }
+      if (res.ok) return "saved";
+      if (res.status === 413) return "tooBig";
+      if (res.status === 400 && photo) return "notPhoto";
+      return "failed";
+    },
+
+    /** "Pitch it again": back to the top of the Feed. Or how many seconds until that's allowed. */
+    async repitch(gameId: string, giftId: string, playerId?: string): Promise<"sent" | { wait: number } | "failed"> {
+      const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/gifts/${encodeURIComponent(giftId)}/pitch/again`, playerId ? { playerId } : {});
+      if (res.ok) return "sent";
+      if (res.status === 429) return { wait: ((await res.json().catch(() => ({}))) as { wait?: number }).wait ?? 60 };
+      return "failed";
     },
 
     async setPostStatus(gameId: string, postId: string, status: "visible" | "hidden", thread = false): Promise<boolean> {

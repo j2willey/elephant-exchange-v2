@@ -39,7 +39,7 @@ describe("A Gift's pitch, on the phones", () => {
     await onTab(/gifts/i);
 
     await user.click(await screen.findByRole("button", { name: /🎤 pitch it$/i }));
-    await user.type(screen.getByRole("textbox", { name: /your pitch for fruitcake/i }), "Grandma's recipe. Probably.");
+    await user.type(within(screen.getByRole("form", { name: /your pitch for fruitcake/i })).getByLabelText(/the pitch/i), "Grandma's recipe. Probably.");
     await user.click(screen.getByRole("button", { name: /^save$/i }));
 
     expect(await pitchList()).toHaveTextContent(/gus: grandma's recipe\. probably\./i);
@@ -57,13 +57,13 @@ describe("A Gift's pitch, on the phones", () => {
 
   it("builds up as the Gift is stolen, newest part on top, each holder editing only their own", async () => {
     const { host, gus, hal, halId, id, user } = await underway();
-    await gus.setPitch(id, "cake", "Grandma's recipe.");
+    await gus.setPitch(id, "cake", { text: "Grandma's recipe." });
     await host.command(id, { type: "Steal", playerId: halId, giftId: "cake" });
     openApp(hal, `/games/${id}`);
     await onTab(/gifts/i);
 
     await user.click(await screen.findByRole("button", { name: /🎤 pitch it$/i }));
-    await user.type(screen.getByRole("textbox", { name: /your pitch for fruitcake/i }), "It's a doorstop.");
+    await user.type(within(screen.getByRole("form", { name: /your pitch for fruitcake/i })).getByLabelText(/the pitch/i), "It's a doorstop.");
     await user.click(screen.getByRole("button", { name: /^save$/i }));
 
     await waitFor(async () => expect(within(await pitchList()).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
@@ -86,7 +86,7 @@ describe("A Gift's pitch, for the Host", () => {
     await onTab(/gift tracker|gifts/i);
 
     await user.click(await screen.findByRole("button", { name: /pitch it for cat/i }));
-    await user.type(screen.getByRole("textbox", { name: /cat's pitch for fruitcake/i }), "Vintage!");
+    await user.type(within(screen.getByRole("form", { name: /cat's pitch for fruitcake/i })).getByLabelText(/the pitch/i), "Vintage!");
     await user.click(screen.getByRole("button", { name: /^save$/i }));
 
     expect(await pitchList()).toHaveTextContent(/cat: vintage!/i);
@@ -94,11 +94,56 @@ describe("A Gift's pitch, for the Host", () => {
 
   it("shows the newest part on the TV's catalog", async () => {
     const { host, gus, id } = await underway();
-    await gus.setPitch(id, "cake", "Grandma's recipe.");
+    await gus.setPitch(id, "cake", { text: "Grandma's recipe." });
     await host.setScreen(id, "catalog");
     openApp(host, `/games/${id}/screen`);
 
     const card = await screen.findByRole("listitem", { name: /fruitcake/i });
     await waitFor(() => expect(card).toHaveTextContent(/“grandma's recipe\.” — gus/i));
+  });
+});
+
+describe("A pitch's tagline, and pitching it again", () => {
+  it("shows the tagline in bold above the pitch, under the Gift and in the Feed", async () => {
+    const { gus, id, user } = await underway();
+    openApp(gus, `/games/${id}`);
+    await onTab(/gifts/i);
+    await user.click(await screen.findByRole("button", { name: /🎤 pitch it$/i }));
+    const form = screen.getByRole("form", { name: /your pitch for fruitcake/i });
+    await user.type(within(form).getByLabelText(/tagline/i), "A TRUE HEIRLOOM");
+    await user.type(within(form).getByLabelText(/the pitch/i), "Grandma's recipe.");
+    await user.click(within(form).getByRole("button", { name: /^save$/i }));
+
+    const list = await pitchList();
+    await waitFor(() => expect(list.querySelector(".pitch-tagline")).toHaveTextContent("A TRUE HEIRLOOM"));
+    expect(list).toHaveTextContent(/gus: grandma's recipe\./i);
+  });
+
+  it("lets the holder send it to the top of the Feed again, then says how long until the next time", async () => {
+    const { gus, id, user } = await underway();
+    await gus.setPitch(id, "cake", { tagline: "A TRUE HEIRLOOM", text: "Grandma's recipe." });
+    openApp(gus, `/games/${id}`);
+    await onTab(/gifts/i);
+
+    // Just written: the wait has only begun.
+    expect(await within(await pitchList()).findByText(/again in 5 min/i)).toBeInTheDocument();
+    expect(await gus.repitch(id, "cake")).toEqual({ wait: 300 });
+  });
+
+  it("lets the Host set the Feed limits in Settings", async () => {
+    const { host, id, user } = await underway();
+    openApp(host, `/games/${id}/settings`);
+    const perMinute = await screen.findByLabelText(/most posts a guest can make in a minute/i);
+    expect(perMinute).toHaveValue(5);
+    expect(screen.getByLabelText(/minutes before a holder can pitch their gift again/i)).toHaveValue(5);
+
+    await user.clear(perMinute);
+    await user.type(perMinute, "3");
+    await user.clear(screen.getByLabelText(/minutes before a holder can pitch/i));
+    await user.type(screen.getByLabelText(/minutes before a holder can pitch/i), "10");
+    await user.click(screen.getByRole("button", { name: /save feed limits/i }));
+
+    await screen.findByText(/^saved\.$/i);
+    expect(await host.game(id)).toMatchObject({ postsPerMinute: 3, repitchMinutes: 10 });
   });
 });

@@ -394,10 +394,12 @@ export function Playbook() {
           out, Skip them and they'll be called again later. Tapped the wrong thing? Undo takes back the last Pick.
         </p>
         <p>
-          <strong>🎤 The pitch.</strong> The holder of a Gift can pitch it from their phone: a creative story to tempt
-          someone into stealing a horrible gift, or every reason nobody should take one they love. When it's stolen, the
-          new holder adds their own part, so the story builds through the night. You or a Co-host can pitch for a guest
-          without a phone. Read the best ones aloud; the TV's catalog shows the newest part of each.
+          <strong>🎤 The pitch.</strong> The holder of a Gift can pitch it from their phone, like an ad: a bold tagline,
+          a creative story to tempt someone into stealing a horrible gift (or every reason nobody should take one they
+          love), and a photo. When it's stolen, the new holder adds their own part, so the story builds through the
+          night. The holder can tap <strong>Pitch it again</strong> to send their ad back to the top of the Feed, every 5
+          minutes at most so nobody bombards it. You or a Co-host can pitch for a guest without a phone. Read the best
+          ones aloud; the TV's catalog shows the newest part of each.
         </p>
         <p>
           <strong>The Steal limit.</strong> A Gift is Frozen by the Steal that reaches the limit, and the Player who made
@@ -438,6 +440,10 @@ export function Playbook() {
           <li>
             <strong>Rename</strong> anyone and lock the name, so they can't change it back. Guests can change their own
             name until you lock it.
+          </li>
+          <li>
+            Nobody can flood the Feed: a guest can make 5 Posts a minute, and pitch a Gift again every 5 minutes. You can
+            change both in Settings.
           </li>
           <li>
             For a tough crowd, choose <strong>Approve names</strong>, or have each Post wait for your approval, or pause

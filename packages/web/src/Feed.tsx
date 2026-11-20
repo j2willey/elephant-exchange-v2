@@ -92,6 +92,7 @@ export function Feed({
             {p.replyTo && <QuoteCard quote={p.replyTo} onOpen={showOriginal} />}
             {p.status === "pending" && <p className="badge">Waiting for the Host to approve</p>}
             {p.status === "hidden" && <p className="badge">Hidden</p>}
+            {p.tagline && <p className="pitch-tagline">{p.tagline}</p>}
             {p.text && <p className="post-text">{p.text}</p>}
             {p.photo && <PostPhoto post={p} />}
             {(p.mine || hosting) && !p.pitchFor && game.gifts.length > 0 && <AttachToGift game={game} post={p} onDone={reload} />}
@@ -283,6 +284,7 @@ export function PostPhoto({ post, className = "post-photo" }: { post: Post; clas
 const postErrors = {
   paused: "The Host has paused posting.",
   muted: "The Host has paused your posting.",
+  tooSoon: "That's a lot of posts in a minute. Wait a moment, then try again.",
   notPhoto: "That doesn't look like a photo we can use. Try another?",
   tooBig: "That Photo is too big to send. Try another?",
   unshrinkable: "This photo couldn't be made smaller on this phone. Try taking a screenshot of it and posting that.",

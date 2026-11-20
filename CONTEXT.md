@@ -127,7 +127,7 @@ A Post that answers another visible Post in the same Game. It joins the top of t
 _Avoid_: Comment, thread
 
 **Pitch**:
-A Gift's story, told by its holders: a horrible Gift gets a creative, enticing story to tempt a Steal, a loved one every reason nobody should take it. Each holder writes their own part, signed with their Player's name, while they hold the Gift; it stays when the Gift is stolen, so the story builds through the night, newest part on top. A holder may change or remove only their own part, any time before the Game ends; the Host and Co-hosts may write the holder's part for them (a Player without a phone) and change any part. Up to 500 characters a part. Each part is a Post about the Gift, so Moderation applies (Approval, Paused, Mute, Hide) and it shows in the Feed too; it can't be moved to another Gift. Separate from the Gift's name and details, which are the Host's facts.
+A Gift's story, told by its holders: a horrible Gift gets a creative, enticing story to tempt a Steal, a loved one every reason nobody should take it. Each holder writes their own part, signed with their Player's name, while they hold the Gift; it stays when the Gift is stolen, so the story builds through the night, newest part on top. A holder may change or remove only their own part, any time before the Game ends; the Host and Co-hosts may write the holder's part for them (a Player without a phone) and change any part. A part has a **Tagline** (a bold headline, up to 80 characters), the story (up to 500) and a Photo, any of them. The current holder may **Pitch it again**: their part goes back to the top of the Feed, at most every 5 minutes (the Host can change it, or set 0 for no wait); it keeps its place in the Gift's story. Each part is a Post about the Gift, so Moderation applies (Approval, Paused, Mute, Hide) and it shows in the Feed too; it can't be moved to another Gift. Separate from the Gift's name and details, which are the Host's facts.
 _Avoid_: Description (that's the Host's details), story, blurb
 
 **Reaction**:
@@ -136,6 +136,9 @@ _Avoid_: Like (as the general name), vote, rating
 
 **Moderation**:
 The Game's rule for Posts, which the Host or a Co-host can switch at any moment: **Open** (Posts appear at once), **Approval** (each waits for the Host or a Co-host to approve it) or **Paused** (nobody can post). In any mode the Host or a Co-host can hide a single Post, or a Post with every reply under it (**Hide with replies**); showing it again brings back what was hidden with it. They can also **Mute** whoever wrote a Post: a Muted person can't post or reply in that Game (they can still react), and muting can hide all their Posts too, which unmuting brings back.
+
+**Feed Limits**:
+Against flooding the Feed: a guest may make at most 5 Posts in any minute (replies and Pitch parts count), and pitch a Gift again at most every 5 minutes. The Host sets both in Settings; 0 means no limit. The Host and Co-hosts are never limited.
 
 **Pending Post**:
 A Post made under Approval that the Host or a Co-host hasn't approved yet; only they and its poster can see it.

@@ -6,7 +6,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { and, asc, count, desc, eq, inArray, isNotNull, like, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, inArray, isNotNull, like, or, sql } from "drizzle-orm";
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
@@ -79,6 +79,7 @@ import {
   muteBody,
   pitchBody,
   postGiftBody,
+  repitchBody,
 } from "./schemas.js";
 
 export type { Mailer } from "./auth.js";
@@ -131,6 +132,9 @@ interface LoadedGame {
   moderation: "open" | "approval" | "paused";
   approveNames: boolean;
   turnSeconds: number;
+  /** Against flooding the Feed: the most Posts a guest makes in a minute, and minutes between sending a Pitch again. */
+  postsPerMinute: number;
+  repitchMinutes: number;
   /** When each Player who's up was called up, or had their timer reset (ms since 1970). */
   clocks: ReadonlyMap<string, number>;
   state: GameState;
@@ -192,7 +196,7 @@ function tally(ballots: ReadonlyMap<string, string>): Record<string, number> {
 
 /** What screens are shown about a Game: answers from the rules module, never its internal state. */
 function view(id: string, game: LoadedGame, now: Date) {
-  const { name, demo, rosterMode, moderation, approveNames, turnSeconds, clocks, state, seq, vote, screen } = game;
+  const { name, demo, rosterMode, moderation, approveNames, turnSeconds, postsPerMinute, repitchMinutes, clocks, state, seq, vote, screen } = game;
   return {
     id,
     name,
@@ -201,6 +205,8 @@ function view(id: string, game: LoadedGame, now: Date) {
     rosterMode,
     moderation,
     approveNames,
+    postsPerMinute,
+    repitchMinutes,
     /** The turn timer. `now` is the server's time, so a screen can count down correctly even if its own clock is off. */
     clock: { now: now.getTime(), turnSeconds, startedAt: Object.fromEntries(clocks) },
     /** Rises with every change (it counts the Game's logged events), so a screen keeps the newest copy it has seen. */
@@ -315,6 +321,8 @@ export function createServer({
       moderation: row.moderation,
       approveNames: row.approveNames,
       turnSeconds: row.turnSeconds,
+      postsPerMinute: row.postsPerMinute,
+      repitchMinutes: row.repitchMinutes,
       clocks: new Map(clocks.map((c) => [c.playerId, c.startedAt.getTime()])),
       state,
       seq: log.length,
@@ -1072,7 +1080,8 @@ export function createServer({
       .select()
       .from(posts)
       .where(seen ? and(eq(posts.gameId, id), seen) : eq(posts.gameId, id))
-      .orderBy(desc(posts.createdAt), desc(sql`${posts}.rowid`))
+      // A Pitch sent again goes back to the top.
+      .orderBy(desc(sql`coalesce(${posts.bumpedAt}, ${posts.createdAt})`), desc(sql`${posts}.rowid`))
       .all();
     // Every Reaction in the Game, tallied per Post in the order they're offered, with the viewer's own marked.
     const tallies = new Map<string, Map<string, { count: number; mine: boolean }>>();
@@ -1122,8 +1131,10 @@ export function createServer({
         reactions: reactionsOf(p.id),
         replyTo: quote(p.replyTo),
         replies: replies.get(p.id) ?? 0,
-        // A part of its Gift's Pitch: whose part it is.
+        // A part of its Gift's Pitch: whose part it is, its headline, and when it was last sent again.
         pitchFor: p.pitchFor,
+        tagline: p.tagline,
+        bumpedAt: p.bumpedAt?.getTime() ?? null,
         // For the Host and Co-hosts: whether its poster is muted, so they can unmute from here.
         ...(hosting ? { authorMuted: mutedPeople.has(p.email) } : {}),
       })),
@@ -1159,6 +1170,8 @@ export function createServer({
     if (!game) return c.json({ error: "Game not found" }, 404);
     if (game.moderation === "paused") return c.json({ code: "Paused", message: "The Host has paused posting" }, 409);
     if (nameRow(id, email)?.muted) return c.json({ code: "Muted", message: "The Host has paused your posting" }, 409);
+    const wait = tooSoon(id, email, game);
+    if (wait > 0) return c.json({ code: "TooSoon", message: `Wait ${wait} seconds before posting again`, wait }, 429);
     const { text, giftId, replyTo } = body.data;
     if (giftId !== undefined && !gifts(game.state).some((g) => g.id === giftId)) return c.json({ error: "No such Gift in this Game" }, 400);
     if (
@@ -1225,54 +1238,152 @@ export function createServer({
    * they hold the Gift and change or remove it later; the Host and Co-hosts may write any holder's part (for a
    * guest without a phone) and change any part. It's a Post, so the Feed's rules apply: Approval, Paused, Mute, Hide.
    */
-  app.put("/api/games/:id/gifts/:giftId/pitch", async (c) => {
+  /**
+   * Seconds this person must still wait before posting again (0: they may post now): at most the Game's Posts a
+   * minute, so a few quick replies are fine but nobody floods the Feed. The Host and Co-hosts are never held back.
+   */
+  function tooSoon(gameId: string, email: string, game: LoadedGame): number {
+    if (game.postsPerMinute === 0 || roleIn(gameId, email)) return 0;
+    const minuteAgo = new Date(now().getTime() - 60_000);
+    const recent = db
+      .select({ at: posts.createdAt })
+      .from(posts)
+      .where(and(eq(posts.gameId, gameId), eq(posts.email, email), gt(posts.createdAt, minuteAgo)))
+      .orderBy(desc(posts.createdAt))
+      .all();
+    if (recent.length < game.postsPerMinute) return 0;
+    // Once the oldest of the last allowed few is a minute old, there's room again.
+    const oldest = recent[game.postsPerMinute - 1]!.at.getTime();
+    return Math.max(1, Math.ceil((oldest + 60_000 - now().getTime()) / 1000));
+  }
+
+  /** The part of a Gift's Pitch that a request is about, with what's needed to decide whether it's allowed. */
+  function pitchPart(id: string, giftId: string, email: string, playerIdAsked: string | undefined) {
+    const game = load(id);
+    if (!game) return { error: { status: 404, message: "Game not found" } } as const;
+    const gift = gifts(game.state).find((g) => g.id === giftId);
+    if (!gift) return { error: { status: 404, message: "No such Gift in this Game" } } as const;
+    const hosting = roleIn(id, email) !== undefined;
+    const me = playerOf(id, email, game);
+    const playerId = playerIdAsked ?? me;
+    if (!playerId) return { error: { status: 403, message: "Only the Gift's holder writes its pitch" } } as const;
+    if (!hosting && playerId !== me) return { error: { status: 403, message: "You can only write your own part" } } as const;
+    const part = db
+      .select()
+      .from(posts)
+      .where(and(eq(posts.gameId, id), eq(posts.giftId, giftId), eq(posts.pitchFor, playerId)))
+      .get();
+    if (!hosting) {
+      if (phase(game.state) === "ended") return { error: { status: 409, code: "GameOver", message: "The Game is over" } } as const;
+      if (game.moderation === "paused") return { error: { status: 409, code: "Paused", message: "The Host has paused posting" } } as const;
+      if (nameRow(id, email)?.muted) return { error: { status: 409, code: "Muted", message: "The Host has paused your posting" } } as const;
+    }
+    return { game, gift, hosting, playerId, part } as const;
+  }
+
+  const pitchError = (c: Context, e: { status: number; code?: string; message: string }) =>
+    c.json(e.code ? { code: e.code, message: e.message } : { error: e.message }, e.status as 403);
+
+  /**
+   * A Gift's Pitch: the story its holder tells, to tempt a Steal or to fend one off. Each holder writes their own
+   * part, kept when the Gift is stolen, so the story builds through the night: a bold headline (the tagline), the
+   * story, and a Photo, any of them. The holder may write theirs while they hold the Gift and change or remove it
+   * later; the Host and Co-hosts may write any holder's part (for a guest without a phone) and change any part.
+   * It's a Post, so the Feed's rules apply: Approval, Paused, Mute, Hide. Words come as JSON; with a Photo, as a
+   * multipart form, its file in `photo`. Nothing left (no tagline, words or Photo) removes the part.
+   */
+  app.put("/api/games/:id/gifts/:giftId/pitch", photoSizeLimit, async (c) => {
     const { id, giftId } = c.req.param();
     const email = signedInAs(c);
     if (!email) return c.json({ error: "Sign in first" }, 401);
-    const body = await parseBody(c, pitchBody);
-    if (!body.ok) return body.res;
-    const game = load(id);
-    if (!game) return c.json({ error: "Game not found" }, 404);
-    const gift = gifts(game.state).find((g) => g.id === giftId);
-    if (!gift) return c.json({ error: "No such Gift in this Game" }, 404);
-    const hosting = roleIn(id, email) !== undefined;
-    const me = playerOf(id, email, game);
-    const playerId = body.data.playerId ?? me;
-    if (!playerId) return c.json({ error: "Only the Gift's holder writes its pitch" }, 403);
-    if (!hosting && playerId !== me) return c.json({ error: "You can only write your own part" }, 403);
-    const at = and(eq(posts.gameId, id), eq(posts.giftId, giftId), eq(posts.pitchFor, playerId));
-    const part = db.select().from(posts).where(at).get();
-    if (!part && gift.holderId !== playerId) return c.json({ error: "Only the Gift's holder writes its pitch" }, 403);
-    if (!hosting) {
-      if (phase(game.state) === "ended") return c.json({ code: "GameOver", message: "The Game is over" }, 409);
-      if (game.moderation === "paused") return c.json({ code: "Paused", message: "The Host has paused posting" }, 409);
-      if (nameRow(id, email)?.muted) return c.json({ code: "Muted", message: "The Host has paused your posting" }, 409);
+    let upload: File | undefined;
+    let body: Awaited<ReturnType<typeof parseBody<z.infer<typeof pitchBody>>>>;
+    if (c.req.header("content-type")?.startsWith("multipart/form-data")) {
+      const form = await c.req.parseBody();
+      const field = (k: string) => (typeof form[k] === "string" && form[k] !== "" ? form[k] : undefined);
+      const file = form["photo"];
+      upload = file !== undefined && typeof file !== "string" ? (file as File) : undefined;
+      const parsed = pitchBody.safeParse({ tagline: field("tagline"), text: field("text"), playerId: field("playerId") });
+      body = parsed.success ? { ok: true, data: parsed.data } : { ok: false, res: c.json({ error: "Invalid request", issues: parsed.error.issues }, 400) };
+    } else {
+      body = await parseBody(c, pitchBody);
     }
-    const { text } = body.data;
-    if (!text) {
-      if (part) db.delete(posts).where(eq(posts.id, part.id)).run();
-    } else if (part) {
-      if (part.text !== text) {
+    if (!body.ok) return body.res;
+    const found = pitchPart(id, giftId, email, body.data.playerId);
+    if ("error" in found) return pitchError(c, found.error);
+    const { game, gift, hosting, playerId, part } = found;
+    if (!part && gift.holderId !== playerId) return c.json({ error: "Only the Gift's holder writes its pitch" }, 403);
+
+    const photo = upload && (await preparePhoto(new Uint8Array(await upload.arrayBuffer())));
+    if (upload && !photo) return c.json({ error: "That doesn't look like a photo we can use" }, 400);
+    const { tagline, text, removePhoto } = body.data;
+    const keepsPhoto = Boolean(photo) || (Boolean(part?.photoWidth) && !removePhoto);
+    if (!tagline && !text && !keepsPhoto) {
+      if (part) {
+        db.delete(posts).where(eq(posts.id, part.id)).run();
+        if (part.photoWidth) photos.remove(id, part.id);
+        postsChanged(id);
+      }
+      return c.body(null, 204);
+    }
+
+    const postId = part?.id ?? randomBytes(12).toString("base64url");
+    if (photo) photos.save(id, postId, photo.data);
+    const pictured = photo ? { photoWidth: photo.width, photoHeight: photo.height } : removePhoto ? { photoWidth: null, photoHeight: null } : {};
+    if (part) {
+      const changed = part.text !== text || (part.tagline ?? "") !== tagline || photo !== undefined || (removePhoto && part.photoWidth !== null);
+      if (changed) {
         // Changed words wait again under Approval; a part a Host hid stays hidden.
         const status = part.status === "hidden" ? "hidden" : !hosting && game.moderation === "approval" ? "pending" : part.status;
-        db.update(posts).set({ text, status }).where(eq(posts.id, part.id)).run();
+        db.update(posts)
+          .set({ text, tagline: tagline || null, status, ...pictured })
+          .where(eq(posts.id, part.id))
+          .run();
+        if (removePhoto && !photo && part.photoWidth) photos.remove(id, part.id);
       }
     } else {
       db.insert(posts)
         .values({
-          id: randomBytes(12).toString("base64url"),
+          id: postId,
           gameId: id,
           email,
           author: roster(game.state).find((p) => p.id === playerId)!.name,
           giftId,
           pitchFor: playerId,
+          tagline: tagline || null,
           text,
+          photoWidth: photo?.width ?? null,
+          photoHeight: photo?.height ?? null,
           status: !hosting && game.moderation === "approval" ? "pending" : "visible",
           createdAt: now(),
         })
         .run();
       stats.noteFeature(id, "pitch");
     }
+    postsChanged(id);
+    return c.body(null, 204);
+  });
+
+  /**
+   * "Pitch it again": the Gift's holder sends their part back to the top of the Feed, for everyone to see again. Not
+   * more often than the Game allows (5 minutes unless the Host changed it), so nobody bombards the Feed; the Host
+   * and Co-hosts may do it any time, for any holder.
+   */
+  app.post("/api/games/:id/gifts/:giftId/pitch/again", async (c) => {
+    const { id, giftId } = c.req.param();
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const body = await parseBody(c, repitchBody);
+    if (!body.ok) return body.res;
+    const found = pitchPart(id, giftId, email, body.data.playerId);
+    if ("error" in found) return pitchError(c, found.error);
+    const { game, gift, hosting, playerId, part } = found;
+    if (!part || part.status !== "visible") return c.json({ error: "There's no pitch to send again" }, 404);
+    if (gift.holderId !== playerId) return c.json({ error: "Only the Gift's holder pitches it again" }, 403);
+    const last = (part.bumpedAt ?? part.createdAt).getTime();
+    const wait = hosting ? 0 : Math.ceil((last + game.repitchMinutes * 60_000 - now().getTime()) / 1000);
+    if (wait > 0) return c.json({ code: "TooSoon", message: `You can pitch it again in ${Math.ceil(wait / 60)} min`, wait }, 429);
+    db.update(posts).set({ bumpedAt: now() }).where(eq(posts.id, part.id)).run();
     postsChanged(id);
     return c.body(null, 204);
   });
@@ -1492,16 +1603,24 @@ export function createServer({
     const game = load(id);
     if (!game) return c.json({ error: "Game not found" }, 404);
     if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can change this Game" }, 403);
-    const { name, turnSeconds, rosterMode, approveNames } = body.data;
+    const { name, turnSeconds, rosterMode, approveNames, postsPerMinute, repitchMinutes } = body.data;
     const set = {
+      ...(postsPerMinute !== undefined ? { postsPerMinute } : {}),
+      ...(repitchMinutes !== undefined ? { repitchMinutes } : {}),
       ...(approveNames !== undefined ? { approveNames } : {}),
       ...(name !== undefined ? { name } : {}),
       ...(turnSeconds !== undefined ? { turnSeconds } : {}),
       ...(rosterMode !== undefined ? { rosterMode } : {}),
     };
     if (Object.keys(set).length > 0) db.update(games).set(set).where(eq(games.id, id)).run();
-    const was = { turnSeconds: game.turnSeconds, rosterMode: game.rosterMode, approveNames: game.approveNames };
-    for (const [option, value] of Object.entries({ turnSeconds, rosterMode, approveNames }))
+    const was = {
+      turnSeconds: game.turnSeconds,
+      rosterMode: game.rosterMode,
+      approveNames: game.approveNames,
+      postsPerMinute: game.postsPerMinute,
+      repitchMinutes: game.repitchMinutes,
+    };
+    for (const [option, value] of Object.entries({ turnSeconds, rosterMode, approveNames, postsPerMinute, repitchMinutes }))
       if (value !== undefined && value !== was[option as keyof typeof was]) stats.optionChanged(id, option);
     return c.json(publish(id, { ...game, ...set }));
   });

@@ -163,6 +163,7 @@ function Posting({ game }: { game: GameView }) {
           </label>
         ))}
       </fieldset>
+      <FeedLimits game={game} />
       <p className="album">
         <a href={`/api/games/${encodeURIComponent(game.id)}/album.zip`} download>
           Download all the Photos
@@ -170,6 +171,74 @@ function Posting({ game }: { game: GameView }) {
         <span className="muted hint">(a .zip). Photos are deleted 60 days after the Game's last move, so keep a copy.</span>
       </p>
     </section>
+  );
+}
+
+/**
+ * Against flooding the Feed: how many Posts a guest may make in a minute, and how often a holder may send their
+ * Gift's pitch to the top of the Feed again. The Host and Co-hosts are never held back.
+ */
+function FeedLimits({ game }: { game: GameView }) {
+  const api = useApi();
+  const [perMinute, setPerMinute] = useState(String(game.postsPerMinute));
+  const [repitch, setRepitch] = useState(String(game.repitchMinutes));
+  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "failed">("idle");
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setStatus("saving");
+    const saved = await api.setGameOptions(game.id, { postsPerMinute: Number(perMinute), repitchMinutes: Number(repitch) });
+    setStatus(saved ? "saved" : "failed");
+  }
+
+  return (
+    <form className="stack feed-limits" aria-label="Feed limits" onSubmit={save}>
+      <label htmlFor="posts-per-minute">Most Posts a guest can make in a minute</label>
+      <input
+        id="posts-per-minute"
+        type="number"
+        inputMode="numeric"
+        min={0}
+        max={60}
+        required
+        aria-describedby="posts-per-minute-hint"
+        value={perMinute}
+        onChange={(e) => (setPerMinute(e.target.value), setStatus("idle"))}
+      />
+      <p id="posts-per-minute-hint" className="muted hint">
+        A few quick replies are fine; this stops anyone flooding the Feed. You and your Co-hosts aren't limited. 0 for no
+        limit.
+      </p>
+      <label htmlFor="repitch-minutes">Minutes before a holder can pitch their Gift again</label>
+      <input
+        id="repitch-minutes"
+        type="number"
+        inputMode="numeric"
+        min={0}
+        max={120}
+        required
+        aria-describedby="repitch-minutes-hint"
+        value={repitch}
+        onChange={(e) => (setRepitch(e.target.value), setStatus("idle"))}
+      />
+      <p id="repitch-minutes-hint" className="muted hint">
+        "Pitch it again" sends a holder's pitch back to the top of the Feed. This keeps the same ad from bombarding
+        everyone. 0 for no wait.
+      </p>
+      <button type="submit" className="secondary" disabled={status === "saving"}>
+        Save Feed limits
+      </button>
+      {status === "saved" && (
+        <p className="muted" role="status">
+          Saved.
+        </p>
+      )}
+      {status === "failed" && (
+        <p className="error" role="alert">
+          That didn't save. Please try again.
+        </p>
+      )}
+    </form>
   );
 }
 

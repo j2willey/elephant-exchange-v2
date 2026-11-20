@@ -65,6 +65,8 @@ export const gameOptionsEdit = z.object({
   turnSeconds: turnSeconds.optional(),
   rosterMode: rosterMode.optional(),
   approveNames: z.boolean().optional(),
+  postsPerMinute: z.int().min(0).max(60).optional(),
+  repitchMinutes: z.int().min(0).max(120).optional(),
 });
 
 export const gameThemeEdit = z.object({ color: themeColor, page: themeColor });
@@ -93,7 +95,15 @@ export const reactionBody = z.object({ emoji: z.enum(REACTIONS), on: z.boolean()
 export const postStatusBody = z.object({ status: z.enum(["visible", "hidden"]), thread: z.boolean().optional() });
 /** Says which Gift a Post is about, after posting; null for none. */
 /** A part of a Gift's Pitch: empty text removes it. `playerId`: whose part (a Host writing for a holder). */
-export const pitchBody = z.object({ text: z.string().trim().max(500), playerId: id.optional() });
+export const pitchBody = z.object({
+  tagline: z.string().trim().max(80).default(""),
+  text: z.string().trim().max(500).default(""),
+  playerId: id.optional(),
+  /** Takes the part's Photo off. */
+  removePhoto: z.boolean().default(false),
+});
+/** "Pitch it again": whose part (a Host may send any holder's). */
+export const repitchBody = z.object({ playerId: id.optional() });
 export const postGiftBody = z.object({ giftId: z.string().min(1).max(64).nullable() });
 /** Mutes or unmutes whoever wrote a Post; muting may hide all their Posts too, which unmuting brings back. */
 export const muteBody = z.object({ postId: z.string().min(1).max(64), muted: z.boolean(), hidePosts: z.boolean().optional() });
