@@ -1,7 +1,9 @@
 import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router";
+import type { Api, Emoji } from "./api.js";
 import { useApi } from "./ApiContext.js";
+import giftTable from "./assets/demo-gift-table.webp";
 import { useLiveGame } from "./useLiveGame.js";
 
 /** Made-up Players for a demo Game: enough for the largest demo, all different. */
@@ -38,9 +40,13 @@ export function DemoGame({ startOpen = false }: { startOpen?: boolean }) {
     setBusy(true);
     try {
       const id = await api.createGame({ name: "Demo game", options: { ...RECOMMENDED_OPTIONS, rosterMode: "self" }, demo: true });
+      const playerIds: string[] = [];
       for (const name of shuffled(demoNames).slice(0, Number(players))) {
-        await api.command(id, { type: "AddPlayer", playerId: crypto.randomUUID(), name });
+        const playerId = crypto.randomUUID();
+        await api.command(id, { type: "AddPlayer", playerId, name });
+        playerIds.push(playerId);
       }
+      await chatter(api, id, playerIds);
       // On a screen wide enough for it, the demo page shows the Host console, the scoreboard and a phone together.
       navigate(window.matchMedia?.(WIDE_ENOUGH).matches ? `/games/${id}/demo` : `/games/${id}`);
     } catch {
@@ -74,6 +80,43 @@ export function DemoGame({ startOpen = false }: { startOpen?: boolean }) {
       </button>
     </form>
   );
+}
+
+/**
+ * What a demo's guests have said before it starts, so its Feed isn't empty: a Photo of the gift table, a joke, a
+ * reply and some Reactions. The sample phone (the first Player's) then shows new Posts on its Feed tab, and the
+ * scoreboard has some to show. Only a nice-to-have: whatever doesn't work is left out, and the demo goes on.
+ */
+async function chatter(api: Api, gameId: string, playerIds: string[]) {
+  const guests = playerIds.slice(1); // not the sample phone's own Player, whose new Posts these are
+  if (guests.length === 0) return;
+  const guest = (i: number) => api.as(guests[i % guests.length]!);
+  const photo = await fetch(giftTable)
+    .then((res) => (res.ok ? res.arrayBuffer() : Promise.reject(new Error(`${res.status}`))))
+    .then((bytes) => new Blob([bytes], { type: "image/webp" }))
+    .catch(() => undefined);
+  /** Says it as that guest, and finds the new Post (the server doesn't say which it is). */
+  const say = async (i: number, text: string, more: { photo?: Blob; replyTo?: string } = {}) => {
+    if ((await guest(i).post(gameId, { text, ...more }).catch(() => "failed")) !== "posted") return undefined;
+    const theirs = (await guest(i).posts(gameId).catch(() => [])).filter((p) => p.mine && p.text === text);
+    return theirs.at(-1)?.id;
+  };
+  const react = (i: number, postId: string | undefined, emoji: Emoji) => postId && guest(i).react(gameId, postId, emoji, true).catch(() => false);
+
+  try {
+    const table = await say(0, "The gift table is getting serious 👀", photo ? { photo } : {});
+    await react(1, table, "😂");
+    await react(2, table, "🔥");
+    const tape = await say(1, "Whoever wrapped a box in duct tape: respect.");
+    await react(2, tape, "😂");
+    await react(3, tape, "😂");
+    const mine = await say(2, "That's mine. Good luck getting into it 😈", tape ? { replyTo: tape } : {});
+    await react(0, mine, "😂");
+    const snowman = await say(3, "Fair warning: I'm stealing anything with a snowman on it ⛄");
+    await react(0, snowman, "🎉");
+  } catch {
+    // The demo works without it.
+  }
 }
 
 /** Wide enough for the demo page's console beside its sample phone. */
@@ -134,6 +177,9 @@ export function DemoPage() {
             </select>
             {/* A new frame for each Player: the phone starts afresh, as theirs. */}
             <iframe key={phonePlayer.id} title={`${phonePlayer.name}'s phone`} src={`/games/${id}?demoPlayer=${encodeURIComponent(phonePlayer.id)}`} />
+            <p className="muted hint">
+              Try the 💬 Feed: post a Photo and watch it land on the big screen. Or add a Photo to a Gift once it's opened.
+            </p>
           </>
         ) : (
           <p className="muted">Add a player to see their phone.</p>

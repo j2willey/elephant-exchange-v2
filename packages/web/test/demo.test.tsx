@@ -1,7 +1,9 @@
 import { RECOMMENDED_OPTIONS } from "@elephant/rules";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { openApp, startServer } from "./harness.js";
 
 const rosterNames = () => within(screen.getByRole("list", { name: /players/i })).getAllByRole("listitem").map((li) => li.querySelector("[data-name]")?.textContent);
@@ -91,5 +93,59 @@ describe("A demo page's sample phone", () => {
     await user.click(await screen.findByRole("tab", { name: /feed/i }));
     expect(await screen.findByText("Hello from Ann")).toBeInTheDocument();
     expect(screen.getAllByText("Ann").length).toBeGreaterThan(0);
+  });
+});
+
+/** The demo's gift-table Photo, as the browser would fetch it from the build; anything else goes on to the server. */
+function giftTablePhotoServed() {
+  const real = globalThis.fetch;
+  const bytes = readFileSync(join(import.meta.dirname, "../src/assets/demo-gift-table.webp"));
+  vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) =>
+    String(input).includes("demo-gift-table") ? Promise.resolve(new Response(bytes, { headers: { "content-type": "image/webp" } })) : real(input, init),
+  );
+}
+afterEach(() => vi.unstubAllGlobals());
+
+/** Creates a demo with this many made-up Players, from the home screen, as a Host would. */
+async function demoWith(count: number) {
+  const server = await startServer();
+  const host = await server.signedIn("host@example.com");
+  openApp(host);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: /try a demo game/i }));
+  await user.clear(screen.getByLabelText(/how many players/i));
+  await user.type(screen.getByLabelText(/how many players/i), String(count));
+  await user.click(screen.getByRole("button", { name: /create demo game/i }));
+  await screen.findByRole("button", { name: /start game/i });
+  const id = (await host.myGames())[0]!.id;
+  return { host, id, game: (await host.game(id))! };
+}
+
+describe("A new demo's Feed", () => {
+  it("already has what the guests said: a Photo of the gift table, a joke, a reply and Reactions", async () => {
+    giftTablePhotoServed();
+    const { host, id, game } = await demoWith(6);
+
+    const posts = await host.posts(id);
+    expect(posts.map((p) => p.text)).toEqual(
+      expect.arrayContaining([
+        "The gift table is getting serious 👀",
+        "Whoever wrapped a box in duct tape: respect.",
+        "That's mine. Good luck getting into it 😈",
+        "Fair warning: I'm stealing anything with a snowman on it ⛄",
+      ]),
+    );
+    expect(posts.find((p) => p.text.startsWith("The gift table"))!.photo).not.toBeNull();
+    expect(posts.find((p) => p.text.startsWith("That's mine"))!.replyTo).toMatchObject({ author: expect.any(String) });
+    expect(posts.flatMap((p) => p.reactions).length).toBeGreaterThan(0);
+    // None from the sample phone's own Player, so all of it is new to that phone.
+    expect(posts.map((p) => p.author)).not.toContain(game.players[0]!.name);
+  });
+
+  it("does without the Photo if it won't load, and still makes the demo", async () => {
+    const { host, id } = await demoWith(2);
+    const posts = await host.posts(id);
+    expect(posts.length).toBeGreaterThan(0);
+    expect(posts.every((p) => p.photo === null)).toBe(true);
   });
 });

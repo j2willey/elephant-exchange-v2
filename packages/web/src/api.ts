@@ -428,6 +428,7 @@ function browserStorage(): DeviceStorage {
 /** Talks to the server. Screens use this, never fetch directly, so tests can hand in a browser with a cookie jar. */
 export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, init), options: ApiOptions = {}) {
   const { demoPlayer } = options;
+  const ownFetch = fetchFn; // before any demo Player is added, for `as`
   if (demoPlayer !== undefined) {
     // The demo page's sample phone: every request says which made-up Player it is; the server checks it may be.
     const plain = fetchFn;
@@ -477,6 +478,15 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
   return {
     /** This device's clock. */
     now,
+
+    /**
+     * This same browser acting as one of its demo Game's made-up Players, as the demo page's sample phone does: for
+     * the Host to fill a new demo with what its guests might say (see Demo.tsx).
+     */
+    as(playerId: string): DemoActor {
+      const { build: _ours, ...rest } = options; // the page itself watches for a new build
+      return createApi(ownFetch, { ...rest, demoPlayer: playerId });
+    },
 
     /** The newer build the server has, once an answer shows this page is out of date; null until then. */
     newBuild: () => newBuild,
@@ -975,3 +985,9 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
 }
 
 export type Api = ReturnType<typeof createApi>;
+/** What a demo Game's made-up Player can do, through `Api.as`. */
+export interface DemoActor {
+  post: Api["post"];
+  posts: Api["posts"];
+  react: Api["react"];
+}
