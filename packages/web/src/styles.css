@@ -1498,7 +1498,8 @@ label.check input {
 
 .lc-gifts li {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  /* The Gift's Photo and Post count, its name, who holds it, its steals; Select gift goes on a row of its own. */
+  grid-template-columns: 56px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 4px 16px;
   padding: 12px 4px;
@@ -2307,4 +2308,29 @@ a.button.secondary-button {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+/* In the Gift Tracker: a small thumbnail over the Post count, in a column of their own. */
+.lc-gift-media {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.lc-gifts li .lc-gift-media button {
+  grid-column: auto;
+  justify-self: auto;
+  min-height: 0;
+  padding: 0;
+}
+.lc-gifts li .lc-gift-media .gift-count {
+  padding: 2px 8px;
+  font-size: 0.85rem;
+}
+.lc-gift-photo {
+  display: block;
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 6px;
 }

@@ -1,4 +1,5 @@
 import { RenameButton } from "./Rename.js";
+import { GiftMedia } from "./GiftPosts.js";
 import { StaffMark } from "./Cohosts.js";
 import { useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router";
@@ -95,6 +96,7 @@ export function LaptopConsole({
           const takeable = stealing !== null && g.holderId !== stealing && !g.frozen;
           return (
             <li key={g.id} aria-label={g.name}>
+              <GiftMedia giftName={g.name} posts={posts.filter((p) => p.giftId === g.id && p.status === "visible")} />
               <span className="lc-gift-name">
                 <strong>{g.name}</strong>
                 {g.frozen && <span className="badge">Frozen</span>}

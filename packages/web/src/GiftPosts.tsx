@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Post } from "./api.js";
 import { PostPhoto } from "./Feed.js";
 
@@ -27,7 +28,8 @@ export function GiftPostsViewer({ giftName, posts, onClose }: { giftName: string
   }, [onClose, last]);
 
   if (!post) return null;
-  return (
+  // On the page itself, not inside the list that opened it, so it takes none of that list's styles.
+  return createPortal(
     <div className="viewer-backdrop" onClick={onClose}>
       <div
         className="viewer card"
@@ -67,6 +69,31 @@ export function GiftPostsViewer({ giftName, posts, onClose }: { giftName: string
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
+  );
+}
+
+/**
+ * For the laptop's Gift Tracker: a Gift's newest Photo as a small thumbnail and how many Posts are about it, either
+ * of which opens them all. Nothing when there are none.
+ */
+export function GiftMedia({ giftName, posts }: { giftName: string; posts: Post[] }) {
+  const [open, setOpen] = useState(false);
+  const photo = posts.find((p) => p.photo);
+  if (posts.length === 0) return <span className="lc-gift-media" />;
+  const label = posts.length === 1 ? `See the post about ${giftName}` : `See all ${posts.length} posts about ${giftName}`;
+  return (
+    <span className="lc-gift-media">
+      {photo && (
+        <button type="button" className="gift-thumb" aria-label={`Photos of ${giftName}`} onClick={() => setOpen(true)}>
+          <PostPhoto post={photo} className="lc-gift-photo" />
+        </button>
+      )}
+      <button type="button" className="secondary gift-count" aria-label={label} onClick={() => setOpen(true)}>
+        📷 {posts.length}
+      </button>
+      {open && <GiftPostsViewer giftName={giftName} posts={posts} onClose={() => setOpen(false)} />}
+    </span>
   );
 }
