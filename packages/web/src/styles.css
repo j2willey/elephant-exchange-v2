@@ -1791,12 +1791,51 @@ a.button {
   max-width: 44rem;
 }
 
-/* The front page's opening: the tagline big, then a line on what it does, the ways in, and the scoreboard. */
+/*
+ * Behind the front page, the party it's for: fixed while the page scrolls past, softened and faded so the solid
+ * cards over it stay easy to read. On a laptop it fills the sides; on a phone it shows above and below.
+ */
+.landing-backdrop {
+  position: fixed;
+  inset: -12px; /* the blur's soft edge falls off-screen */
+  z-index: -1;
+  background-size: cover;
+  background-position: center 30%;
+  filter: blur(3px) saturate(1.1);
+}
+
+.landing-backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(color-mix(in srgb, var(--page) 55%, transparent), color-mix(in srgb, var(--page) 78%, transparent));
+}
+
+/* The brand and Sign out, over the photo. */
+.page:has(.landing) > .top-bar {
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+}
+
+/* The front page's opening, on a card: the party, the tagline big, a line on what it does, the ways in, and the scoreboard. */
 .landing-hero {
   display: grid;
   gap: 14px;
-  padding: 8px 0 4px;
+  padding: 0 16px 20px;
+  overflow: hidden;
   text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 36px rgb(0 0 0 / 18%);
+}
+
+.landing-party {
+  display: block;
+  width: calc(100% + 32px);
+  height: auto;
+  margin: 0 -16px 6px;
 }
 
 .landing-tagline {
@@ -1886,6 +1925,19 @@ a.button.secondary-button {
 
 .landing-privacy {
   text-align: center;
+}
+
+/* Words straight on the party photo: a soft glow for the titles; the small print gets a pale backing. */
+.landing-section-title {
+  text-shadow: 0 0 6px var(--page), 0 0 14px var(--page), 0 0 24px var(--page);
+}
+
+.landing .landing-privacy {
+  justify-self: center;
+  max-width: 44rem;
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
 }
 
 .landing-points,
