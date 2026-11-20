@@ -83,6 +83,7 @@ export function Feed({
             {p.status === "hidden" && <p className="badge">Hidden</p>}
             {p.text && <p className="post-text">{p.text}</p>}
             {p.photo && <PostPhoto post={p} />}
+            {(p.mine || hosting) && game.gifts.length > 0 && <AttachToGift game={game} post={p} onDone={reload} />}
             {p.status === "visible" && (
               <div className="post-actions">
                 <Reactions gameId={game.id} post={p} reload={reload} />
@@ -473,6 +474,67 @@ function MuteButton({ gameId, post, onDone }: { gameId: string; post: Post; onDo
           Cancel
         </button>
       </div>
+    </form>
+  );
+}
+
+/**
+ * For a Post's poster, and the Host and Co-hosts: says which Gift it's about after posting (a great photo whose
+ * poster didn't pick the Gift), so it shows under that Gift; or takes it off.
+ */
+function AttachToGift({ game, post, onDone }: { game: GameView; post: Post; onDone: () => void }) {
+  const api = useApi();
+  const ids = useId();
+  const [open, setOpen] = useState(false);
+  const [giftId, setGiftId] = useState(post.giftId ?? "");
+  const [error, setError] = useState<string | null>(null);
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    if (await api.setPostGift(game.id, post.id, giftId || null)) {
+      setOpen(false);
+      setError(null);
+      onDone();
+    } else {
+      setError("That didn't work. Please try again.");
+    }
+  }
+
+  if (!open)
+    return (
+      <button
+        type="button"
+        className="link"
+        onClick={() => {
+          setGiftId(post.giftId ?? "");
+          setOpen(true);
+        }}
+      >
+        🎁 {post.giftId ? "Change gift" : "Attach to a gift"}
+      </button>
+    );
+  return (
+    <form className="stack reply-form" aria-label="Which gift is this about?" onSubmit={save}>
+      <label htmlFor={`${ids}-gift`}>Which gift is this about?</label>
+      <select id={`${ids}-gift`} value={giftId} onChange={(e) => setGiftId(e.target.value)}>
+        <option value="">None, just the Feed</option>
+        {game.gifts.map((g) => (
+          <option key={g.id} value={g.id}>
+            {g.name}
+          </option>
+        ))}
+      </select>
+      <div className="inline">
+        <button type="submit">Save</button>
+        <button type="button" className="secondary" onClick={() => setOpen(false)}>
+          Cancel
+        </button>
+      </div>
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
     </form>
   );
 }

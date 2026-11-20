@@ -679,6 +679,12 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
     },
 
     /** Approves a Pending Post or shows a Hidden one again ("visible"), or hides it. */
+    /** Says which Gift a Post is about after posting (null for none): for its poster, the Host and Co-hosts. */
+    async setPostGift(gameId: string, postId: string, giftId: string | null): Promise<boolean> {
+      const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/posts/${encodeURIComponent(postId)}/gift`, { giftId });
+      return res.status === 204;
+    },
+
     /** Mutes or unmutes whoever wrote a Post; muting can hide all their Posts too, which unmuting brings back. */
     async mute(gameId: string, postId: string, muted: boolean, hidePosts = false): Promise<boolean> {
       return (await postJson(`/api/games/${encodeURIComponent(gameId)}/mute`, { postId, muted, ...(hidePosts ? { hidePosts } : {}) })).status === 204;

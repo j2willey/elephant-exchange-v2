@@ -75,6 +75,7 @@ import {
   renameBody,
   approveNameBody,
   muteBody,
+  postGiftBody,
 } from "./schemas.js";
 
 export type { Mailer } from "./auth.js";
@@ -1547,6 +1548,35 @@ export function createServer({
           .where(and(eq(posts.gameId, id), inArray(posts.id, replies)))
           .run();
     });
+    postsChanged(id);
+    return c.body(null, 204);
+  });
+
+  /**
+   * Attaches a Post to a Gift after it was posted (a great photo whose poster didn't pick the Gift), or takes it off.
+   * For its poster, and the Host and Co-hosts.
+   */
+  app.post("/api/games/:id/posts/:postId/gift", async (c) => {
+    const { id, postId } = c.req.param();
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const body = await parseBody(c, postGiftBody);
+    if (!body.ok) return body.res;
+    const game = load(id);
+    if (!game) return c.json({ error: "Game not found" }, 404);
+    const row = db
+      .select({ email: posts.email })
+      .from(posts)
+      .where(and(eq(posts.gameId, id), eq(posts.id, postId)))
+      .get();
+    if (!row) return c.json({ error: "Post not found" }, 404);
+    if (row.email !== email && !roleIn(id, email)) return c.json({ error: "Only its poster, the Host and Co-hosts can change this Post" }, 403);
+    const { giftId } = body.data;
+    if (giftId !== null && !gifts(game.state).some((g) => g.id === giftId)) return c.json({ error: "No such Gift in this Game" }, 400);
+    db.update(posts)
+      .set({ giftId })
+      .where(and(eq(posts.gameId, id), eq(posts.id, postId)))
+      .run();
     postsChanged(id);
     return c.body(null, 204);
   });

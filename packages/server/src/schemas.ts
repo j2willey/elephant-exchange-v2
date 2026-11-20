@@ -68,6 +68,8 @@ export const REACTIONS = ["👍", "❤️", "😂", "🎉", "🔥", "😮", "⛄
 export const reactionBody = z.object({ emoji: z.enum(REACTIONS), on: z.boolean() });
 /** Hides a Post (with every reply under it, if `thread`) or shows it again (with whatever was hidden with it). */
 export const postStatusBody = z.object({ status: z.enum(["visible", "hidden"]), thread: z.boolean().optional() });
+/** Says which Gift a Post is about, after posting; null for none. */
+export const postGiftBody = z.object({ giftId: z.string().min(1).max(64).nullable() });
 /** Mutes or unmutes whoever wrote a Post; muting may hide all their Posts too, which unmuting brings back. */
 export const muteBody = z.object({ postId: z.string().min(1).max(64), muted: z.boolean(), hidePosts: z.boolean().optional() });
 
