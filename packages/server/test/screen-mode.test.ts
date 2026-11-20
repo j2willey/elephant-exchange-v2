@@ -11,13 +11,28 @@ async function aGame() {
   const game = async () => (await (await app.request(`/api/games/${id}`)).json()) as { screen: string };
   const setScreen = (cookie: string | undefined, mode: string, gameId = id) => app.request(`/api/games/${gameId}/screen`, post({ mode }, cookie));
   const as = (email: string) => signIn(app, sent, email);
-  return { id, host, game, setScreen, as };
+  return { app, id, host, game, setScreen, as };
 }
 
 describe("What the big screen shows", () => {
-  it("is the Gifts until the Host switches it", async () => {
-    const { game } = await aGame();
+  it("is the join code while people arrive, and the Gifts once the Game starts", async () => {
+    const { app, id, host, game } = await aGame();
+    expect((await game()).screen).toBe("qr");
+
+    const run = (cmd: object) => app.request(`/api/games/${id}/commands`, post(cmd, host));
+    for (const name of ["Ann", "Bob"]) await run({ type: "AddPlayer", playerId: name.toLowerCase(), name });
+    expect((await game()).screen).toBe("qr");
+    expect((await run({ type: "StartGame" })).status).toBe(200);
     expect((await game()).screen).toBe("gifts");
+  });
+
+  it("stays on what the Host chose before the start, such as the rules to read out", async () => {
+    const { app, id, host, game, setScreen } = await aGame();
+    await setScreen(host, "rules");
+    const run = (cmd: object) => app.request(`/api/games/${id}/commands`, post(cmd, host));
+    for (const name of ["Ann", "Bob"]) await run({ type: "AddPlayer", playerId: name.toLowerCase(), name });
+    await run({ type: "StartGame" });
+    expect((await game()).screen).toBe("rules");
   });
 
   it("switches to the rules, the join code, the catalog and back, for everyone watching", async () => {
@@ -32,7 +47,7 @@ describe("What the big screen shows", () => {
     const { game, setScreen, as } = await aGame();
     expect((await setScreen(undefined, "rules")).status).toBe(401);
     expect((await setScreen(await as("gus@example.com"), "rules")).status).toBe(403);
-    expect((await game()).screen).toBe("gifts");
+    expect((await game()).screen).toBe("qr");
   });
 
   it("takes only the modes there are, for a Game that exists", async () => {

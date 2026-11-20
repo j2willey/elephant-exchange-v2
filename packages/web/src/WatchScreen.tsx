@@ -31,7 +31,7 @@ export function WatchScreen() {
       {game.screen === "rules" ? (
         <Rules game={game} />
       ) : game.screen === "qr" ? (
-        <Join gameId={game.id} big />
+        <Join gameId={game.id} big waiting={game.phase === "setup" ? players : undefined} />
       ) : game.screen === "catalog" ? (
         <Catalog game={game} posts={posts} />
       ) : (
@@ -473,7 +473,8 @@ function LatestPosts({ game, posts }: { game: GameView; posts: Post[] }) {
 }
 
 /** The QR code for following along; `big` fills the screen, for when the Host puts it up on its own. */
-function Join({ gameId, big = false }: { gameId: string; big?: boolean }) {
+/** How to join: the QR code and the link. Big, it fills the screen; `waiting` adds how many are in before the start. */
+function Join({ gameId, big = false, waiting }: { gameId: string; big?: boolean; waiting?: number | undefined }) {
   const url = `${window.location.origin}/games/${gameId}`;
   const qr = useMemo(() => `data:image/svg+xml;utf8,${encodeURIComponent(renderSVG(url, { border: 2 }))}`, [url]);
   return (
@@ -482,6 +483,11 @@ function Join({ gameId, big = false }: { gameId: string; big?: boolean }) {
       <div>
         <p className="label">Follow along on your phone</p>
         <p className="url">{url}</p>
+        {waiting !== undefined && (
+          <p className="join-waiting" aria-live="polite">
+            Waiting for the Host to start · {waiting} {waiting === 1 ? "player" : "players"} so far
+          </p>
+        )}
       </div>
     </section>
   );

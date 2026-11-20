@@ -470,6 +470,10 @@ export function createServer({
     if (!Array.isArray(result)) return result;
     const at = now();
     const state = result.reduce(evolve, game.state);
+    // The join code has done its job once the Game starts: the big screen turns to the Gifts. Anything else the
+    // Host chose for it (the rules, read out at the start) stays.
+    const started = game.state.phase === "setup" && state.phase !== "setup";
+    const screen = started && game.screen === "qr" ? ("gifts" as const) : game.screen;
     // A Player's clock starts when they're called up (a Victim's too) and goes once they're no longer up.
     const clocks = new Map<string, number>();
     for (const playerId of activePlayers(state)) clocks.set(playerId, game.clocks.get(playerId) ?? at.getTime());
@@ -479,9 +483,10 @@ export function createServer({
       });
       tx.delete(turnClocks).where(eq(turnClocks.gameId, id)).run();
       for (const [playerId, ms] of clocks) tx.insert(turnClocks).values({ gameId: id, playerId, startedAt: new Date(ms) }).run();
+      if (screen !== game.screen) tx.update(games).set({ screenMode: screen }).where(eq(games.id, id)).run();
       alsoWrite?.(tx);
     });
-    return publish(id, { ...game, clocks, state, seq: game.seq + result.length });
+    return publish(id, { ...game, clocks, state, screen, seq: game.seq + result.length });
   }
 
   /** Tells every screen watching that the Feed changed. Each asks for it again, since each may see different Posts. */
@@ -728,6 +733,8 @@ export function createServer({
           orgId: orgId ?? null,
           demo: body.data.demo,
           settings: JSON.stringify(settings),
+          // While people arrive, the big screen shows how to join; it turns to the Gifts at the start (see run).
+          screenMode: "qr",
           createdAt: now(),
         })
         .run();

@@ -117,6 +117,21 @@ describe("The watch screen", () => {
     expect(await screen.findByText(/2 players/i)).toBeInTheDocument();
   });
 
+  it("shows the QR code while people arrive, and turns to the Gifts when the Host starts", async () => {
+    const { origin, signedIn } = await startServer();
+    const host = await signedIn("host@example.com");
+    const id = await host.createGame({ options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
+    openApp(browser(origin), `/games/${id}/screen`);
+    expect(await screen.findByRole("img", { name: /qr code to join/i })).toBeInTheDocument();
+    expect(screen.queryByText(/up now/i)).not.toBeInTheDocument(); // not the Gift board yet
+
+    for (const name of ["Ann", "Bob"]) await host.command(id, { type: "AddPlayer", playerId: name.toLowerCase(), name });
+    await host.command(id, { type: "StartGame" });
+
+    await waitFor(() => expect(screen.queryByText(/waiting for the host to start/i)).not.toBeInTheDocument());
+    expect(await screen.findByText(/up now/i)).toBeInTheDocument();
+  });
+
   it("says so for a Game that doesn't exist", async () => {
     const { origin } = await startServer();
     openApp(browser(origin), "/games/nope/screen");

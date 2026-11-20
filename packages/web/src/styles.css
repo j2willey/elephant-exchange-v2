@@ -1671,6 +1671,18 @@ label.check input {
   font-size: 1.2em;
 }
 
+.join-waiting {
+  margin: 12px 0 0;
+  font-size: 1.3em;
+  font-weight: 700;
+  color: var(--brand-text);
+}
+
+/* Room for the line under it. */
+.join.join-big:has(.join-waiting) img {
+  width: min(52vh, 80vw);
+}
+
 /* The catalog: a card per Gift with its Photo, filling the window and scrolling itself like the board. */
 .catalog-scroll {
   min-height: 0;
