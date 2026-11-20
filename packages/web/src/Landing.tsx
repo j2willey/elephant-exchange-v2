@@ -442,7 +442,7 @@ export function Playbook() {
             name until you lock it.
           </li>
           <li>
-            Nobody can flood the Feed: a guest can make 5 Posts a minute, and pitch a Gift again every 5 minutes. You can
+            Nobody can flood the Feed: a guest can make 3 Posts a minute, and pitch a Gift again every 5 minutes. You can
             change both in Settings.
           </li>
           <li>

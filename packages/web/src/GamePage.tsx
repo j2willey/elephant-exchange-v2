@@ -273,6 +273,7 @@ function GuestView({
   players: ReactNode;
 }) {
   const [tab, setTab] = useState<GuestTab>("gifts");
+  const unread = useUnreadPosts(game.id, posts, tab === "feed");
   // A Gift to show once the Gifts tab is up: from "about Mug" in the Feed.
   const [showing, setShowing] = useState<string | null>(null);
   useEffect(() => {
@@ -395,6 +396,7 @@ function GuestView({
             aria-selected={tab === t.id}
             aria-controls={`panel-${t.id}`}
             className={t.id === "you" && myTurn ? "alert" : undefined}
+            aria-label={t.id === "feed" && unread > 0 ? `${t.label}, ${unread} new` : undefined}
             onClick={() => {
               setTab(t.id);
               window.scrollTo?.(0, 0);
@@ -402,11 +404,47 @@ function GuestView({
           >
             <span aria-hidden="true">{t.icon}</span>
             {t.label}
+            {t.id === "feed" && unread > 0 && (
+              <span className="tab-badge" aria-hidden="true">
+                {unread > 9 ? "9+" : unread}
+              </span>
+            )}
           </button>
         ))}
       </nav>
     </div>
   );
+}
+
+/** When a Post last reached the top of the Feed: when posted, or when its Pitch was sent again. */
+const postedAt = (p: Post) => p.bumpedAt ?? p.createdAt;
+
+/**
+ * How many Posts others made since this phone last had the Feed open: the bubble on the Feed tab, so a guest who's
+ * busy on the Gifts sees the Feed is lively without anything pushed in front of them. Remembered per Game on this
+ * phone (a reload doesn't reset it); a Pitch sent to the top again counts as new.
+ */
+function useUnreadPosts(gameId: string, posts: Post[], looking: boolean): number {
+  const key = `ee-feed-seen-${gameId}`;
+  const [seen, setSeen] = useState<number>(() => {
+    try {
+      return Number(localStorage.getItem(key)) || 0;
+    } catch {
+      return 0;
+    }
+  });
+  const newest = posts.reduce((n, p) => Math.max(n, postedAt(p)), 0);
+  useEffect(() => {
+    if (!looking || newest <= seen) return;
+    setSeen(newest);
+    try {
+      localStorage.setItem(key, String(newest));
+    } catch {
+      // private browsing: it's just forgotten on reload
+    }
+  }, [looking, newest, seen, key]);
+  if (looking) return 0;
+  return posts.filter((p) => p.status === "visible" && !p.mine && postedAt(p) > seen).length;
 }
 
 /**

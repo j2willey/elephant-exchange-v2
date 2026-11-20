@@ -18,7 +18,7 @@ export const games = sqliteTable("games", {
   /** How long each Turn's countdown runs, as a guide for the Host; 0 shows no timer. Nobody is ever skipped by it. */
   turnSeconds: integer("turn_seconds").notNull().default(60),
   /** Against flooding the Feed: the most Posts a guest may make in a minute (the Host and Co-hosts aren't limited); 0 for no limit. */
-  postsPerMinute: integer("posts_per_minute").notNull().default(5),
+  postsPerMinute: integer("posts_per_minute").notNull().default(3),
   /** How long a holder waits before sending their Pitch to the top of the Feed again; 0 for no limit. */
   repitchMinutes: integer("repitch_minutes").notNull().default(5),
   /** The Worst Gift Vote: "none" (not opened yet), "open" or "closed" (results revealed). */

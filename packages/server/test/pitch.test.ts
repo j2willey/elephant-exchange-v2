@@ -194,10 +194,10 @@ describe("Pitching it again", () => {
 });
 
 describe("Flooding the Feed", () => {
-  it("allows a guest 5 Posts a minute, then asks them to wait; the Host is never held back", async () => {
+  it("allows a guest 3 Posts a minute, then asks them to wait; the Host is never held back", async () => {
     const { app, id, host, gus, minutes } = await setup();
     const write = (cookie: string, text: string) => app.request(`/api/games/${id}/posts`, post({ text, name: "Host" }, cookie));
-    for (let i = 0; i < 5; i++) expect((await write(gus.cookie, `Post ${i}`)).status).toBe(201);
+    for (let i = 0; i < 3; i++) expect((await write(gus.cookie, `Post ${i}`)).status).toBe(201);
     const res = await write(gus.cookie, "One more");
     expect(res.status).toBe(429);
     expect(await res.json()).toMatchObject({ code: "TooSoon", wait: 60 });

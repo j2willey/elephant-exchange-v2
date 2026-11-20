@@ -2535,3 +2535,24 @@ button.info {
 .feed-limits {
   margin: 12px 0;
 }
+
+/* New Posts since the Feed was last open: a bubble on the Feed tab's icon. */
+.tabbar button {
+  position: relative;
+}
+
+.tabbar .tab-badge {
+  position: absolute;
+  top: 4px;
+  left: calc(50% + 8px);
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+  color: var(--brand-ink);
+  background: var(--brand);
+  border-radius: 10px;
+}

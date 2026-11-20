@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "0ae01a6c-1131-455f-b470-7e9c9115559a",
+  "id": "7ebac11a-7a56-463d-aa18-d65ba7ecf403",
   "prevId": "a5a80f00-165e-4615-a317-df5c67d76bf9",
   "tables": {
     "app_keys": {
@@ -901,7 +901,7 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": 5
+          "default": 3
         },
         "repitch_minutes": {
           "name": "repitch_minutes",

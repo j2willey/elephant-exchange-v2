@@ -134,7 +134,7 @@ describe("A pitch's tagline, and pitching it again", () => {
     const { host, id, user } = await underway();
     openApp(host, `/games/${id}/settings`);
     const perMinute = await screen.findByLabelText(/most posts a guest can make in a minute/i);
-    expect(perMinute).toHaveValue(5);
+    expect(perMinute).toHaveValue(3);
     expect(screen.getByLabelText(/minutes before a holder can pitch their gift again/i)).toHaveValue(5);
 
     await user.clear(perMinute);
