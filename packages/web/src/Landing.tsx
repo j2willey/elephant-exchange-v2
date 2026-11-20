@@ -46,7 +46,7 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
         <p className="landing-tagline">The White Elephant gift swap that keeps the whole room in the game.</p>
         <p className="landing-lede">
           Run your party's gift exchange from a laptop or a phone. Every opened gift, who has it and how many times it's
-          been stolen goes up on the TV, and everyone follows along on their own phone, with the party's own photo feed
+          been stolen goes up on the big screen (a TV or projector), and everyone follows along on their own phone, with the party's own photo feed
           to post to, reply in and react to.
         </p>
         {ways}
@@ -54,8 +54,8 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
           Going to a party? <a href="#join">Enter your code</a>
         </p>
         <figure className="landing-shot">
-          <img src={scoreboard} width={1280} height={720} alt="The scoreboard on the party's TV: who's up now and on deck, every gift with its holder and steals, the latest posts, and a QR code for guests" />
-          <figcaption className="muted">The scoreboard on the party's TV.</figcaption>
+          <img src={scoreboard} width={1280} height={720} alt="The scoreboard on the party's big screen: who's up now and on deck, every gift with its holder and steals, the latest posts, and a QR code for guests" />
+          <figcaption className="muted">The scoreboard on the party's big screen.</figcaption>
         </figure>
       </section>
 
@@ -76,7 +76,7 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
           <section className="card">
             <h3>⚡ Turns take seconds</h3>
             <p>
-              Every opened gift is on the TV with its holder and how many steals it has left. People decide from their
+              Every opened gift is on the big screen with its holder and how many steals it has left. People decide from their
               seats, and the next name is already on deck.
             </p>
           </section>
@@ -102,7 +102,7 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
           <section className="card">
             <h3>📱 Nothing to install</h3>
             <p>
-              It runs in the browser. Guests scan the QR code on the TV; you run it from a laptop or your phone. Free.
+              It runs in the browser. Guests scan the QR code on the big screen; you run it from a laptop or your phone. Free.
             </p>
           </section>
         </div>
@@ -115,7 +115,7 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
             <strong>Create a Game</strong> and paste in your guest list, or let guests sign themselves up on their phones.
           </li>
           <li>
-            <strong>Put the scoreboard on the TV.</strong> Guests scan its QR code to follow along and post.
+            <strong>Put the scoreboard on the big screen</strong> (a TV or projector). Guests scan its QR code to follow along and post.
           </li>
           <li>
             <strong>Call names, open gifts and make steals</strong> from your console. The room sees it all, live.
@@ -131,7 +131,7 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
 
       <section className="card landing-again" aria-label="Try it">
         <h2>See it in two minutes</h2>
-        <p>The demo sets up a whole party with made-up guests, ready to start. Open gifts, steal, and watch the TV keep up.</p>
+        <p>The demo sets up a whole party with made-up guests, ready to start. Open gifts, steal, and watch the big screen keep up.</p>
         {ways}
       </section>
 
@@ -234,7 +234,7 @@ function OpenGame() {
   return (
     <form className="card stack" aria-label="Open a Game" onSubmit={open}>
       <h2>Going to a party?</h2>
-      <p className="muted">Scan the QR code on the TV, or paste the link your Host sent.</p>
+      <p className="muted">Scan the QR code on the big screen, or paste the link your Host sent.</p>
       <label htmlFor="game-link">Game link or code</label>
       <input id="game-link" autoComplete="off" autoCapitalize="off" spellCheck={false} value={text} onChange={(e) => setText(e.target.value)} />
       <button type="submit" disabled={!id}>
@@ -370,7 +370,7 @@ export function Playbook() {
         </p>
         <div className="tip">
           <strong>Tip:</strong> when someone opens something small or detailed, a gift card or a book, ask them to post a
-          Photo from their phone. It's on the TV in seconds, and nobody at the back has to ask "what is that?"
+          Photo from their phone. It's on the big screen in seconds, and nobody at the back has to ask "what is that?"
         </div>
       </section>
 
@@ -409,7 +409,7 @@ export function Playbook() {
           love), and a photo. When it's stolen, the new holder adds their own part, so the story builds through the
           night. The holder can tap <strong>Pitch it again</strong> to send their ad back to the top of the Feed, every 5
           minutes at most so nobody bombards it. You or a Co-host can pitch for a guest without a phone. Read the best
-          ones aloud; the TV's catalog shows the newest part of each.
+          ones aloud; the big screen's catalog shows the newest part of each.
         </p>
         <p>
           <strong>The Steal limit.</strong> A Gift is Frozen by the Steal that reaches the limit, and the Player who made
@@ -428,7 +428,7 @@ export function Playbook() {
       <section className="card">
         <h3>📸 The party Feed</h3>
         <p>
-          The Feed is the party's own social stream, on every phone and the TV. Guests post a few words, a Photo or both,
+          The Feed is the party's own social stream, on every phone and the big screen. Guests post a few words, a Photo or both,
           reply to each other's posts and react with friendly emoji: 👍 ❤️ 😂 🎉 🔥 😮, a ⛄ snowman and, of course, the leg
           lamp. Only friendly ones, to keep it in good spirits.
         </p>
@@ -440,7 +440,7 @@ export function Playbook() {
         </p>
         <p>
           <strong>Get the Feed going.</strong> When you open the Game, tell the room:{" "}
-          <em>"Post a photo from your phone, and it goes up on the TV."</em> Then post the first one yourself, a selfie
+          <em>"Post a photo from your phone, and it goes up on the big screen."</em> Then post the first one yourself, a selfie
           with the Gift pile works. Once people see their own photo on the big screen, the rest follow. Guests browsing
           the Gifts see a little bubble on the 💬 Feed tab counting the new Posts, so nobody misses the fun.
         </p>
@@ -474,10 +474,10 @@ export function Playbook() {
         <p>
           Every exchange has that one Gift: the singing fish, the creepy doll, the fruitcake. Instead of leaving its
           holder feeling stuck, make it a contest. After you end the Game, open the vote, and everyone votes from their
-          phone for the worst Gift. Show the counts live on the TV, hide them until the reveal, or let every Gift parade
+          phone for the worst Gift. Show the counts live on the big screen, hide them until the reveal, or let every Gift parade
           past as a reminder.
         </p>
-        <p>When you close the vote, the TV reveals the winner, the top five and a Photo of the winning Gift.</p>
+        <p>When you close the vote, the big screen reveals the winner, the top five and a Photo of the winning Gift.</p>
         <div className="tip">
           <strong>Tip: the consolation prize.</strong> Keep one or two small, genuinely good gifts hidden, like chocolate
           or a gift card. The Worst Gift's holder picks a prize, so a loss becomes a win and the night ends on a laugh.

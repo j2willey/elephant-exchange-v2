@@ -11,14 +11,14 @@ describe("The landing page", () => {
 
     const hero = await screen.findByRole("region", { name: /what it is/i });
     expect(hero).toHaveTextContent(/white elephant gift swap/i);
-    expect(within(hero).getByRole("img", { name: /scoreboard on the party's tv/i })).toBeInTheDocument();
+    expect(within(hero).getByRole("img", { name: /scoreboard on the party's big screen/i })).toBeInTheDocument();
     expect(within(hero).getByRole("link", { name: /try the demo/i })).toHaveAttribute("href", "/try");
     expect(within(hero).getByRole("link", { name: /host a game/i })).toHaveAttribute("href", "#host");
     expect(screen.getByRole("region", { name: /sound familiar/i })).toHaveTextContent(/wanders the room/i);
     for (const point of [/turns take seconds/i, /the whole room stays in it/i, /the rules keep themselves/i, /nothing to install/i]) {
       expect(screen.getByRole("heading", { name: point })).toBeInTheDocument();
     }
-    expect(screen.getByRole("region", { name: /how it works/i })).toHaveTextContent(/create a game.*scoreboard on the tv.*call names/i);
+    expect(screen.getByRole("region", { name: /how it works/i })).toHaveTextContent(/create a game.*scoreboard on the big screen.*call names/i);
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /host's guide/i })).toHaveAttribute("href", "/guide");
   });

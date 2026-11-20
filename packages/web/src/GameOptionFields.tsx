@@ -42,7 +42,7 @@ export const OPTION_HELP: Record<keyof GameOptions, ReactNode> = {
   ),
   moderation: (
     <>
-      Guests can post words and Photos to the party's Feed, which shows on their phones and the TV.{" "}
+      Guests can post words and Photos to the party's Feed, which shows on their phones and the big screen.{" "}
       <strong>Open:</strong> Posts appear at once. <strong>Approval:</strong> each waits for you or a Co-host.{" "}
       <strong>Paused:</strong> nobody can post. You can switch at any time, and hide any Post.
     </>
