@@ -12,6 +12,8 @@ export interface GameView {
   rosterMode: RosterMode;
   /** The Game's rule for Posts; the Host or a Co-host can switch it at any moment. */
   moderation: Moderation;
+  /** For a tough crowd: names people pick for themselves wait for the Host or a Co-host to approve them. */
+  approveNames: boolean;
   /** The turn timer: the server's time when sent, the countdown's length (0: no timer), and when each Player up was called. */
   clock: { now: number; turnSeconds: number; startedAt: Record<string, number> };
   /** Rises with every change; the newest copy wins. */
@@ -39,7 +41,7 @@ export interface GameView {
    * The name the person looking goes by here (a Player's, or the one a Guest posts as; null until they give one), and
    * whether the Host or a Co-host has locked it. Null when nobody is signed in.
    */
-  myName: { name: string | null; locked: boolean } | null;
+  myName: { name: string | null; locked: boolean; pending: string | null } | null;
   /** The Gift the person looking voted the worst, if they have. */
   myVote: string | null;
 }
@@ -256,6 +258,17 @@ export interface Post {
   replies: number;
 }
 
+/** Whose name the Host or a Co-host is changing: a Player, whoever wrote a Post, or someone whose name is waiting. */
+export type RenameWho = { playerId: string } | { postId: string } | { key: string };
+
+/** A name someone asked for under Approve names: `shown` is what everyone sees meanwhile. */
+export interface PendingName {
+  key: string;
+  shown: string;
+  wants: string;
+  playerId: string | null;
+}
+
 /** The Post a reply answers, as shown above the reply. */
 export type Quote = Pick<Post, "id" | "author" | "text" | "photo"> | { id: string; removed: true };
 
@@ -405,7 +418,10 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
     },
 
     /** Changes a Game's name, turn timer or who adds the Players; only those given. */
-    async setGameOptions(gameId: string, options: { name?: string; turnSeconds?: number; rosterMode?: RosterMode }): Promise<SharedGame | undefined> {
+    async setGameOptions(
+      gameId: string,
+      options: { name?: string; turnSeconds?: number; rosterMode?: RosterMode; approveNames?: boolean },
+    ): Promise<SharedGame | undefined> {
       const res = await sendJson("PATCH", `/api/games/${encodeURIComponent(gameId)}/options`, options);
       return res.ok ? ((await res.json()) as SharedGame) : undefined;
     },
@@ -660,13 +676,24 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
 
     /** Approves a Pending Post or shows a Hidden one again ("visible"), or hides it. */
     /** Changes the name the person looking goes by in this Game, unless the Host has locked it. */
-    async changeMyName(gameId: string, name: string): Promise<"ok" | "locked" | "failed"> {
+    async changeMyName(gameId: string, name: string): Promise<"ok" | "waiting" | "locked" | "failed"> {
       const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/me/name`, { name });
-      return res.status === 204 ? "ok" : res.status === 409 ? "locked" : "failed";
+      return res.status === 204 ? "ok" : res.status === 202 ? "waiting" : res.status === 409 ? "locked" : "failed";
+    },
+
+    /** Under Approve names: the names people asked for, waiting for the Host or a Co-host. */
+    async pendingNames(gameId: string): Promise<PendingName[]> {
+      const res = await fetchFn(`/api/games/${encodeURIComponent(gameId)}/names/pending`);
+      if (!res.ok) throw new Error(`loading the names waiting failed: ${res.status}`);
+      return ((await res.json()) as { pending: PendingName[] }).pending;
+    },
+
+    async approveName(gameId: string, key: string): Promise<boolean> {
+      return (await postJson(`/api/games/${encodeURIComponent(gameId)}/names/approve`, { key })).status === 204;
     },
 
     /** The Host or a Co-host renames a Player, or whoever wrote a Post, everywhere; `locked` keeps them from changing it. */
-    async rename(gameId: string, who: { playerId: string } | { postId: string }, name: string, locked: boolean): Promise<boolean> {
+    async rename(gameId: string, who: RenameWho, name: string, locked: boolean): Promise<boolean> {
       const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/names`, { ...who, name, locked });
       return res.status === 204;
     },

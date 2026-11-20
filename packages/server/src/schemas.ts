@@ -41,6 +41,7 @@ export const gameOptionsEdit = z.object({
   name: name.optional(),
   turnSeconds: z.int().min(0).max(600).optional(),
   rosterMode: rosterMode.optional(),
+  approveNames: z.boolean().optional(),
 });
 
 export const gameThemeEdit = z.object({ color: themeColor, page: themeColor });
@@ -70,8 +71,12 @@ export const postStatusBody = z.object({ status: z.enum(["visible", "hidden"]) }
 export const joinBody = z.object({ name });
 /** The Host or a Co-host renames someone, found by their Player or by one of their Posts, and locks the name or not. */
 export const renameBody = z
-  .object({ playerId: id.optional(), postId: id.optional(), name, locked: z.boolean() })
-  .refine((b) => (b.playerId === undefined) !== (b.postId === undefined), { message: "Say whose name: a playerId or a postId" });
+  .object({ playerId: id.optional(), postId: id.optional(), key: id.optional(), name, locked: z.boolean() })
+  .refine((b) => [b.playerId, b.postId, b.key].filter((x) => x !== undefined).length === 1, {
+    message: "Say whose name: a playerId, a postId or a person's key",
+  });
+/** Approves the name someone asked for under Approve names; `key` is from the list of names waiting. */
+export const approveNameBody = z.object({ key: id });
 
 /**
  * A page of this app to return to after signing in: a path on this site only. "//host" and "/\\host" are

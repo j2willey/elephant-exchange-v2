@@ -73,6 +73,7 @@ import {
   screenModeBody,
   voteStatusBody,
   renameBody,
+  approveNameBody,
 } from "./schemas.js";
 
 export type { Mailer } from "./auth.js";
@@ -123,6 +124,7 @@ interface LoadedGame {
   demo: boolean;
   rosterMode: "host" | "self";
   moderation: "open" | "approval" | "paused";
+  approveNames: boolean;
   turnSeconds: number;
   /** When each Player who's up was called up, or had their timer reset (ms since 1970). */
   clocks: ReadonlyMap<string, number>;
@@ -185,7 +187,7 @@ function tally(ballots: ReadonlyMap<string, string>): Record<string, number> {
 
 /** What screens are shown about a Game: answers from the rules module, never its internal state. */
 function view(id: string, game: LoadedGame, now: Date) {
-  const { name, demo, rosterMode, moderation, turnSeconds, clocks, state, seq, vote, screen } = game;
+  const { name, demo, rosterMode, moderation, approveNames, turnSeconds, clocks, state, seq, vote, screen } = game;
   return {
     id,
     name,
@@ -193,6 +195,7 @@ function view(id: string, game: LoadedGame, now: Date) {
     theme: resolveTheme(id, game.theme),
     rosterMode,
     moderation,
+    approveNames,
     /** The turn timer. `now` is the server's time, so a screen can count down correctly even if its own clock is off. */
     clock: { now: now.getTime(), turnSeconds, startedAt: Object.fromEntries(clocks) },
     /** Rises with every change (it counts the Game's logged events), so a screen keeps the newest copy it has seen. */
@@ -305,6 +308,7 @@ export function createServer({
       demo: row.demo,
       rosterMode: row.rosterMode,
       moderation: row.moderation,
+      approveNames: row.approveNames,
       turnSeconds: row.turnSeconds,
       clocks: new Map(clocks.map((c) => [c.playerId, c.startedAt.getTime()])),
       state,
@@ -352,11 +356,29 @@ export function createServer({
   }
 
   /** The name someone goes by in a Game (a Player's roster name, or a Guest's), and whether it's locked. */
-  function nameIn(gameId: string, email: string, game: LoadedGame): { name: string | null; locked: boolean } {
+  function nameIn(gameId: string, email: string, game: LoadedGame): { name: string | null; locked: boolean; pending: string | null } {
     const playerId = playerOf(gameId, email, game);
     const row = nameRow(gameId, email);
     const name = playerId ? (roster(game.state).find((p) => p.id === playerId)?.name ?? null) : (row?.name ?? null);
-    return { name, locked: row?.locked ?? false };
+    return { name, locked: row?.locked ?? false, pending: row?.pending ?? null };
+  }
+
+  /** What others see in place of a name that's waiting for approval. */
+  const WAITING_PLAYER = "New player";
+  const WAITING_GUEST = "Guest";
+
+  /** Under Approve names, whether a name this person picks for themselves waits for a Host or Co-host. */
+  function needsApproval(gameId: string, email: string, game: LoadedGame): boolean {
+    return game.approveNames && !roleIn(gameId, email);
+  }
+
+  /** Puts the name someone asked for aside until a Host or Co-host approves it, and tells their screens. */
+  function holdName(gameId: string, email: string, wants: string) {
+    db.insert(gameNames)
+      .values({ gameId, email, pending: wants })
+      .onConflictDoUpdate({ target: [gameNames.gameId, gameNames.email], set: { pending: wants } })
+      .run();
+    staffChanged(gameId);
   }
 
   /**
@@ -372,13 +394,16 @@ export function createServer({
       const guestName = playerId ? null : name;
       tx.insert(gameNames)
         .values({ gameId: id, email, name: guestName, locked: locked ?? false })
-        .onConflictDoUpdate({ target: [gameNames.gameId, gameNames.email], set: { name: guestName, ...(locked === undefined ? {} : { locked }) } })
+        .onConflictDoUpdate({ target: [gameNames.gameId, gameNames.email], set: { name: guestName, pending: null, ...(locked === undefined ? {} : { locked }) } })
         .run();
       tx.update(posts).set({ author: name }).where(and(eq(posts.gameId, id), eq(posts.email, email))).run();
     };
     if (playerId) run(id, game, { type: "RenamePlayer", playerId, name }, write);
     else db.transaction(write);
-    if (email) postsChanged(id);
+    if (email) {
+      postsChanged(id);
+      staffChanged(id); // it may have settled a name that was waiting
+    }
   }
 
   function playerOf(gameId: string, email: string, game: LoadedGame): string | undefined {
@@ -747,6 +772,47 @@ export function createServer({
   });
 
   /** Which Players are the Host or a Co-host, for their consoles to mark: they may need to step in on those turns. */
+  /** Under Approve names: the names people asked for, waiting for the Host or a Co-host, with what's shown meanwhile. */
+  app.get("/api/games/:id/names/pending", (c) => {
+    const id = c.req.param("id");
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const game = load(id);
+    if (!game) return c.json({ error: "Game not found" }, 404);
+    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts approve names" }, 403);
+    const rows = db
+      .select()
+      .from(gameNames)
+      .where(and(eq(gameNames.gameId, id), isNotNull(gameNames.pending)))
+      .all();
+    const pending = rows.map((r) => {
+      const playerId = playerOf(id, r.email, game) ?? null;
+      const shown = playerId ? (roster(game.state).find((p) => p.id === playerId)?.name ?? WAITING_PLAYER) : (r.name ?? WAITING_GUEST);
+      return { key: personKey(id, r.email), shown, wants: r.pending!, playerId };
+    });
+    return c.json({ pending });
+  });
+
+  app.post("/api/games/:id/names/approve", async (c) => {
+    const id = c.req.param("id");
+    const email = signedInAs(c);
+    if (!email) return c.json({ error: "Sign in first" }, 401);
+    const body = await parseBody(c, approveNameBody);
+    if (!body.ok) return body.res;
+    const game = load(id);
+    if (!game) return c.json({ error: "Game not found" }, 404);
+    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts approve names" }, 403);
+    const row = db
+      .select()
+      .from(gameNames)
+      .where(and(eq(gameNames.gameId, id), isNotNull(gameNames.pending)))
+      .all()
+      .find((r) => personKey(id, r.email) === body.data.key);
+    if (!row?.pending) return c.json({ error: "That name isn't waiting any more" }, 404);
+    renamePerson(id, game, { email: row.email }, row.pending);
+    return c.body(null, 204);
+  });
+
   /** Someone changes their own name in a Game (a Player's or a Guest's), unless the Host or a Co-host locked it. */
   app.post("/api/games/:id/me/name", async (c) => {
     const id = c.req.param("id");
@@ -757,6 +823,10 @@ export function createServer({
     const game = load(id);
     if (!game) return c.json({ error: "Game not found" }, 404);
     if (nameRow(id, email)?.locked) return c.json({ code: "NameLocked", message: "Your Host set this name" }, 409);
+    if (needsApproval(id, email, game)) {
+      holdName(id, email, body.data.name);
+      return c.body(null, 202); // accepted, waiting for approval
+    }
     renamePerson(id, game, { email }, body.data.name);
     return c.body(null, 204);
   });
@@ -771,8 +841,12 @@ export function createServer({
     const game = load(id);
     if (!game) return c.json({ error: "Game not found" }, 404);
     if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can rename people" }, 403);
-    const { playerId, postId, name, locked } = body.data;
-    if (playerId !== undefined) {
+    const { playerId, postId, key, name, locked } = body.data;
+    if (key !== undefined) {
+      const who = [...knownPeople(id)].find((e) => personKey(id, e) === key);
+      if (!who) return c.json({ error: "No such person in this Game" }, 404);
+      renamePerson(id, game, { email: who }, name, locked);
+    } else if (playerId !== undefined) {
       if (!roster(game.state).some((p) => p.id === playerId)) return c.json({ error: "No such Player in this Game" }, 404);
       renamePerson(id, game, { playerId }, name, locked);
     } else {
@@ -1010,14 +1084,22 @@ export function createServer({
     const playerId = playerOf(id, email, game);
     const saved = playerId ? undefined : nameRow(id, email);
     const fixed = saved?.locked && saved.name ? saved.name : undefined;
-    const author = playerId ? roster(game.state).find((p) => p.id === playerId)!.name : (fixed ?? body.data.name ?? saved?.name ?? undefined);
+    const wants = playerId || fixed ? undefined : body.data.name;
+    // Under Approve names, a new name waits, and they post as the old one (or as "Guest") until it's approved.
+    const held = wants !== undefined && wants !== saved?.name && needsApproval(id, email, game);
+    const waiting = saved?.name ?? WAITING_GUEST;
+    const author = playerId
+      ? roster(game.state).find((p) => p.id === playerId)!.name
+      : (fixed ?? (held ? waiting : (wants ?? saved?.name ?? (saved?.pending ? waiting : undefined))));
     if (!author) return c.json({ error: "Say what name to post as" }, 400);
 
     const photo = upload && (await preparePhoto(new Uint8Array(await upload.arrayBuffer())));
     if (upload && !photo) return c.json({ error: "That doesn't look like a photo we can use" }, 400);
 
     // A Guest's new or changed name is theirs from now on, on their earlier Posts too.
-    if (!playerId && author !== saved?.name) renamePerson(id, game, { email }, author);
+    if (held) {
+      if (wants !== saved?.pending) holdName(id, email, wants);
+    } else if (!playerId && author !== saved?.name && author !== WAITING_GUEST) renamePerson(id, game, { email }, author);
 
     const status = game.moderation === "approval" ? "pending" : "visible";
     const postId = randomBytes(12).toString("base64url");
@@ -1261,8 +1343,9 @@ export function createServer({
     const game = load(id);
     if (!game) return c.json({ error: "Game not found" }, 404);
     if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can change this Game" }, 403);
-    const { name, turnSeconds, rosterMode } = body.data;
+    const { name, turnSeconds, rosterMode, approveNames } = body.data;
     const set = {
+      ...(approveNames !== undefined ? { approveNames } : {}),
       ...(name !== undefined ? { name } : {}),
       ...(turnSeconds !== undefined ? { turnSeconds } : {}),
       ...(rosterMode !== undefined ? { rosterMode } : {}),
@@ -1444,11 +1527,19 @@ export function createServer({
     if (playerOf(id, email, game)) return c.json({ code: "AlreadyJoined", message: "You're already playing in this Game" }, 409);
 
     const playerId = randomBytes(12).toString("base64url");
-    const result = run(id, game, { type: "AddPlayer", playerId, name: body.data.name }, (tx) => {
+    // Under Approve names, they play as "New player" until the Host or a Co-host approves the name they gave.
+    const held = needsApproval(id, email, game);
+    const result = run(id, game, { type: "AddPlayer", playerId, name: held ? WAITING_PLAYER : body.data.name }, (tx) => {
+      if (held)
+        tx.insert(gameNames)
+          .values({ gameId: id, email, pending: body.data.name })
+          .onConflictDoUpdate({ target: [gameNames.gameId, gameNames.email], set: { pending: body.data.name } })
+          .run();
       // A link left over from a Player the Host has since removed gives way to the new one.
       tx.delete(gamePlayers).where(and(eq(gamePlayers.gameId, id), eq(gamePlayers.email, email))).run();
       tx.insert(gamePlayers).values({ gameId: id, playerId, email }).run();
     });
+    if (held && !("code" in result)) staffChanged(id);
     return "code" in result ? c.json(result, 409) : c.json({ ...result, me: { playerId } });
   });
 

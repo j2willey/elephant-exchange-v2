@@ -57,6 +57,7 @@ function GameOptions({ game, onSaved }: { game: GameView; onSaved: (game: Shared
   const [steals, setSteals] = useState(String(game.settings.maxSteals));
   const [turnSeconds, setTurnSeconds] = useState(String(game.clock.turnSeconds));
   const [rosterMode, setRosterMode] = useState<RosterMode>(game.rosterMode);
+  const [approveNames, setApproveNames] = useState(game.approveNames);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | string>("idle");
 
   async function save(e: FormEvent) {
@@ -75,6 +76,7 @@ function GameOptions({ game, onSaved }: { game: GameView; onSaved: (game: Shared
       ...(name.trim() !== game.name ? { name: name.trim() } : {}),
       ...(Number(turnSeconds) !== game.clock.turnSeconds ? { turnSeconds: Number(turnSeconds) } : {}),
       ...(rosterMode !== game.rosterMode ? { rosterMode } : {}),
+      ...(approveNames !== game.approveNames ? { approveNames } : {}),
     };
     if (Object.keys(options).length > 0) {
       const saved = await api.setGameOptions(game.id, options);
@@ -120,6 +122,14 @@ function GameOptions({ game, onSaved }: { game: GameView; onSaved: (game: Shared
             Players sign up on their phones
           </label>
         </fieldset>
+        <label className="check">
+          <input type="checkbox" aria-describedby="opt-approve-hint" checked={approveNames} onChange={(e) => setApproveNames(e.target.checked)} /> Approve
+          names before everyone sees them
+        </label>
+        <p id="opt-approve-hint" className="muted hint">
+          For a tough crowd. A name someone picks for themselves shows as "New player" or "Guest" until you or a Co-host
+          approves it. You can rename anyone, and lock the name, either way.
+        </p>
         {status !== "idle" && status !== "saving" && (
           <p className={status === "saved" ? "muted" : "error"} role={status === "saved" ? "status" : "alert"}>
             {status === "saved" ? "Saved." : status}

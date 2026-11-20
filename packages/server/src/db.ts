@@ -13,6 +13,8 @@ export const games = sqliteTable("games", {
   rosterMode: text("roster_mode", { enum: ["host", "self"] }).notNull().default("host"),
   /** The Game's rule for Posts: "open" (they appear at once), "approval" (each waits for a Host) or "paused" (no posting). */
   moderation: text("moderation", { enum: ["open", "approval", "paused"] }).notNull().default("open"),
+  /** For a tough crowd: a name people pick for themselves waits for a Host or Co-host to approve it. Off by default. */
+  approveNames: integer("approve_names", { mode: "boolean" }).notNull().default(false),
   /** How long each Turn's countdown runs, as a guide for the Host; 0 shows no timer. Nobody is ever skipped by it. */
   turnSeconds: integer("turn_seconds").notNull().default(60),
   /** The Worst Gift Vote: "none" (not opened yet), "open" or "closed" (results revealed). */
@@ -159,6 +161,8 @@ export const gameNames = sqliteTable(
     /** A Guest's name; null for a Player, whose name is on the roster. */
     name: text("name"),
     locked: integer("locked", { mode: "boolean" }).notNull().default(false),
+    /** Under Approve names, the name they asked for, waiting for a Host or Co-host to approve it. */
+    pending: text("pending"),
   },
   (t) => [primaryKey({ columns: [t.gameId, t.email] })],
 );

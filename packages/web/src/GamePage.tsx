@@ -1,4 +1,4 @@
-import { MyName, RenameButton } from "./Rename.js";
+import { MyName, NamesToApprove, RenameButton } from "./Rename.js";
 import { StaffMark, useStaff } from "./Cohosts.js";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useLocation, useParams } from "react-router";
@@ -134,6 +134,8 @@ export function GamePage({ gameId }: { gameId?: string } = {}) {
   // A Host on a laptop gets v1's two-column console; on a phone, the single column below.
   if (wide) {
     return (
+      <>
+      <NamesToApprove game={game} changes={staffChanges} />
       <LaptopConsole
         game={game}
         send={send}
@@ -149,6 +151,7 @@ export function GamePage({ gameId }: { gameId?: string } = {}) {
         joinPanel={game.me ? <p className="you">You're playing as {nameOf(game.me.playerId)}</p> : joinOffered && <JoinPanel gameId={game.id} onJoined={accept} />}
         finalRoundPanel={game.phase === "playing" && game.active.length === 0 && game.gifts.length > 0 && <FinalRoundPanel game={game} send={send} />}
       />
+      </>
     );
   }
 
@@ -182,6 +185,7 @@ export function GamePage({ gameId }: { gameId?: string } = {}) {
       ) : (
         joinOffered && <JoinPanel gameId={game.id} onJoined={accept} />
       )}
+      <NamesToApprove game={game} changes={staffChanges} />
 
       {error && (
         <p className="error" role="alert">
@@ -304,7 +308,7 @@ function GuestView({
             {myName ? (
               <section className="card you" aria-label="You">
                 <p>You're playing as {myName}</p>
-                <MyName game={game} onChanged={(name) => accept(null, { myName: { name, locked: false } })} />
+                <MyName game={game} onChanged={(myName) => accept(null, { myName })} />
                 {onDeck && <p>You're on deck: get ready!</p>}
                 {holding && (
                   <p>You're holding: {holding.name}</p>
@@ -315,10 +319,16 @@ function GuestView({
             ) : (
               <p className="card muted">You're following along. The Host enters the Players for this Game.</p>
             )}
-            {!game.me && game.myName?.name && (
+            {!game.me && (game.myName?.name || game.myName?.pending) && (
               <section className="card" aria-label="Your name">
-                <p>You're posting as {game.myName.name}</p>
-                <MyName game={game} onChanged={(name) => { accept(null, { myName: { name, locked: false } }); reloadFeed(); }} />
+                <p>You're posting as {game.myName.name ?? "Guest"}</p>
+                <MyName
+                  game={game}
+                  onChanged={(myName) => {
+                    accept(null, { myName });
+                    reloadFeed();
+                  }}
+                />
               </section>
             )}
             {players}
@@ -435,7 +445,9 @@ function JoinPanel({ gameId, onJoined }: { gameId: string; onJoined: (game: Shar
     const result = await api.join(gameId, trimmed);
     if (result.ok) {
       api.setGuestName(trimmed);
-      onJoined(result.game, { me: result.me });
+      // Under Approve names they play as "New player" until it's approved; their phone says so.
+      const shown = result.game.players.find((p) => p.id === result.me.playerId)?.name ?? null;
+      onJoined(result.game, { me: result.me, myName: { name: shown, locked: false, pending: shown === trimmed ? null : trimmed } });
     }
     else setError(result.message.endsWith(".") ? result.message : `${result.message}.`);
   }

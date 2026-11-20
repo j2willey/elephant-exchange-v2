@@ -41,7 +41,7 @@ A signed-in person following a Game who did not bring a Gift and is not a Player
 _Avoid_: Spectator, viewer
 
 **Name**:
-What a person goes by in a Game, for everyone to see: a Player's name on the Roster, or the one a Guest posts as. One per person per Game; changing it changes it on their earlier Posts too. The Host or a Co-host can rename anyone, from the Roster or from one of their Posts, and **lock** the name so its owner can't change it back (for an unkind name). Names go live at once.
+What a person goes by in a Game, for everyone to see: a Player's name on the Roster, or the one a Guest posts as. One per person per Game; changing it changes it on their earlier Posts too. The Host or a Co-host can rename anyone, from the Roster or from one of their Posts, and **lock** the name so its owner can't change it back (for an unkind name). Names go live at once, unless the Host has switched on **Approve names** (for a tough crowd): then a name someone picks for themselves shows as "New player" or "Guest" until the Host or a Co-host approves it or renames them. Names the Host and Co-hosts give, or pick for themselves, never wait.
 _Avoid_: Nickname, handle, display name
 
 **Late Arrival**:

@@ -1,5 +1,5 @@
-import { useId, useState, type FormEvent } from "react";
-import type { GameView } from "./api.js";
+import { useEffect, useId, useState, type FormEvent } from "react";
+import type { GameView, PendingName, RenameWho } from "./api.js";
 import { useApi } from "./ApiContext.js";
 
 /**
@@ -7,12 +7,24 @@ import { useApi } from "./ApiContext.js";
  * roster and every Post they've made), locked by default so they can't change it back. Found by their Player or by
  * one of their Posts, so no email is ever needed.
  */
-export function RenameButton({ gameId, who, name, onDone }: { gameId: string; who: { playerId: string } | { postId: string }; name: string; onDone?: () => void }) {
+export function RenameButton({
+  gameId,
+  who,
+  name,
+  label = "✏️",
+  onDone,
+}: {
+  gameId: string;
+  who: RenameWho;
+  name: string;
+  label?: string;
+  onDone?: () => void;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <button type="button" className="link" aria-label={`Rename ${name}`} aria-expanded={open} title="Rename" onClick={() => setOpen(!open)}>
-        ✏️
+        {label}
       </button>
       {open && (
         <RenameForm
@@ -38,7 +50,7 @@ function RenameForm({
   onCancel,
 }: {
   gameId: string;
-  who: { playerId: string } | { postId: string };
+  who: RenameWho;
   name: string;
   onDone: () => void;
   onCancel: () => void;
@@ -81,25 +93,27 @@ function RenameForm({
  * Someone's own name in this Game, to change: a Player's on their You card, a Guest's once they've given one. Once
  * the Host or a Co-host has locked it, it just says so.
  */
-export function MyName({ game, onChanged }: { game: GameView; onChanged: (name: string) => void }) {
+export function MyName({ game, onChanged }: { game: GameView; onChanged: (myName: NonNullable<GameView["myName"]>) => void }) {
   const api = useApi();
   const ids = useId();
   const current = game.myName?.name;
   const [open, setOpen] = useState(false);
   const [next, setNext] = useState(current ?? "");
   const [error, setError] = useState<string | null>(null);
-  if (!current) return null;
+  const pending = game.myName?.pending;
+  if (!current && !pending) return null;
   if (game.myName?.locked) return <p className="muted hint">Your Host set this name.</p>;
+  const waiting = pending && <p className="muted hint">Waiting for your Host to OK "{pending}".</p>;
 
   async function save(e: FormEvent) {
     e.preventDefault();
     const name = next.trim();
     const result = await api.changeMyName(game.id, name);
-    if (result === "ok") {
+    if (result === "ok" || result === "waiting") {
       setOpen(false);
       setError(null);
       api.setGuestName(name);
-      onChanged(name);
+      onChanged(result === "ok" ? { name, locked: false, pending: null } : { name: current ?? null, locked: false, pending: name });
     } else {
       setError(result === "locked" ? "Your Host set this name, so it can't be changed." : "That didn't work. Please try again.");
     }
@@ -107,16 +121,19 @@ export function MyName({ game, onChanged }: { game: GameView; onChanged: (name: 
 
   if (!open)
     return (
-      <button
-        type="button"
-        className="link"
-        onClick={() => {
-          setNext(current);
-          setOpen(true);
-        }}
-      >
-        ✏️ Change my name
-      </button>
+      <>
+        {waiting}
+        <button
+          type="button"
+          className="link"
+          onClick={() => {
+            setNext(pending ?? current ?? "");
+            setOpen(true);
+          }}
+        >
+          ✏️ Change my name
+        </button>
+      </>
     );
   return (
     <form className="stack rename-form" aria-label="Change my name" onSubmit={save}>
@@ -134,5 +151,49 @@ export function MyName({ game, onChanged }: { game: GameView; onChanged: (name: 
         </p>
       )}
     </form>
+  );
+}
+
+/**
+ * Under Approve names, for the Host and Co-hosts: each name someone asked for, to approve as it is or rename (and
+ * lock) instead. Shown only while any are waiting; reloaded whenever one is asked for or settled.
+ */
+export function NamesToApprove({ game, changes }: { game: GameView; changes: number }) {
+  const api = useApi();
+  const [pending, setPending] = useState<PendingName[]>([]);
+  const [asked, setAsked] = useState(0);
+
+  useEffect(() => {
+    let current = true;
+    api.pendingNames(game.id).then(
+      (list) => current && setPending(list),
+      () => {}, // keep what we had
+    );
+    return () => {
+      current = false;
+    };
+  }, [api, game.id, changes, asked]);
+
+  if (pending.length === 0) return null;
+  return (
+    <section className="card names-waiting" aria-label="Names to approve">
+      <h2>Names to approve</h2>
+      <ul className="people">
+        {pending.map((p) => (
+          <li key={p.key} aria-label={p.wants}>
+            <span className="person">
+              <strong>{p.wants}</strong>
+              <span className="muted"> (shown as {p.shown} for now)</span>
+            </span>
+            <span className="inline">
+              <button type="button" onClick={() => void api.approveName(game.id, p.key).then(() => setAsked((n) => n + 1))}>
+                Approve
+              </button>
+              <RenameButton gameId={game.id} who={{ key: p.key }} name={p.wants} label="✏️ Rename" onDone={() => setAsked((n) => n + 1)} />
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

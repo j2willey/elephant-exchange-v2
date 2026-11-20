@@ -47,7 +47,7 @@ describe("The Host renaming someone, and locking the name", () => {
 
     await within(participants).findByRole("listitem", { name: /^sam\b/i });
     await waitFor(async () => expect((await host.posts(id)).map((p) => p.author)).not.toContain("Mr. Big"));
-    expect((await teen.game(id))!.myName).toEqual({ name: "Sam", locked: true });
+    expect((await teen.game(id))!.myName).toMatchObject({ name: "Sam", locked: true });
   });
 
   it("renames a Guest from one of their Posts in the Feed", async () => {
@@ -59,7 +59,7 @@ describe("The Host renaming someone, and locking the name", () => {
     await rename(await within(feed).findByRole("article", { name: /rude dude/i }), /rename rude dude/i, "Guest Gary", user);
 
     await within(feed).findByRole("article", { name: /guest gary/i });
-    expect((await guest.game(id))!.myName).toEqual({ name: "Guest Gary", locked: true });
+    expect((await guest.game(id))!.myName).toMatchObject({ name: "Guest Gary", locked: true });
   });
 
   it("renames a Player from the phone's Players list", async () => {
@@ -142,5 +142,52 @@ describe("Changing your own name", () => {
     const you = await screen.findByRole("region", { name: /^you$/i });
     await within(you).findByText(/your host set this name/i);
     expect(within(you).queryByRole("button", { name: /change my name/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("Approve names", () => {
+  it("is switched on in the Game options", async () => {
+    screenWidth(true);
+    const { host, id, user } = await party();
+    openApp(host, `/games/${id}/settings`);
+
+    const options = await screen.findByRole("region", { name: /game options/i });
+    await user.click(within(options).getByRole("checkbox", { name: /approve names/i }));
+    await user.click(within(options).getByRole("button", { name: /save options/i }));
+
+    await waitFor(async () => expect((await host.game(id))!.approveNames).toBe(true));
+  });
+
+  it("lists names waiting on the Host's console, to approve or rename", async () => {
+    screenWidth(true);
+    const { host, id, user, signedIn } = await party();
+    await host.setGameOptions(id, { approveNames: true });
+    const kid = await signedIn("kid@example.com");
+    await kid.join(id, "Big Kahuna");
+    const other = await signedIn("other@example.com");
+    await other.join(id, "Rude Name");
+    openApp(host, `/games/${id}`);
+
+    const waiting = await screen.findByRole("region", { name: /names to approve/i });
+    const kahuna = await within(waiting).findByRole("listitem", { name: /big kahuna/i });
+    await user.click(within(kahuna).getByRole("button", { name: /approve/i }));
+    await within(await screen.findByRole("region", { name: /participants/i })).findByRole("listitem", { name: /^big kahuna/i });
+
+    await rename(await within(waiting).findByRole("listitem", { name: /rude name/i }), /rename/i, "Rudy", user);
+    await waitFor(() => expect(screen.queryByRole("region", { name: /names to approve/i })).not.toBeInTheDocument());
+    expect((await kid.game(id))!.players.map((p) => p.name)).toEqual(expect.arrayContaining(["Big Kahuna", "Rudy"]));
+  });
+
+  it("tells someone whose name is waiting", async () => {
+    screenWidth(false);
+    const { host, id, signedIn } = await party();
+    await host.setGameOptions(id, { approveNames: true });
+    const kid = await signedIn("kid@example.com");
+    await kid.join(id, "Big Kahuna");
+    openApp(kid, `/games/${id}`);
+    await onTab(/^you$/i);
+
+    const you = await screen.findByRole("region", { name: /^you$/i });
+    await within(you).findByText(/waiting for your host to ok "big kahuna"/i);
   });
 });

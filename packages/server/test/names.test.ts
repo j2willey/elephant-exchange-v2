@@ -87,14 +87,14 @@ describe("A locked name", () => {
     await app.request(`/api/games/${id}/posts`, post({ text: "Ha", name: "Mr. Rude Again" }, gus));
 
     expect((await postBy("Ha")).author).toBe("Gus");
-    expect((await game(gus)).myName).toEqual({ name: "Gus", locked: true });
+    expect((await game(gus)).myName).toMatchObject({ name: "Gus", locked: true });
   });
 
   it("tells a Player their name is locked", async () => {
     const { tess, host, tessId, rename, game } = await setup();
-    expect((await game(tess)).myName).toEqual({ name: "Tess", locked: false });
+    expect((await game(tess)).myName).toMatchObject({ name: "Tess", locked: false });
     await rename(host, { playerId: tessId, name: "Tessa", locked: true });
-    expect((await game(tess)).myName).toEqual({ name: "Tessa", locked: true });
+    expect((await game(tess)).myName).toMatchObject({ name: "Tessa", locked: true });
   });
 
   it("can be unlocked by the Host", async () => {
@@ -102,14 +102,14 @@ describe("A locked name", () => {
     const postId = (await postBy("Hi from Gus")).id;
     await rename(host, { postId, name: "Gus", locked: true });
     await rename(host, { postId, name: "Gus", locked: false });
-    expect((await game(gus)).myName).toEqual({ name: "Gus", locked: false });
+    expect((await game(gus)).myName).toMatchObject({ name: "Gus", locked: false });
   });
 });
 
 describe("A Guest's name", () => {
   it("is remembered for the Game, so a Guest who changes it is renamed on their earlier Posts too", async () => {
     const { app, id, gus, postBy, game } = await setup();
-    expect((await game(gus)).myName).toEqual({ name: "Mr. Rude", locked: false });
+    expect((await game(gus)).myName).toMatchObject({ name: "Mr. Rude", locked: false });
 
     await app.request(`/api/games/${id}/posts`, post({ text: "Sorry", name: "Gus" }, gus));
 
@@ -124,7 +124,7 @@ describe("A Guest's name", () => {
 
   it("is null for someone signed in who hasn't given one, and the whole thing for nobody signed in", async () => {
     const { as, game } = await setup();
-    expect((await game(await as("new@example.com"))).myName).toEqual({ name: null, locked: false });
+    expect((await game(await as("new@example.com"))).myName).toMatchObject({ name: null, locked: false });
     expect((await game()).myName).toBeNull();
   });
 });
@@ -147,7 +147,7 @@ describe("Someone changing their own name", () => {
 
     const dot = await as("dot@example.com");
     expect((await change(app, id, dot, "Dot")).status).toBe(204);
-    expect((await game(dot)).myName).toEqual({ name: "Dot", locked: false });
+    expect((await game(dot)).myName).toMatchObject({ name: "Dot", locked: false });
   });
 
   it("refuses once the Host has locked it", async () => {
@@ -163,5 +163,85 @@ describe("Someone changing their own name", () => {
     const { app, id, tess } = await setup();
     expect((await app.request(`/api/games/${id}/me/name`, post({ name: "X" }))).status).toBe(401);
     expect((await change(app, id, tess, " ")).status).toBe(400);
+  });
+});
+
+describe("Approve names, a Game option for a tough crowd", () => {
+  type Waiting = { key: string; shown: string; wants: string; playerId: string | null };
+  async function strict() {
+    const s = await setup();
+    const { app, id, host } = s;
+    expect((await app.request(`/api/games/${id}/options`, { ...post({ approveNames: true }, host), method: "PATCH" })).status).toBe(200);
+    const waiting = async (cookie = host) => {
+      const res = await app.request(`/api/games/${id}/names/pending`, { headers: { cookie } });
+      return res.status === 200 ? ((await res.json()) as { pending: Waiting[] }).pending : res.status;
+    };
+    const approve = (key: string, cookie = host) => app.request(`/api/games/${id}/names/approve`, post({ key }, cookie));
+    return { ...s, waiting, approve };
+  }
+
+  it("is off unless the Host turns it on, and everyone can see whether it's on", async () => {
+    const { game } = await setup();
+    expect(await game()).toMatchObject({ approveNames: false });
+    const { game: g2 } = await strict();
+    expect(await g2()).toMatchObject({ approveNames: true });
+  });
+
+  it("holds a new Player's name until the Host or a Co-host approves it", async () => {
+    const { app, id, as, game, waiting, approve, cohost } = await strict();
+    const teen = await as("teen@example.com");
+    await app.request(`/api/games/${id}/join`, post({ name: "Mr. Big" }, teen));
+    const playerId = (await game(teen)).me!.playerId;
+
+    expect((await game()).players.find((p) => p.id === playerId)!.name).toBe("New player");
+    expect((await game(teen)).myName).toEqual({ name: "New player", locked: false, pending: "Mr. Big" });
+    const [w] = (await waiting(cohost)) as Waiting[];
+    expect(w).toMatchObject({ shown: "New player", wants: "Mr. Big", playerId });
+
+    expect((await approve(w!.key, cohost)).status).toBe(204);
+    expect((await game()).players.find((p) => p.id === playerId)!.name).toBe("Mr. Big");
+    expect(await waiting()).toEqual([]);
+  });
+
+  it("holds a Guest's name, posting them as Guest meanwhile, and fixes their Posts once approved", async () => {
+    const { app, id, as, feed, waiting, approve } = await strict();
+    const dot = await as("dot@example.com");
+    await app.request(`/api/games/${id}/posts`, post({ text: "First!", name: "Dot" }, dot));
+
+    expect((await feed()).find((p) => (p as unknown as { text: string }).text === "First!")!.author).toBe("Guest");
+    const w = ((await waiting()) as Waiting[]).find((x) => x.wants === "Dot")!;
+    await approve(w.key);
+    expect((await feed()).find((p) => (p as unknown as { text: string }).text === "First!")!.author).toBe("Dot");
+  });
+
+  it("holds a changed name, keeping the old one meanwhile", async () => {
+    const { app, id, tess, tessId, nameOf, waiting } = await strict();
+    expect((await app.request(`/api/games/${id}/me/name`, post({ name: "Big T" }, tess))).status).toBe(202);
+    expect(await nameOf(tessId)).toBe("Tess");
+    expect(((await waiting()) as Waiting[]).map((w) => w.wants)).toEqual(["Big T"]);
+  });
+
+  it("lets the Host rename instead of approving, which settles it", async () => {
+    const { app, id, as, game, waiting, rename, host } = await strict();
+    const teen = await as("teen@example.com");
+    await app.request(`/api/games/${id}/join`, post({ name: "Mr. Big" }, teen));
+    const [w] = (await waiting()) as Waiting[];
+
+    expect((await rename(host, { key: w!.key, name: "Sam", locked: true })).status).toBe(204);
+    expect((await game(teen)).myName).toEqual({ name: "Sam", locked: true, pending: null });
+    expect(await waiting()).toEqual([]);
+  });
+
+  it("doesn't hold the names of the Host and Co-hosts", async () => {
+    const { app, id, cohost, game, waiting } = await strict();
+    await app.request(`/api/games/${id}/join`, post({ name: "Cora" }, cohost));
+    expect((await game()).players.map((p) => p.name)).toContain("Cora");
+    expect(await waiting()).toEqual([]);
+  });
+
+  it("shows who's waiting only to the Host and Co-hosts", async () => {
+    const { waiting, approve, gus } = await strict();
+    expect(await waiting(gus)).toBe(403);
+    expect((await approve("whoever", gus)).status).toBe(403);
   });
 });
