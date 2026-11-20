@@ -102,7 +102,7 @@ export const personBody = z
 export const command = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("AddPlayer"), playerId: id, name }),
   z.strictObject({ type: z.literal("StartGame") }),
-  // The name may be left empty, to keep up with a fast party: it's then "Gift 3" until someone names it.
+  // The name may be left empty, to keep up with a fast party: it's then "Ann's gift" (by who opened it) until someone names it.
   z.strictObject({ type: z.literal("OpenGift"), playerId: id, giftId: id, name: z.string().trim().max(100), description: description.exactOptional() }),
   z.strictObject({ type: z.literal("Steal"), playerId: id, giftId: id }),
   z.strictObject({

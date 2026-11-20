@@ -763,11 +763,11 @@ describe("A Gift opened without a name", () => {
     { type: "OpenGift", playerId: "cat", giftId: "g2", name: "" },
   ];
 
-  it("is called by the order it was opened until someone names it, and says it needs a name", () => {
+  it("is called by who opened it until someone names it, and says it needs a name", () => {
     const state = play({ activeSlots: 1, maxSteals: 3 }, unnamed(), scriptedDraw(["bob", "cat", "ann"]));
     expect(gifts(state).map((g) => [g.name, g.named])).toEqual([
       ["Chia Pet", true],
-      ["Gift 2", false],
+      ["cat's gift", false],
     ]);
 
     const named = play(
@@ -781,6 +781,15 @@ describe("A Gift opened without a name", () => {
     ]);
   });
 
+  it("keeps the opener's name after it's stolen", () => {
+    const state = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [...unnamed(), { type: "Steal", playerId: "ann", giftId: "g2" }],
+      scriptedDraw(["bob", "cat", "ann"]),
+    );
+    expect(gifts(state).find((g) => g.id === "g2")).toMatchObject({ name: "cat's gift", named: false, holderId: "ann" });
+  });
+
   it("is called that in the rules' messages too", () => {
     const state = play(
       { activeSlots: 1, maxSteals: 0 },
@@ -789,7 +798,7 @@ describe("A Gift opened without a name", () => {
     );
     expect(decide(state, { type: "Steal", playerId: "ann", giftId: "g2" }, scriptedDraw([]))).toMatchObject({
       code: "GiftFrozen",
-      message: "Gift 2 is Frozen and can't be stolen",
+      message: "cat's gift is Frozen and can't be stolen",
     });
   });
 });

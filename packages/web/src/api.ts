@@ -21,7 +21,7 @@ export interface GameView {
   players: { id: string; name: string }[];
   active: string[];
   onDeck: string[];
-  /** In the order opened. One opened without a name is called "Gift 3" (by that order), with `named` false, until named. */
+  /** In the order opened. One opened without a name is called "Ann's gift" (by who opened it), with `named` false, until named. */
   gifts: { id: string; name: string; named: boolean; description: string; holderId: string | null; steals: number; frozen: boolean }[];
   /** Unopened Gifts still on the table in the Final Round. */
   leftoverGifts: number;

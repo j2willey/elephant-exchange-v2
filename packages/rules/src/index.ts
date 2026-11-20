@@ -63,6 +63,8 @@ interface Gift {
   description: string;
   /** Null only for a Returned Gift, back on the table during the Final Round. */
   holderId: PlayerId | null;
+  /** Who opened it; names a Gift opened without a name ("Ann's gift"), even after it's stolen. */
+  openedBy: PlayerId;
   steals: number;
 }
 
@@ -228,7 +230,7 @@ function apply(state: GameState, event: Event): GameState {
         beforeLastPick: { ...state, beforeLastPick: null },
         active: state.active.filter((id) => id !== event.playerId),
         takenFrom: without(state.takenFrom, event.playerId),
-        gifts: [...state.gifts, { id: event.giftId, name: event.name, description: event.description ?? "", holderId: event.playerId, steals: 0 }],
+        gifts: [...state.gifts, { id: event.giftId, name: event.name, description: event.description ?? "", holderId: event.playerId, openedBy: event.playerId, steals: 0 }],
         leftoverGifts: state.phase === "finalRound" ? state.leftoverGifts - 1 : state.leftoverGifts,
         picks: state.picks + 1,
       });
@@ -381,11 +383,14 @@ export function roster(state: GameState): { id: PlayerId; name: string }[] {
 
 /**
  * What a Gift is called: its name, or for one opened without a name (to keep up with a fast party, named later)
- * "Gift 3", by the order it was opened.
+ * "Ann's gift", by who opened it, whoever holds it now.
  */
 function giftLabel(state: GameState, giftId: GiftId): string {
   const i = state.gifts.findIndex((g) => g.id === giftId);
-  return state.gifts[i]?.name || `Gift ${i + 1}`;
+  const gift = state.gifts[i];
+  if (gift?.name) return gift.name;
+  const opener = state.players.find((p) => p.id === gift?.openedBy)?.name;
+  return opener ? `${opener}'s gift` : `Gift ${i + 1}`;
 }
 
 /** Opened Gifts in the order opened. A null holder is a Returned Gift; `named` is false until someone names it. */

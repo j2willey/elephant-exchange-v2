@@ -44,7 +44,7 @@ describe("Commands over HTTP", () => {
 
     const res = await send({ type: "OpenGift", playerId: "ann", giftId: "g1", name: "   " });
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ gifts: [{ id: "g1", name: "Gift 1", named: false }] });
+    expect(await res.json()).toMatchObject({ gifts: [{ id: "g1", name: "Ann's gift", named: false }] });
 
     expect((await send({ type: "DescribeGift", giftId: "g1", name: "", description: "" })).status).toBe(400);
     await send({ type: "DescribeGift", giftId: "g1", name: "Lava lamp", description: "" });

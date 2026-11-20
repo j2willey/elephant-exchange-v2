@@ -34,18 +34,18 @@ describe("Opening a Gift now and naming it later, on a laptop", () => {
     await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: /name it later/i }));
 
     const tracker = await screen.findByRole("region", { name: /gift tracker/i });
-    const gift = await within(tracker).findByRole("listitem", { name: /gift 1/i });
-    expect(gift).toHaveTextContent(/needs a name/i);
+    const gift = await within(tracker).findByRole("listitem", { name: /ann's gift/i });
+    expect(gift).toHaveTextContent(/what is it\?/i);
     expect(gift).toHaveTextContent(/ann/i);
 
-    await user.click(within(gift).getByRole("button", { name: /name gift 1/i }));
+    await user.click(within(gift).getByRole("button", { name: /what is ann's gift/i }));
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByLabelText(/what's inside/i)).toHaveValue("");
     await user.type(within(dialog).getByLabelText(/what's inside/i), "Lava lamp");
     await user.click(within(dialog).getByRole("button", { name: /save/i }));
 
     const named = await within(tracker).findByRole("listitem", { name: /lava lamp/i });
-    expect(named).not.toHaveTextContent(/needs a name/i);
+    expect(named).not.toHaveTextContent(/what is it\?/i);
   });
 });
 
@@ -59,15 +59,15 @@ describe("Opening a Gift now and naming it later, on a phone", () => {
     await user.click(within(turn).getByRole("button", { name: /name it later/i }));
 
     const gifts = await screen.findByRole("list", { name: /^gifts$/i });
-    const gift = await within(gifts).findByRole("listitem", { name: /gift 1/i });
-    expect(gift).toHaveTextContent(/needs a name/i);
+    const gift = await within(gifts).findByRole("listitem", { name: /ann's gift/i });
+    expect(gift).toHaveTextContent(/what is it\?/i);
 
-    await user.click(within(gift).getByRole("button", { name: /name gift 1/i }));
+    await user.click(within(gift).getByRole("button", { name: /what is ann's gift/i }));
     const form = within(gift).getByRole("form");
     expect(within(form).getByLabelText(/what's inside/i)).toHaveValue("");
     await user.type(within(form).getByLabelText(/what's inside/i), "Lava lamp");
     await user.click(within(form).getByRole("button", { name: /save/i }));
 
-    await waitFor(() => expect(within(gifts).getByRole("listitem", { name: /lava lamp/i })).not.toHaveTextContent(/needs a name/i));
+    await waitFor(() => expect(within(gifts).getByRole("listitem", { name: /lava lamp/i })).not.toHaveTextContent(/what is it\?/i));
   });
 });

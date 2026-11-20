@@ -102,8 +102,8 @@ export function LaptopConsole({
                     ✏️
                   </button>
                 ) : (
-                  <button className="needs-name" aria-label={`Name ${g.name}`} onClick={() => setEditing(g)}>
-                    ✏️ Needs a name
+                  <button className="needs-name" aria-label={`What is ${g.name}?`} onClick={() => setEditing(g)}>
+                    ✏️ What is it?
                   </button>
                 )}
                 {g.description && <span className="gift-desc">{g.description}</span>}
@@ -255,7 +255,7 @@ export function LaptopConsole({
       )}
       {editing && (
         <GiftDialog
-          title={editing.named ? "✏️ Edit gift" : `✏️ Name ${editing.name}`}
+          title={editing.named ? "✏️ Edit gift" : `✏️ What is ${editing.name}?`}
           label={`Edit ${editing.name}`}
           context={editing.holderId === null ? "On the table" : `Held by ${nameOf(editing.holderId)}`}
           gift={editing.named ? editing : { ...editing, name: "" }}

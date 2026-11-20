@@ -684,14 +684,14 @@ export function Gifts({
             )}
             <span className="gift-name">
               <strong>{g.name}</strong> — {holderName(g.holderId)}
-              {!g.named && !onEdit && <span className="muted"> (name to come)</span>}
+              {!g.named && !onEdit && <span className="muted"> (details coming)</span>}
               {onEdit && editing !== g.id && (g.named ? (
                 <button className="link" aria-label={`Edit ${g.name}`} onClick={() => setEditing(g.id)}>
                   Edit
                 </button>
               ) : (
-                <button className="needs-name" aria-label={`Name ${g.name}`} onClick={() => setEditing(g.id)}>
-                  ✏️ Needs a name
+                <button className="needs-name" aria-label={`What is ${g.name}?`} onClick={() => setEditing(g.id)}>
+                  ✏️ What is it?
                 </button>
               ))}
               {g.description && editing !== g.id && <span className="gift-desc">{g.description}</span>}
