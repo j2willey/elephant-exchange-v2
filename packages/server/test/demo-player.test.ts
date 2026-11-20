@@ -92,3 +92,40 @@ describe("A Game's view", () => {
     expect(await shown(await make(false))).toBe(false);
   });
 });
+
+describe("A demo Game's made-up Players as people", () => {
+  type Person = { key: string; name: string | null; hint: string; playerId: string | null; role: string | null };
+  const people = async (app: { request: (p: string, i?: RequestInit) => Response | Promise<Response> }, id: string, host: string) =>
+    ((await (await app.request(`/api/games/${id}/people`, { headers: { cookie: host } })).json()) as { people: Person[] }).people;
+
+  it("each have a stand-in email at example.com, so the Host can find them in the Co-hosts panel", async () => {
+    const { app, id, host } = await setup();
+    const found = await people(app, id, host);
+    expect(found.filter((p) => p.name).map((p) => [p.name, p.hint, p.playerId])).toEqual([
+      ["ANN", "an…@example.com", "ann"],
+      ["BOB", "bo…@example.com", "bob"],
+    ]);
+  });
+
+  it("can be made a Co-host, and the sample phone as that Player then runs the Game", async () => {
+    const { app, id, host, get, asAnn, command } = await setup();
+    const ann = (await people(app, id, host)).find((p) => p.name === "ANN")!;
+    expect((await app.request(`/api/games/${id}/people/${ann.key}`, post({ cohost: true }, host))).status).toBe(204);
+
+    expect(await (await get(asAnn)).json()).toMatchObject({ role: "cohost", me: { playerId: "ann" } });
+    expect((await command({ type: "StartGame" }, { "x-demo-player": "ann" })).status).toBe(200);
+    const staff = (await (await app.request(`/api/games/${id}/staff`, { headers: { cookie: host } })).json()) as { staff: unknown[] };
+    expect(staff.staff).toEqual([{ playerId: "ann", role: "cohost" }]);
+  });
+
+  it("get different stand-ins when two share a name", async () => {
+    const { app, id, host, command } = await setup();
+    await command({ type: "AddPlayer", playerId: "ann2", name: "Ann" });
+    expect((await people(app, id, host)).map((p) => p.hint).filter((h) => h.startsWith("an"))).toEqual(["an…@example.com", "an…@example.com"]);
+  });
+
+  it("aren't given in a real Game: Players the Host types in there have no email", async () => {
+    const { app, id, host } = await setup({ demo: false });
+    expect((await people(app, id, host)).filter((p) => p.name)).toEqual([]);
+  });
+});

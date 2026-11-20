@@ -340,6 +340,23 @@ export function createServer({
   }
 
   /** The Player this person signed up as, if they did and are still on the Roster. */
+  /** A demo Player's stand-in email: "fay@example.com", or "fay2@example.com" when there's already a Fay. */
+  function demoEmail(gameId: string, name: string): string {
+    const base = name.toLowerCase().replace(/[^a-z0-9]/g, "") || "player";
+    const taken = new Set(
+      db
+        .select({ email: gamePlayers.email })
+        .from(gamePlayers)
+        .where(eq(gamePlayers.gameId, gameId))
+        .all()
+        .map((r) => r.email),
+    );
+    for (let n = 1; ; n++) {
+      const email = `${base}${n === 1 ? "" : n}@example.com`;
+      if (!taken.has(email)) return email;
+    }
+  }
+
   /** The person behind a Player who signed up themselves; none for a Player the Host typed in. */
   function emailOfPlayer(gameId: string, playerId: string): string | undefined {
     return db
@@ -465,7 +482,8 @@ export function createServer({
 
   // The demo page's sample phone (Demo.tsx) is one of a demo Game's made-up Players. It runs in the Host's own
   // browser, so it carries the Host's sign-in, and names the Player in a header. Only in a demo Game, only for
-  // its Hosts and only for a Player on its Roster: the phone then acts as that Player, never as a Host.
+  // its Hosts and only for a Player on its Roster: the phone then acts as that Player, by the Player's stand-in email
+  // (so, if the Host made that Player a Co-host, as a Co-host; never as the Host).
   app.use("/api/games/:id/*", async (c, next) => {
     const playerId = c.req.header(DEMO_PLAYER_HEADER);
     if (playerId === undefined) return next();
@@ -476,7 +494,7 @@ export function createServer({
     if (!email || !game || !roleIn(id, email) || !roster(game.state).some((p) => p.id === playerId)) {
       return c.json({ error: "Only a demo Game's Host can see it as one of its Players" }, 403);
     }
-    demoActors.set(c, DEMO_ACTOR + playerId);
+    demoActors.set(c, emailOfPlayer(id, playerId) ?? DEMO_ACTOR + playerId);
     return next();
   });
 
@@ -962,7 +980,13 @@ export function createServer({
     if (!game) return c.json({ error: "Game not found" }, 404);
     if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can run this Game" }, 403);
 
-    const result = run(id, game, body.data);
+    // A demo Game's made-up Players each get a stand-in email, so the Host can find them in the Co-hosts panel and
+    // make one a Co-host, as with real people. At example.com, which takes no mail: nobody can ever sign in as one.
+    const cmd = body.data;
+    const standIn = game.demo && cmd.type === "AddPlayer" ? demoEmail(id, cmd.name) : undefined;
+    const result = run(id, game, cmd, (tx) => {
+      if (standIn && cmd.type === "AddPlayer") tx.insert(gamePlayers).values({ gameId: id, playerId: cmd.playerId, email: standIn }).run();
+    });
     return "code" in result ? c.json(result, 409) : c.json(result);
   });
 
