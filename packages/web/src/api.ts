@@ -610,7 +610,7 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
     },
 
     /** Tells the statistics a Game used a feature only the browser sees, such as pasting the roster. */
-    noteFeature(gameId: string, feature: "rosterPaste") {
+    noteFeature(gameId: string, feature: "rosterPaste" | "share") {
       void postJson(`/api/games/${encodeURIComponent(gameId)}/features`, { feature }).catch(() => {});
     },
 

@@ -104,6 +104,7 @@ export function Feed({
                     Reply
                   </button>
                 )}
+                <ShareButton game={game} post={p} />
               </div>
             )}
             {canReply && replyingTo === p.id && (
@@ -263,6 +264,69 @@ export function Reactions({ gameId, post, reload, readOnly = false }: { gameId: 
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Shares a Post outside the party: on a phone, through its own share menu (Messages, Slack, Facebook), with the
+ * Photo when there is one; elsewhere, by copying the words to paste. The link is to the app's front page, never
+ * the Game: a Game's link lets anyone follow its Feed, and a funny moment shared shouldn't open up the whole party.
+ */
+function ShareButton({ game, post }: { game: GameView; post: Post }) {
+  const api = useApi();
+  const [note, setNote] = useState<string | null>(null);
+  const link = `${window.location.origin}/?ref=share`;
+  const said = post.text ? `“${post.text}” (${post.author})` : `A Photo from ${post.author}`;
+  const text = `${said}, at ${game.name}. Our White Elephant gift swap runs on Elephant Exchange:`;
+
+  /** The Photo as a file to share, if this phone can share files; it's already loaded, so this is quick. */
+  async function photoFile(): Promise<File | undefined> {
+    if (!post.photo || typeof navigator.canShare !== "function") return undefined;
+    try {
+      const res = await fetch(post.photo.url, { cache: "force-cache" });
+      if (!res.ok) return undefined;
+      const type = res.headers.get("content-type") ?? "image/jpeg";
+      const file = new File([await res.arrayBuffer()], `elephant-exchange.${type.split("/")[1] ?? "jpg"}`, { type });
+      return navigator.canShare({ files: [file] }) ? file : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  async function share() {
+    setNote(null);
+    if (typeof navigator.share === "function") {
+      const file = await photoFile();
+      try {
+        // With a Photo, some apps drop a separate link, so it goes in the words too.
+        await navigator.share(file ? { text: `${text} ${link}`, files: [file] } : { text, url: link });
+        api.noteFeature(game.id, "share");
+        return;
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") return; // they changed their mind
+        // Otherwise, copy it instead.
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(`${text} ${link}`);
+      setNote("Copied, ready to paste.");
+      api.noteFeature(game.id, "share");
+    } catch {
+      setNote("This browser can't share or copy. Try a screenshot?");
+    }
+  }
+
+  return (
+    <>
+      <button type="button" className="reaction add" aria-label={`Share ${post.author}'s Post`} onClick={() => void share()}>
+        Share
+      </button>
+      {note && (
+        <span className="muted hint" role="status">
+          {note}
+        </span>
+      )}
+    </>
   );
 }
 

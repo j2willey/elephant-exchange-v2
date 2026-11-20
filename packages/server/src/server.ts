@@ -565,15 +565,20 @@ export function createServer({
     return c.body(null, 202);
   });
 
-  /** A feature only the browser sees (such as pasting the roster), used in a Game by its Host or a Co-host. */
+  /**
+   * A feature only the browser sees, used in a Game: pasting the roster (by its Host or a Co-host), or sharing a Post
+   * outside the party (by anyone following it, signed in or not; it only marks that the Game had a share).
+   */
   app.post("/api/games/:id/features", async (c) => {
     const id = c.req.param("id");
     const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
     const body = await parseBody(c, featureBody);
     if (!body.ok) return body.res;
     if (!load(id)) return c.json({ error: "Game not found" }, 404);
-    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts" }, 403);
+    if (body.data.feature !== "share") {
+      if (!email) return c.json({ error: "Sign in first" }, 401);
+      if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts" }, 403);
+    }
     stats.noteFeature(id, body.data.feature);
     return c.body(null, 204);
   });

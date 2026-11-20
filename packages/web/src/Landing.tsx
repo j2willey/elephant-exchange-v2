@@ -445,6 +445,11 @@ export function Playbook() {
           the Gifts see a little bubble on the 💬 Feed tab counting the new Posts, so nobody misses the fun.
         </p>
         <p>
+          <strong>Sharing the fun.</strong> Anyone can tap <strong>Share</strong> on a Post to send it, Photo and all, to
+          their own messages or social media. The link in it goes to Elephant Exchange's front page, never to your
+          party, so sharing a funny moment doesn't let strangers follow along.
+        </p>
+        <p>
           <strong>You stay in charge.</strong> You and your Co-hosts have simple tools to keep the Feed, and the names
           people choose, right for your crowd, whether it's the office party or a room full of teenagers:
         </p>

@@ -131,7 +131,7 @@ export const linkRequest = z.object({ email, next: returnPath.optional(), feedba
 export const visitBody = z.object({ ref: z.string().max(64) });
 export const excludeBody = z.object({ excluded: z.boolean() });
 /** The features the browser reports itself (the server sees the rest); anything else sent is refused. */
-export const featureBody = z.object({ feature: z.enum(["rosterPaste"]) });
+export const featureBody = z.object({ feature: z.enum(["rosterPaste", "share"]) });
 /** A Host's answer (stars, and maybe again and a comment) or a guest's (thumbs, and maybe a comment). */
 export const answerBody = z.object({
   rating: z.number().int().min(1).max(5).optional(),

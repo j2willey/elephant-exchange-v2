@@ -194,6 +194,9 @@ describe("Usage statistics", () => {
     await app.request(`/api/games/${first}/features`, post({ feature: "rosterPaste" }, ann));
     expect((await app.request(`/api/games/${first}/features`, post({ feature: "anythingElse" }, ann))).status).toBe(400);
     expect((await app.request(`/api/games/${first}/features`, post({ feature: "rosterPaste" }, await as("bob@willey.test")))).status).toBe(403);
+    // Sharing a Post is for anyone following the Game, even someone not signed in.
+    expect((await app.request(`/api/games/${first}/features`, post({ feature: "share" }))).status).toBe(204);
+    expect((await app.request(`/api/games/nope/features`, post({ feature: "share" }))).status).toBe(404);
     await party(ann, "Second");
 
     const { insights } = await stats();
@@ -201,6 +204,7 @@ describe("Usage statistics", () => {
       expect.arrayContaining([
         { feature: "screenModes", games: 1 },
         { feature: "rosterPaste", games: 1 },
+        { feature: "share", games: 1 },
         { feature: "posts", games: 0 },
       ]),
     );
