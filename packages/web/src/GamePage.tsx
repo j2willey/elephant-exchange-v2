@@ -15,7 +15,7 @@ import { RosterPaste } from "./RosterPaste.js";
 import { ScreenSwitch } from "./WatchScreen.js";
 import { VotePanel } from "./Vote.js";
 import { FeedbackCard } from "./Feedback.js";
-import { GiftPostsViewer } from "./GiftPosts.js";
+import { GiftPostsViewer, showGift } from "./GiftPosts.js";
 
 /** `gameId`: the Game to show, when it isn't the one in the address (the front page's sample phone). */
 export function GamePage({ gameId }: { gameId?: string } = {}) {
@@ -269,6 +269,13 @@ function GuestView({
   players: ReactNode;
 }) {
   const [tab, setTab] = useState<GuestTab>("gifts");
+  // A Gift to show once the Gifts tab is up: from "about Mug" in the Feed.
+  const [showing, setShowing] = useState<string | null>(null);
+  useEffect(() => {
+    if (tab !== "gifts" || !showing) return;
+    showGift(showing);
+    setShowing(null);
+  }, [tab, showing]);
   // When the Game ends, everyone is wanted on the Gifts, where the Worst Gift Vote happens.
   useEffect(() => {
     if (game.phase === "ended") setTab("gifts");
@@ -343,7 +350,17 @@ function GuestView({
                 Write a Post
               </button>
             )}
-            <Feed game={game} posts={posts} reload={reloadFeed} offerSignIn={false} composer={false} />
+            <Feed
+              game={game}
+              posts={posts}
+              reload={reloadFeed}
+              offerSignIn={false}
+              composer={false}
+              onShowGift={(giftId) => {
+                setTab("gifts");
+                setShowing(giftId);
+              }}
+            />
           </>
         )}
         {tab === "post" && (
@@ -709,7 +726,7 @@ export function Gifts({
       <h2>Gifts</h2>
       <ul className="gifts" aria-label="Gifts">
         {shown.map((g) => (
-          <li key={g.id} aria-label={g.name} className={isStarred(g.id) ? "starred" : undefined}>
+          <li key={g.id} id={`gift-${g.id}`} tabIndex={-1} aria-label={g.name} className={isStarred(g.id) ? "starred" : undefined}>
             {stars && (
               <button className="star" aria-label={`Star ${g.name}`} aria-pressed={isStarred(g.id)} onClick={() => stars.toggle(g.id)}>
                 {isStarred(g.id) ? "★" : "☆"}

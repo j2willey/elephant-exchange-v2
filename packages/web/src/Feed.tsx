@@ -1,4 +1,5 @@
 import { RenameButton } from "./Rename.js";
+import { showGift } from "./GiftPosts.js";
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { useLocation } from "react-router";
 import { REACTIONS, type Emoji, type GameView, type Post, type Quote } from "./api.js";
@@ -36,10 +37,13 @@ export function Feed({
   reload,
   offerSignIn,
   composer = true,
+  onShowGift = showGift,
 }: {
   game: GameView;
   posts: Post[];
   reload: () => void;
+  /** Where "about Mug" goes: to that Gift on this page, unless the page says otherwise (a phone's Gifts tab). */
+  onShowGift?: (giftId: string) => void;
   /** False where posting has a panel of its own (a guest's phone). */
   composer?: boolean;
   /** False when the page already offers sign-in elsewhere (the join panel), so it isn't asked for twice. */
@@ -75,7 +79,14 @@ export function Feed({
             <p className="post-meta">
               <strong>{p.author}</strong>
               {p.authorMuted && <span className="badge">Muted</span>}
-              {p.giftId && giftName(p.giftId) && <span className="muted"> · about {giftName(p.giftId)}</span>}
+              {p.giftId && giftName(p.giftId) && (
+                <span className="muted">
+                  {" · "}
+                  <button type="button" className="link about-gift" onClick={() => onShowGift(p.giftId!)}>
+                    about {giftName(p.giftId)}
+                  </button>
+                </span>
+              )}
               {p.replies > 0 && <span className="muted"> · {p.replies === 1 ? "1 reply" : `${p.replies} replies`}</span>}
             </p>
             {p.replyTo && <QuoteCard quote={p.replyTo} onOpen={showOriginal} />}

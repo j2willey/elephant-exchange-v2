@@ -97,3 +97,16 @@ export function GiftMedia({ giftName, posts }: { giftName: string; posts: Post[]
     </span>
   );
 }
+
+/**
+ * Brings a Gift's row into view and moves focus to it, with a brief highlight so it's clear which one: from "about
+ * Mug" in the Feed. The Gifts list and the Gift Tracker give each row the id `gift-<id>`.
+ */
+export function showGift(giftId: string) {
+  const row = document.getElementById(`gift-${giftId}`);
+  if (!row) return;
+  row.scrollIntoView?.({ behavior: "smooth", block: "center" });
+  row.focus({ preventScroll: true });
+  row.classList.add("flash");
+  setTimeout(() => row.classList.remove("flash"), 2000);
+}

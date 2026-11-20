@@ -95,7 +95,7 @@ export function LaptopConsole({
         {game.gifts.map((g) => {
           const takeable = stealing !== null && g.holderId !== stealing && !g.frozen;
           return (
-            <li key={g.id} aria-label={g.name}>
+            <li key={g.id} id={`gift-${g.id}`} tabIndex={-1} aria-label={g.name}>
               <GiftMedia giftName={g.name} posts={posts.filter((p) => p.giftId === g.id && p.status === "visible")} />
               <span className="lc-gift-name">
                 <strong>{g.name}</strong>
