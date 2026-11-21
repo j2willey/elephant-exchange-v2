@@ -55,7 +55,7 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
         <p className="landing-lede">
           Run your party's gift exchange from a laptop plugged into the big screen (a TV or projector). Every opened gift,
           who has it and how many times it's been stolen goes up for the whole room, and everyone follows along on their
-          own phone, with the party's own photo feed to post to, reply in and react to.
+          own phone, where they can share photos and comments, reply to each other and react.
         </p>
         {ways}
         <p className="landing-party-link">
@@ -89,10 +89,10 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
             </p>
           </section>
           <section className="card">
-            <h3>📸 A party feed, not just a scoreboard</h3>
+            <h3>📸 Photos and chatter, not just a scoreboard</h3>
             <p>
-              Guests post photos and comments from their phones into the party's own feed, reply to each other and react
-              with friendly emoji (yes, there's a leg lamp). Photos attach to the gift they show, so anyone can tap a gift
+              Guests share photos and comments from their phones in the party's own social stream, reply to each other and
+              react with friendly emoji (yes, there's a leg lamp). Photos attach to the gift they show, so anyone can tap a gift
               and see what it is, and who's grinning about it.
             </p>
           </section>
@@ -101,10 +101,10 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
             <p>Guests star the gifts they're after, see who's on deck, and vote for the Worst Gift at the end.</p>
           </section>
           <section className="card">
-            <h3>⚖️ The rules keep themselves</h3>
+            <h3>⚖️ The app keeps track of the rules</h3>
             <p>
-              Steal limits, frozen gifts, no take-backs and a final round for the first few players, all kept for you. No
-              more debates.
+              Steal limits, frozen gifts, no take-backs and a final round for the first few players: the app tracks them
+              all and won't allow a move that breaks one. No more debates.
             </p>
           </section>
           <section className="card">

@@ -15,7 +15,7 @@ describe("The landing page", () => {
     expect(within(hero).getByRole("link", { name: /try the demo/i })).toHaveAttribute("href", "/try");
     expect(within(hero).getByRole("link", { name: /host a game/i })).toHaveAttribute("href", "#host");
     expect(screen.getByRole("region", { name: /sound familiar/i })).toHaveTextContent(/wanders the room/i);
-    for (const point of [/turns take seconds/i, /the whole room stays in it/i, /the rules keep themselves/i, /nothing to install/i]) {
+    for (const point of [/turns take seconds/i, /the whole room stays in it/i, /the app keeps track of the rules/i, /nothing to install/i]) {
       expect(screen.getByRole("heading", { name: point })).toBeInTheDocument();
     }
     expect(screen.getByRole("region", { name: /how it works/i })).toHaveTextContent(/create a game.*scoreboard on the big screen.*call names/i);
