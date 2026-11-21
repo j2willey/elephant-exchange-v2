@@ -51,10 +51,11 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
           alt="A big office holiday party in full swing: a room of round tables, a pile of wrapped gifts half picked over, guests holding up the gifts they opened, and the scoreboard on the TV at the far end"
         />
         <img className="landing-medallion" src={medallion} width={640} height={640} alt="" />
-        <p className="landing-tagline">The White Elephant gift swap that keeps the whole room in the game.</p>
+        <p className="landing-tagline">Keep the whole room in your White Elephant gift swap.</p>
         <p className="landing-lede">
-          Run your party's gift exchange from a laptop plugged into the big screen (a TV or projector). Every opened gift,
-          who has it and how many times it's been stolen goes up for the whole room. Guests are welcome to follow along on
+          Your party already has the gifts and the tradition. Elephant Exchange adds a big screen: from a laptop plugged
+          into a TV or projector, every opened gift, who has it and how many times it's been stolen goes up for the whole
+          room. Guests are welcome to follow along on
           their own phones too, keeping up with the gifts and sharing photos and comments. No phone? No problem: the big
           screen shows everyone everything.
         </p>
@@ -70,12 +71,15 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
 
       <section className="card landing-problem" aria-label="Sound familiar?">
         <h2>Sound familiar?</h2>
-        <p>Fifty people, a pile of wrapped gifts and a rule everyone remembers differently. Two hours later you're on turn thirty.</p>
+        <p>
+          White Elephant swaps are a great tradition. With fifty people, a pile of wrapped gifts and a rule everyone
+          remembers a little differently, they can also start to drag.
+        </p>
         <ul>
           <li>Every turn, someone wanders the room asking who has what before they decide whether to steal.</li>
           <li>From the back, nobody can see what that gift card was for, or what was in the box that just got opened.</li>
           <li>Was that one stolen twice or three times? Cue the argument.</li>
-          <li>By the end, half the room has drifted off to the snacks.</li>
+          <li>By the end, part of the room has drifted off to the snacks.</li>
         </ul>
       </section>
 
@@ -83,10 +87,10 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
         <h2 className="landing-section-title">How Elephant Exchange helps</h2>
         <div className="landing-points">
           <section className="card">
-            <h3>⚡ Turns take seconds</h3>
+            <h3>⚡ Turns move faster</h3>
             <p>
-              Every opened gift is on the big screen with its holder and how many steals it has left. People decide from their
-              seats, and the next name is already on deck.
+              Every opened gift is on the big screen with its holder and how many steals it has left. People can decide from
+              their seats, and the next name is already on deck.
             </p>
           </section>
           <section className="card">
@@ -105,7 +109,7 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
             <h3>⚖️ The app keeps track of the rules</h3>
             <p>
               Steal limits, frozen gifts, no take-backs and a final round for the first few players: the app tracks them
-              all and won't allow a move that breaks one. No more debates.
+              all and won't allow a move that breaks one. Fewer debates.
             </p>
           </section>
           <section className="card">
