@@ -15,7 +15,7 @@ import { ContactForm, ContactPage, FeedbackPage } from "./Feedback.js";
 import { Landing, Playbook, TipJar } from "./Landing.js";
 import { NewGame } from "./NewGame.js";
 import { MyOrgs, OrgPage } from "./Orgs.js";
-import { SignInForm } from "./SignIn.js";
+import { SignInForm, useSignedIn } from "./SignIn.js";
 import mark from "./assets/brand-mark.webp";
 import medallion from "./assets/medallion.webp";
 import { Backdrop } from "./Backdrop.js";
@@ -45,6 +45,7 @@ export function AppRoutes() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/sign-in" element={<RedeemLink />} />
+        <Route path="/login" element={<SignInPage />} />
         <Route path="/guide" element={<Playbook />} />
         {/* Its old name, still on links already shared. */}
         <Route path="/playbook" element={<Playbook />} />
@@ -123,7 +124,15 @@ function SignOutLink() {
     };
   }, [api, pathname, inGame]);
 
-  if (inGame || !signedIn) return null;
+  if (inGame) return null;
+  // Signed out: the way back in, from any page (the front page's Host a Game form is the same thing, further down).
+  if (!signedIn) {
+    return pathname === "/sign-in" || pathname === "/login" ? null : (
+      <Link to="/login" className="sign-out">
+        Sign in
+      </Link>
+    );
+  }
   return (
     <button
       className="link sign-out"
@@ -249,8 +258,10 @@ function Home() {
     );
   }
 
+  // On a laptop, two columns: hosting on the left (New Game, Your Games, Your Organizations), the rest beside them. On a phone,
+  // one column in the order of the slots' numbers, as before (styles.css: .home-wide).
   return (
-    <div className="stack home">
+    <div className="stack home home-wide">
       <Backdrop />
       <section className="card home-welcome" aria-label="Welcome">
         <img className="home-medallion" src={medallion} width={640} height={640} alt="" />
@@ -259,41 +270,57 @@ function Home() {
           <p className="muted">Ready to get this year's gift swap going? Start a Game, or take the demo for a spin first.</p>
         </div>
       </section>
-      <NewGame
-        session={session}
-        onTipNoteRead={() => setSession({ ...session, tipNoteRead: true })}
-        onOptionsSaved={(myOptions, alwaysMyOptions) => setSession({ ...session, myOptions, alwaysMyOptions })}
-      />
-      <section className="card playbook-card">
-        <h2>📖 Host's Guide</h2>
-        <p>
-          How the game works and how to run a smooth party: why several Players can go at once, how to use the turn timer,
-          the rules, and what every setting is for. A five-minute read, worth it before your first party.
-        </p>
-        <Link to="/guide">Read the Host's Guide</Link>
-      </section>
-      <DemoGame />
-      <MyGames />
-      <MyOrgs />
-      <TipJar />
-      <ContactForm email={session.email} />
-      <section className="card">
-        <SignedInAs email={session.email} />
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={session.feedbackOk}
-            onChange={(e) => {
-              const ok = e.target.checked;
-              setSession({ ...session, feedbackOk: ok });
-              void api.setFeedbackOk(ok);
-            }}
+      <div className="home-main">
+        <div className="home-slot" style={{ order: 1 }}>
+          <NewGame
+            session={session}
+            onTipNoteRead={() => setSession({ ...session, tipNoteRead: true })}
+            onOptionsSaved={(myOptions, alwaysMyOptions) => setSession({ ...session, myOptions, alwaysMyOptions })}
           />
-          OK to contact me to ask how it went
-        </label>
-        <Link to="/about">About Elephant Exchange</Link>
-        {session.admin && <Link to="/admin">Admin</Link>}
-      </section>
+        </div>
+        <div className="home-slot" style={{ order: 4 }}>
+          <MyGames />
+        </div>
+        <div className="home-slot" style={{ order: 5 }}>
+          <MyOrgs />
+        </div>
+      </div>
+      <div className="home-side">
+        <section className="card playbook-card" style={{ order: 2 }}>
+          <h2>📖 Host's Guide</h2>
+          <p>
+            How the game works and how to run a smooth party: why several Players can go at once, how to use the turn
+            timer, the rules, and what every setting is for. A five-minute read, worth it before your first party.
+          </p>
+          <Link to="/guide">Read the Host's Guide</Link>
+        </section>
+        <div className="home-slot" style={{ order: 3 }}>
+          <DemoGame />
+        </div>
+        <div className="home-slot" style={{ order: 6 }}>
+          <TipJar />
+        </div>
+        <div className="home-slot" style={{ order: 7 }}>
+          <ContactForm email={session.email} />
+        </div>
+        <section className="card" style={{ order: 8 }}>
+          <SignedInAs email={session.email} />
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={session.feedbackOk}
+              onChange={(e) => {
+                const ok = e.target.checked;
+                setSession({ ...session, feedbackOk: ok });
+                void api.setFeedbackOk(ok);
+              }}
+            />
+            OK to contact me to ask how it went
+          </label>
+          <Link to="/about">About Elephant Exchange</Link>
+          {session.admin && <Link to="/admin">Admin</Link>}
+        </section>
+      </div>
     </div>
   );
 }
@@ -381,6 +408,28 @@ function MyGames() {
 }
 
 /** Where emailed links land: uses the link up once, then goes back where the person started (home if nowhere). */
+/** Signing back in, from the top bar's Sign in: the same emailed link as hosting a Game. */
+function SignInPage() {
+  const signedIn = useSignedIn();
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (signedIn === true) navigate("/", { replace: true });
+  }, [signedIn, navigate]);
+  if (signedIn !== false) return <p className="muted">Loading…</p>;
+  return (
+    <div className="stack">
+      <Backdrop />
+      <SignInForm heading="Sign in" next="/" />
+      <section className="card">
+        <p className="muted">
+          New here? Signing in is all it takes to host a Game: no password, nothing to install. Going to a party
+          instead? <Link to="/#join">Enter your code</Link>.
+        </p>
+      </section>
+    </div>
+  );
+}
+
 function RedeemLink() {
   const api = useApi();
   const navigate = useNavigate();

@@ -3188,3 +3188,43 @@ kbd {
 .contact-form input[type="email"] {
   max-width: 24rem;
 }
+
+/*
+ * The signed-in home screen. On a phone, one column: the two column boxes step aside (display: contents) and their
+ * cards fall into one list, in the order of their slots' numbers. On a laptop, the welcome across the top, then
+ * running Games (New Game, Your Games) in a wide column with everything else beside it.
+ */
+.home-wide > .home-main,
+.home-wide > .home-side {
+  display: contents;
+}
+
+.home-slot {
+  display: grid;
+}
+
+.home-slot:empty {
+  display: none;
+}
+
+@media (min-width: 60rem) {
+  .page:has(.home-wide) {
+    max-width: 76rem;
+  }
+
+  .home-wide {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    align-items: start;
+  }
+
+  .home-wide > .home-welcome {
+    grid-column: 1 / -1;
+  }
+
+  .home-wide > .home-main,
+  .home-wide > .home-side {
+    display: grid;
+    gap: 16px;
+    align-content: start;
+  }
+}

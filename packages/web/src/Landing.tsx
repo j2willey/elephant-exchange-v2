@@ -3,7 +3,7 @@ import { OPTION_HELP } from "./GameOptionFields.js";
 import { useEffect, useState, type FormEvent } from "react";
 import type { Testimonial } from "./api.js";
 import { useApi } from "./ApiContext.js";
-import { Link, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import medallion from "./assets/medallion.webp";
 import { Backdrop } from "./Backdrop.js";
 import party from "./assets/landing-party.webp";
@@ -16,6 +16,11 @@ import { SignInForm } from "./SignIn.js";
  * signed-in Host is pointed back to their Games instead of asked to sign in.
  */
 export function Landing({ signedIn = false }: { signedIn?: boolean }) {
+  // Arriving at /#join or /#host (as from the Sign in page): the browser looked for it before it was drawn.
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (hash) document.getElementById(hash.slice(1))?.scrollIntoView?.();
+  }, [hash]);
   const ways = (
     <div className="landing-ctas">
       <Link to="/try" className="button">
