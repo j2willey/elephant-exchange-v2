@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import type { ColorChange, MyOrg } from "./api.js";
 import { useApi } from "./ApiContext.js";
+import { Backdrop } from "./Backdrop.js";
 import { ConfirmDelete } from "./ConfirmDelete.js";
 import { LOOKS, type Look } from "./looks.js";
 
@@ -109,6 +110,7 @@ export function OrgPage() {
 
   return (
     <div className="stack">
+      <Backdrop />
       <section className="card">
         <h2>{org.name}</h2>
         <p className="muted">Its Theme shows on every Game you run for it, unless a Game sets its own.</p>

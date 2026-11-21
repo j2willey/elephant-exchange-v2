@@ -5,6 +5,7 @@ import type { Testimonial } from "./api.js";
 import { useApi } from "./ApiContext.js";
 import { Link, useNavigate } from "react-router";
 import medallion from "./assets/medallion.webp";
+import { Backdrop } from "./Backdrop.js";
 import party from "./assets/landing-party.webp";
 import scoreboard from "./assets/scoreboard.webp";
 import { SignInForm } from "./SignIn.js";
@@ -306,15 +307,19 @@ const RECOMMENDED_WORDS: Record<keyof GameOptions, string> = {
 export function Playbook() {
   return (
     <article className="stack playbook">
-      <Link to="/" className="back">
-        ← Home
-      </Link>
-      <header>
-        <h2>Host's Guide</h2>
-        <p className="muted">
-          How the game works, and how to run a smooth exchange for a big party, 25 people or more. A five-minute read; every setting is
-          explained at the end.
-        </p>
+      <Backdrop />
+      <header className="card home-welcome">
+        <img className="home-medallion" src={medallion} width={640} height={640} alt="" />
+        <div>
+          <Link to="/" className="back">
+            ← Home
+          </Link>
+          <h2>Host's Guide</h2>
+          <p className="muted">
+            How the game works, and how to run a smooth exchange for a big party, 25 people or more. A five-minute read;
+            every setting is explained at the end.
+          </p>
+        </div>
       </header>
 
       <section className="card">

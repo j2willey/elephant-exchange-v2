@@ -16,6 +16,8 @@ import { NewGame } from "./NewGame.js";
 import { MyOrgs, OrgPage } from "./Orgs.js";
 import { SignInForm } from "./SignIn.js";
 import mark from "./assets/brand-mark.webp";
+import medallion from "./assets/medallion.webp";
+import { Backdrop } from "./Backdrop.js";
 import { HighlightsPage } from "./HighlightsPage.js";
 import { WatchScreen } from "./WatchScreen.js";
 
@@ -202,7 +204,15 @@ function Home() {
   if (!session) return <Landing />;
 
   return (
-    <div className="stack">
+    <div className="stack home">
+      <Backdrop />
+      <section className="card home-welcome" aria-label="Welcome">
+        <img className="home-medallion" src={medallion} width={640} height={640} alt="" />
+        <div>
+          <h2>Happy holidays!</h2>
+          <p className="muted">Ready to get this year's gift swap going? Start a Game, or take the demo for a spin first.</p>
+        </div>
+      </section>
       <NewGame
         session={session}
         onTipNoteRead={() => setSession({ ...session, tipNoteRead: true })}

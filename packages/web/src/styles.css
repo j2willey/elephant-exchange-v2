@@ -81,7 +81,8 @@ body {
 
 .brand {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: clamp(1.2rem, 5.2vw, 1.5rem);
+  white-space: nowrap;
 }
 
 .top-bar .sign-out {
@@ -1955,7 +1956,8 @@ a.button {
  * Behind the front page, the party it's for: fixed while the page scrolls past, softened and faded so the solid
  * cards over it stay easy to read. On a laptop it fills the sides; on a phone it shows above and below.
  */
-.landing-backdrop {
+.landing-backdrop,
+.page-backdrop {
   position: fixed;
   inset: -12px; /* the blur's soft edge falls off-screen */
   z-index: -1;
@@ -1964,15 +1966,30 @@ a.button {
   filter: blur(3px) saturate(1.1);
 }
 
-.landing-backdrop::after {
+.landing-backdrop::after,
+.page-backdrop::after {
   content: "";
   position: absolute;
   inset: 0;
   background: linear-gradient(color-mix(in srgb, var(--page) 55%, transparent), color-mix(in srgb, var(--page) 78%, transparent));
 }
 
+/* Behind the app's own pages, more of the holiday picture shows through than behind the front page. */
+.page-backdrop::after {
+  background: linear-gradient(color-mix(in srgb, var(--page) 22%, transparent), color-mix(in srgb, var(--page) 48%, transparent));
+}
+
+.page-backdrop {
+  filter: blur(2px) saturate(1.15);
+}
+
+/* Over the picture, an outlined button gets a solid card behind it. */
+.page:has(.page-backdrop) button.secondary {
+  background: var(--surface);
+}
+
 /* The brand and Sign out, over the photo. */
-.page:has(.landing) > .top-bar {
+.page:has(.landing, .page-backdrop) > .top-bar {
   padding: 8px 14px;
   border-radius: var(--radius);
   background: color-mix(in srgb, var(--surface) 88%, transparent);
@@ -3110,4 +3127,27 @@ kbd {
   border-bottom-width: 2px;
   border-radius: 4px;
   background: var(--surface);
+}
+
+/* The home screen's welcome: the medallion beside a holiday hello. */
+.home-welcome {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.home-welcome h2 {
+  margin: 0 0 4px;
+  font-size: 1.6rem;
+}
+
+.home-welcome p {
+  margin: 0;
+}
+
+.home-medallion {
+  flex: none;
+  width: clamp(84px, 22vw, 120px);
+  height: auto;
+  filter: drop-shadow(0 4px 10px rgb(0 0 0 / 25%));
 }
