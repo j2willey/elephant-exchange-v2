@@ -129,7 +129,7 @@ _Avoid_: Comment (as a separate thing), message
 **Photo**:
 A picture attached to a Post, at most one per Post; a Post may be just a Photo. Photos are deleted 60 days after the Game's last move (whether it ended or was left unfinished): a Post that was only a Photo goes with it, and one with words keeps them. Before then the Host or a Co-host can download the **Album**: every visible Photo, with who posted it and what they said.
 
-**Feed**:
+**Feed**: (shown to people as **💬 Chat** since 2026-11-21: "feed" at a party reads as food; the code keeps the name Feed)
 All of a Game's visible Posts, newest first, on phones and the big screen.
 _Avoid_: Chat, blog, wall
 
