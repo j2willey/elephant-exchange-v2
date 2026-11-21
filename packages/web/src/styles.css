@@ -121,8 +121,16 @@ body {
 }
 
 .brand a {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   color: var(--page-heading);
   text-decoration: none;
+}
+
+.brand-mark {
+  width: 1.5em;
+  height: 1.5em;
 }
 
 .theme-logo {
@@ -651,6 +659,16 @@ select {
 }
 
 /* The logo sits on a white tile, since a Theme's logo isn't made to be read on its main color. */
+/* The app's badge on the big screen, large enough to see from the back, spilling over the banner's edges like a seal. */
+.screen-medallion {
+  flex: none;
+  position: relative;
+  width: 5em;
+  height: 5em;
+  margin: -1.1em 0;
+  filter: drop-shadow(0 0 3px rgb(255 255 255 / 60%));
+}
+
 .screen-logo {
   max-height: 2.6em;
   max-width: 30%;
@@ -1978,6 +1996,17 @@ a.button {
   width: calc(100% + 32px);
   height: auto;
   margin: 0 -16px 6px;
+}
+
+/* The badge, like a seal pressed onto the bottom edge of the party photo. */
+.landing-medallion {
+  --size: clamp(110px, 22vw, 180px);
+  justify-self: center;
+  width: var(--size);
+  height: auto;
+  margin: calc(var(--size) * -0.62) 0 -4px;
+  position: relative;
+  filter: drop-shadow(0 6px 14px rgb(0 0 0 / 30%));
 }
 
 .landing-tagline {

@@ -15,6 +15,7 @@ import { Landing, Playbook, TipJar } from "./Landing.js";
 import { NewGame } from "./NewGame.js";
 import { MyOrgs, OrgPage } from "./Orgs.js";
 import { SignInForm } from "./SignIn.js";
+import mark from "./assets/brand-mark.webp";
 import { HighlightsPage } from "./HighlightsPage.js";
 import { WatchScreen } from "./WatchScreen.js";
 
@@ -30,7 +31,10 @@ export function AppRoutes() {
     <main className="page">
       <div className="top-bar">
         <h1 className="brand">
-          <Link to="/">Elephant Exchange</Link>
+          <Link to="/">
+            <img className="brand-mark" src={mark} width={128} height={128} alt="" />
+            Elephant Exchange
+          </Link>
         </h1>
         <SignOutLink />
       </div>

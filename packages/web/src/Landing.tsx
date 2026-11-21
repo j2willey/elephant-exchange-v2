@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import type { Testimonial } from "./api.js";
 import { useApi } from "./ApiContext.js";
 import { Link, useNavigate } from "react-router";
+import medallion from "./assets/medallion.webp";
 import party from "./assets/landing-party.webp";
 import scoreboard from "./assets/scoreboard.webp";
 import { SignInForm } from "./SignIn.js";
@@ -43,6 +44,7 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
           height={434}
           alt="A big office holiday party in full swing: a room of round tables, a pile of wrapped gifts half picked over, guests holding up the gifts they opened, and the scoreboard on the TV at the far end"
         />
+        <img className="landing-medallion" src={medallion} width={640} height={640} alt="" />
         <p className="landing-tagline">The White Elephant gift swap that keeps the whole room in the game.</p>
         <p className="landing-lede">
           Run your party's gift exchange from a laptop or a phone. Every opened gift, who has it and how many times it's

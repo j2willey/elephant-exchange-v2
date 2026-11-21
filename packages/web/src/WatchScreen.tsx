@@ -1,3 +1,4 @@
+import medallion from "./assets/medallion.webp";
 import { pitchOf } from "./Pitch.js";
 import { useEffect, useMemo, useRef, type RefObject } from "react";
 import { useParams } from "react-router";
@@ -26,7 +27,8 @@ export function WatchScreen() {
   return (
     <div className="screen">
       <header className="screen-banner" role="banner">
-        <ThemeLogo theme={game.theme} className="screen-logo" />
+        {/* An Organization's own logo where it has one; otherwise the app's badge. */}
+        {game.theme.logoUrl ? <ThemeLogo theme={game.theme} className="screen-logo" /> : <img className="screen-medallion" src={medallion} width={640} height={640} alt="" />}
         <h2>{game.name}</h2>
         {game.tagline && <p className="screen-tagline">{game.tagline}</p>}
       </header>
