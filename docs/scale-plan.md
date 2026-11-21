@@ -39,10 +39,44 @@ The window is short: a launch post around 11/23–25, the best chance to reach h
 
 **Still to do:**
 
-1. **Load test:** a throwaway droplet for a few hours (under $2), simulating 20, 100 and 200 parties of 100 phones posting, reacting and loading Photos. Set `MAX_SCREENS` and `MAX_LAG_MS` from what it shows.
+1. **Load test:** a throwaway droplet for a few hours (under $2), simulating 20, 100 and 200 parties of 100 phones posting, reacting and loading Photos ("Load test" below). Set `MAX_SCREENS` and `MAX_LAG_MS` from what it shows.
 2. **Its own droplet for the season:** DigitalOcean CPU-Optimized, 2 dedicated vCPUs and 4 GB, from about $42 a month. Basic 2 vCPU / 4 GB at about $24 if the load test allows. Droplets are billed by the second (since 2026-01-01), so six weeks costs about six weeks. Move on a weekday morning before 11/30 (see "Moving to a new server" below).
 3. **Peak week, only if the load test says so:** resize to 4 dedicated vCPUs (about $84 a month, about $20 for the week). More cores help only with Photo resizing and Caddy; the app itself uses one.
 4. **January:** resize down, or move back to the shared droplet, and delete the seasonal one.
+
+### Load test
+
+`scripts/load-test.mjs` simulates parties against a running server. Each party is a demo Game with 50 made-up Players and `PHONES` (100) screens watching. The screens keep live connections, fetch the Feed whenever they're told it changed, and load each new Photo's small copy once. Meanwhile the party posts (a quarter with a Photo), reacts and opens Gifts. One signed-in Host runs every party, since a demo Game's Host may act as its made-up Players. Parties are added in stages (`STAGES`, default 20, 100, 200), each measured for `STAGE_MINUTES` (default 5). After each stage it prints how long each kind of request took (p50, p95, p99, max), how late phones heard of changes, the counts, and the errors. The script's header lists every setting.
+
+A local run (Docker on Omarchy, 3–4 parties of 20–30 phones) answered the Feed in about 3 ms. Half of all Feed changes reached phones within 5 ms and the rest within the 2-second gathering window. Moves reached phones in 2–3 ms. A Photo post took about 270 ms, which is sharp resizing it, the heaviest single request.
+
+**Running it (about two hours, under $2):**
+
+1. **Two throwaway droplets in the same region:**
+   - **Server:** the size you're considering, e.g. CPU-Optimized 2 vCPU / 4 GB.
+   - **Load generator:** Basic 4 vCPU / 8 GB is plenty for about 20,000 phones.
+2. **On the server droplet:**
+   - Install Docker and `git clone` this repo.
+   - Run `docker compose up -d --build`. That's plain HTTP on port 3000, with no Resend key, so sign-in links go to the log.
+   - Give the container the same `mem_limit` as production, so memory is measured fairly.
+3. **On the generator droplet:**
+   - Install Node and clone the repo, then run `npm install`.
+   - Run `ulimit -n 65536`.
+   - Copy a real phone photo over (`PHOTO=`).
+4. **Run it:**
+   ```sh
+   TARGET=http://<server-ip>:3000 PHOTO=~/real-photo.jpg \
+     LOGS="ssh root@<server-ip> 'cd elephant-exchange-v2 && docker compose logs app --no-log-prefix'" \
+     node scripts/load-test.mjs
+   ```
+5. **Meanwhile, on the server droplet:** `docker stats` (CPU and memory), and `uptime` (load average).
+6. **Read the results:**
+   - **Healthy:** the Feed under ~100 ms at p95, moves reaching phones within ~500 ms, no timeouts or disconnects.
+   - **The limit:** the stage where p95 climbs past a second, or errors appear, is where this size tops out. Set `MAX_SCREENS` a safe step below the screens connected at that stage.
+   - **Busy:** if the guard said busy (`health said busy`), check `MAX_LAG_MS` sits where users would start to notice.
+7. **Delete both droplets.**
+
+It refuses to run against elephantexchange.app. It talks to the server directly rather than through Cloudflare, so every Photo is served by the server. That's the worst case.
 
 **Rough season total:** about $110–130, covering the droplet, a possible peak resize, Resend for one or two months, backups and load-test droplets. Jim's vault has the reasoning (`10-Projects/Elephant-Exchange/Peak-Scale-Plan.md`).
 
