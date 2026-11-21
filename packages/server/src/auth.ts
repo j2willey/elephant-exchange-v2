@@ -1,12 +1,15 @@
 import { createHash, randomBytes } from "node:crypto";
 import { and, count, eq, gt, isNull, lte, type SQL } from "drizzle-orm";
 import { users, sessions, signInLinks, type Db } from "./db.js";
+import { VISITOR_DAYS, VISITOR_DOMAIN } from "./stats.js";
 
 /** Sends sign-in links. Resend in production; tests capture the links instead. */
 export interface Mailer {
   sendSignInLink(email: string, url: string): Promise<void>;
   /** Asks a Host, who said it's OK, how their Game went; without it, nobody is asked by email. */
   sendFeedbackRequest?(email: string, gameName: string, url: string): Promise<void>;
+  /** Passes a message from the contact form to Jim (the admins); a reply goes straight to `replyTo`, if given. */
+  sendContactMessage?(to: readonly string[], message: string, replyTo: string | undefined, from: string): Promise<void>;
 }
 
 /** Until there's a domain to send from, links are written to the server log. */
@@ -16,6 +19,9 @@ export const logMailer: Mailer = {
   },
   async sendFeedbackRequest(email, gameName, url) {
     console.log(`Feedback request for ${email} about ${gameName}: ${url}`);
+  },
+  async sendContactMessage(to, message, replyTo, from) {
+    console.log(`Contact message for ${to.join(", ")} from ${from} (reply to ${replyTo ?? "nobody"}): ${message}`);
   },
 };
 
@@ -93,6 +99,22 @@ export function createAuth(db: Db, now: () => Date, limits: LinkLimits) {
         .values({ tokenHash: hash(sessionToken), userId: user.id, expiresAt: new Date(at.getTime() + SESSION_LIFETIME_MS) })
         .run();
       return { sessionToken, email: user.email, ref: link.ref };
+    },
+
+    /**
+     * A session for someone trying the demo without signing in: a stand-in user (see VISITOR_DOMAIN) that lasts
+     * VISITOR_DAYS. No email is sent; the cookie is all they need.
+     */
+    startVisitor(): { sessionToken: string; email: string } {
+      const at = now();
+      const email = `visitor-${newToken().slice(0, 16).toLowerCase()}@${VISITOR_DOMAIN}`;
+      const userId = newToken();
+      db.insert(users).values({ id: userId, email, createdAt: at, lastSignInAt: at }).run();
+      const sessionToken = newToken();
+      db.insert(sessions)
+        .values({ tokenHash: hash(sessionToken), userId, expiresAt: new Date(at.getTime() + VISITOR_DAYS * 24 * 60 * MINUTE) })
+        .run();
+      return { sessionToken, email };
     },
 
     /** The signed-in person's email, or undefined for no session or an expired one. */

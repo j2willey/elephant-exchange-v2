@@ -145,6 +145,15 @@ export const answerBody = z.object({
 });
 export const publishBody = z.object({ published: z.boolean() });
 export const suggestionBody = z.object({ comment: z.string().trim().min(1).max(2000) });
+/**
+ * A message from the contact form, from anyone: the words, an optional address for a reply, and `website`, a field
+ * people never see (only bots fill it in).
+ */
+export const contactBody = z.object({
+  message: z.string().trim().min(1).max(2000),
+  replyTo: z.union([z.literal(""), z.email().max(254)]).optional(),
+  website: z.string().max(500).optional(),
+});
 export const feedbackBody = z.object({ ok: z.boolean() });
 export const linkRedemption = z.object({ token: z.string().min(1).max(100) });
 /** A Co-host by email; `playsAs` links them to a Player the Host typed in, who hasn't signed in yet. */

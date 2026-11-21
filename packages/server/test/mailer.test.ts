@@ -54,3 +54,25 @@ describe("Asking for a sign-in link when email can't be sent", () => {
     expect((await res.json()).error).toMatch(/couldn't send/i);
   });
 });
+
+describe("Emailing a contact-form message to Jim through Resend", () => {
+  it("sends it to the admins, from our address, set so that replying answers the sender", async () => {
+    const { calls, fetch } = fakeFetch();
+    const mailer = resendMailer({ apiKey: "re_test", from: "Elephant Exchange <hello@swap.example.com>", fetch });
+
+    await mailer.sendContactMessage!(["jim@example.org"], "Does it work for 200 people?", "planner@example.com", "a visitor");
+
+    const body = JSON.parse(String(calls[0]!.init.body));
+    expect(body).toMatchObject({ from: "Elephant Exchange <hello@swap.example.com>", to: ["jim@example.org"], reply_to: "planner@example.com" });
+    expect(body.text).toContain("Does it work for 200 people?");
+  });
+
+  it("leaves Reply-To out when they gave no address", async () => {
+    const { calls, fetch } = fakeFetch();
+    const mailer = resendMailer({ apiKey: "re_test", from: "hello@swap.example.com", fetch });
+
+    await mailer.sendContactMessage!(["jim@example.org"], "Hi", undefined, "a visitor");
+
+    expect(JSON.parse(String(calls[0]!.init.body))).not.toHaveProperty("reply_to");
+  });
+});

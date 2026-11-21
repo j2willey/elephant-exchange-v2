@@ -3151,3 +3151,20 @@ kbd {
   height: auto;
   filter: drop-shadow(0 4px 10px rgb(0 0 0 / 25%));
 }
+
+/* The foot of the app's own pages: a way to reach Jim. */
+.site-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 24px;
+  margin: 24px auto 8px;
+  padding: 10px 16px;
+  width: fit-content;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+}
+
+.contact-form input[type="email"] {
+  max-width: 24rem;
+}

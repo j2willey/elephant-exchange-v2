@@ -10,7 +10,7 @@ import { GameSettings } from "./GameSettings.js";
 import { ConfirmDelete } from "./ConfirmDelete.js";
 import { StatsPage } from "./Stats.js";
 import { SAMPLE_GAME_ID, SamplePhone } from "./SamplePhone.js";
-import { FeedbackPage, SuggestBox } from "./Feedback.js";
+import { ContactForm, ContactPage, FeedbackPage } from "./Feedback.js";
 import { Landing, Playbook, TipJar } from "./Landing.js";
 import { NewGame } from "./NewGame.js";
 import { MyOrgs, OrgPage } from "./Orgs.js";
@@ -58,10 +58,12 @@ export function AppRoutes() {
         <Route path="/games/:id/settings" element={<GameSettings />} />
         <Route path="/games/:id/cohosts" element={<CohostsPage />} />
         <Route path="/orgs/:orgId" element={<OrgPage />} />
+        <Route path="/contact" element={<ContactPage />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/admin/stats" element={<StatsPage />} />
         <Route path="/admin/feedback" element={<FeedbackPage />} />
       </Routes>
+      <SiteFooter />
     </main>
   );
 }
@@ -165,24 +167,31 @@ function TryDemo() {
     };
   }, [api]);
   if (signedIn === null) return <p className="muted">Loading…</p>;
-  if (signedIn) {
-    return (
-      <div className="stack">
-        <DemoGame startOpen />
-      </div>
-    );
-  }
   return (
     <div className="stack">
-      <section className="card">
-        <h2>Try the demo</h2>
-        <p className="muted">
-          The demo is a practice party of your own, with made-up guests. Sign in with your email first: we'll send a
-          link, and the demo opens as soon as you follow it. No password, nothing to install.
-        </p>
-      </section>
-      <SignInForm heading="Sign in to try the demo" next="/try" />
+      <Backdrop />
+      {!signedIn && (
+        <section className="card">
+          <h2>Try the demo</h2>
+          <p className="muted">
+            A practice party of your own, with made-up guests, ready to start. No sign-up, nothing to install: pick how
+            many guests and go.
+          </p>
+        </section>
+      )}
+      <DemoGame startOpen />
     </div>
+  );
+}
+
+/** A way to reach Jim, at the foot of the app's own pages (not a Game's: a guest's phone and the big screen stay uncluttered). */
+function SiteFooter() {
+  const { pathname } = useLocation();
+  if (pathname.startsWith("/games/") || pathname === "/contact") return null;
+  return (
+    <footer className="site-footer">
+      <Link to="/contact">Questions? Contact Jim</Link>
+    </footer>
   );
 }
 
@@ -202,6 +211,25 @@ function Home() {
 
   if (session === "loading") return <p className="muted">Loading…</p>;
   if (!session) return <Landing />;
+  if (session.visitor) {
+    // Trying the demo without signing in: their demo Games, another demo, and the way to host a real party.
+    return (
+      <div className="stack home">
+        <Backdrop />
+        <section className="card home-welcome" aria-label="Welcome">
+          <img className="home-medallion" src={medallion} width={640} height={640} alt="" />
+          <div>
+            <h2>Happy holidays!</h2>
+            <p className="muted">You're trying the demo. To host your own party, sign in with your email: no password, nothing to install.</p>
+          </div>
+        </section>
+        <SignInForm heading="Host your own party" next="/" />
+        <DemoGame />
+        <MyGames />
+        <ContactForm />
+      </div>
+    );
+  }
 
   return (
     <div className="stack home">
@@ -230,7 +258,7 @@ function Home() {
       <MyGames />
       <MyOrgs />
       <TipJar />
-      <SuggestBox />
+      <ContactForm email={session.email} />
       <section className="card">
         <p>Signed in as {session.email}</p>
         <label className="check">

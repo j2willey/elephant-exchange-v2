@@ -27,7 +27,16 @@ export const BREAK_MS = 30 * 60_000;
 export const PLAYED = { players: 4, picks: 3 } as const;
 
 /** Addresses nobody can really have: the smoke test's, and Claude's on Jim's behalf. */
-export const isTestEmail = (email: string) => /@example\.com$/i.test(email.trim());
+export const isTestEmail = (email: string) => /@(example\.com|visitors\.invalid)$/i.test(email.trim());
+
+/**
+ * Someone trying the demo without signing in has a stand-in address on this domain (never a real one: .invalid
+ * can't receive email). They can run demo Games only, are kept out of every count of people, and are let go, with
+ * their demo Games, after VISITOR_DAYS.
+ */
+export const VISITOR_DOMAIN = "visitors.invalid";
+export const isVisitor = (email: string | undefined) => email !== undefined && email.endsWith(`@${VISITOR_DOMAIN}`);
+export const VISITOR_DAYS = 7;
 
 /** A ?ref= source as kept: lowercase letters, digits, - and _, up to 32; anything else isn't one. */
 export function cleanRef(ref: unknown): string | null {
@@ -58,6 +67,8 @@ export interface Insights {
   /** When each played Game's first Pick was, for the page to group by the viewer's own week, weekday and hour. */
   startTimes: string[];
   costs: { signInEmails: { day: string; count: number }[]; signInEmailCap: number; photoBytes: number };
+  /** Demo visitors (people trying the demo without signing in), per day for the last 14 days. */
+  demoVisitors: { day: string; count: number }[];
   setup: SetupInsights;
 }
 
@@ -442,6 +453,13 @@ export function createStats(db: Db, now: () => Date) {
       .orderBy(desc(dailyCounts.day))
       .all();
 
+    const demoVisitors = db
+      .select({ day: dailyCounts.day, count: dailyCounts.count })
+      .from(dailyCounts)
+      .where(and(eq(dailyCounts.name, "demoVisitors"), gte(dailyCounts.day, fortnightAgo)))
+      .orderBy(desc(dailyCounts.day))
+      .all();
+
     const insights: Insights = {
       funnel: [
         { step: "signedIn", people: people.length },
@@ -482,6 +500,7 @@ export function createStats(db: Db, now: () => Date) {
       returningHosts: { returning: [...byHost.values()].filter((mine) => mine.length >= 2).length, hosts: byHost.size },
       startTimes: counted.map((s) => s.g.firstPickAt!.toISOString()),
       costs: { signInEmails: emails, signInEmailCap, photoBytes },
+      demoVisitors,
       setup: setupInsights(real, counted, used, share),
     };
 

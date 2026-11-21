@@ -134,7 +134,7 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
 
       <section className="card landing-again" aria-label="Try it">
         <h2>See it in two minutes</h2>
-        <p>The demo sets up a whole party with made-up guests, ready to start. Open gifts, steal, and watch the big screen keep up.</p>
+        <p>The demo sets up a whole party with made-up guests, ready to start. Open gifts, steal, and watch the big screen keep up. No sign-up needed.</p>
         {ways}
       </section>
 

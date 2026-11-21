@@ -24,6 +24,8 @@ export interface FeedbackItem {
   again: Row["again"];
   thumbs: Row["thumbs"];
   comment: string | null;
+  /** For a contact-form message: where to reply, if they gave an address. */
+  replyTo: string | null;
   /** They said it may be quoted on the website, under this name; and whether Jim has put it there. */
   quoteOk: boolean;
   quoteName: string | null;
@@ -84,10 +86,22 @@ export function createFeedback(db: Db, now: () => Date, keyOf: (email: string) =
       .run();
   }
 
-  function suggest(email: string, comment: string) {
+  /**
+   * A suggestion from a signed-in Host, or a message from the contact form: by `email` when they're signed in,
+   * otherwise by a key that counts nobody (an anonymous message), with any reply address they gave.
+   */
+  function suggest(email: string | undefined, comment: string, replyTo?: string) {
     const at = now();
     db.insert(feedback)
-      .values({ id: randomBytes(12).toString("base64url"), kind: "suggestion", personKey: keyOf(email), comment: comment.trim(), createdAt: at, updatedAt: at })
+      .values({
+        id: randomBytes(12).toString("base64url"),
+        kind: "suggestion",
+        personKey: email ? keyOf(email) : `anonymous:${randomBytes(8).toString("base64url")}`,
+        comment: comment.trim(),
+        replyTo: replyTo || null,
+        createdAt: at,
+        updatedAt: at,
+      })
       .run();
   }
 
@@ -118,6 +132,7 @@ export function createFeedback(db: Db, now: () => Date, keyOf: (email: string) =
         kind: r.kind,
         game: r.gameId ? (nameOf.get(r.gameId) ?? "(deleted Game)") : null,
         from: emailOf.get(r.personKey) ?? null,
+        replyTo: r.replyTo,
         rating: r.rating,
         again: r.again,
         thumbs: r.thumbs,

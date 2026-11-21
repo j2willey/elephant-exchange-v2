@@ -40,6 +40,8 @@ export function DemoGame({ startOpen = false }: { startOpen?: boolean }) {
     e.preventDefault();
     setBusy(true);
     try {
+      // No sign-in needed: someone not signed in gets a stand-in session for demo Games.
+      await api.startVisitor();
       const id = await api.createGame({ name: "Demo game", options: { ...RECOMMENDED_OPTIONS, rosterMode: "self" }, demo: true });
       const playerIds: string[] = [];
       for (const name of shuffled(demoNames).slice(0, Number(players))) {

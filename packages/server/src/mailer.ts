@@ -59,5 +59,21 @@ export function resendMailer({
       });
       if (!res.ok) throw new Error(`Resend refused the email: ${res.status} ${await res.text().catch(() => "")}`);
     },
+
+    async sendContactMessage(to, message, replyTo, sender) {
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          from,
+          to,
+          ...(replyTo ? { reply_to: replyTo } : {}),
+          subject: `Elephant Exchange: a message from ${sender}`,
+          text: `${message}\n\n— ${sender}${replyTo ? `, ${replyTo} (just reply to this email)` : " (no reply address given)"}`,
+        }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!res.ok) throw new Error(`Resend refused the email: ${res.status} ${await res.text().catch(() => "")}`);
+    },
   };
 }

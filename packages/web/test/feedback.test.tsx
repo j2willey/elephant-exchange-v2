@@ -64,19 +64,49 @@ describe("Asking how it went", () => {
     });
   });
 
-  it("takes a suggestion from the Host's home screen, and shows it all on the admin's Feedback page", async () => {
+  it("takes a message from the Host's home screen, and shows it all on the admin's Feedback page", async () => {
     const { signedIn } = await startServer({ adminEmails: ["boss@example.org"] });
     const user = userEvent.setup();
     openApp(await signedIn("ann@example.org"));
 
-    const box = await screen.findByRole("form", { name: /suggest something/i });
+    const box = await screen.findByRole("form", { name: /contact jim/i });
+    expect(box).toHaveTextContent(/jim can reply to ann@example.org/i);
     await user.type(within(box).getByRole("textbox"), "A dark mode, please");
     await user.click(within(box).getByRole("button", { name: /send to jim/i }));
     expect(await within(box).findByRole("status")).toHaveTextContent(/thanks/i);
 
     openApp(await signedIn("boss@example.org"), "/admin/feedback");
     const list = await screen.findByRole("list", { name: /what people said/i });
-    expect(list).toHaveTextContent(/suggestion.*ann@example.org.*a dark mode, please/i);
+    expect(list).toHaveTextContent(/message.*ann@example.org.*a dark mode, please.*reply to ann@example.org/i);
+  });
+});
+
+describe("Contacting Jim", () => {
+  it("is a link at the foot of the front page, for a visitor who isn't signed in, with an address for a reply if they like", async () => {
+    const { origin, signedIn } = await startServer({ adminEmails: ["boss@example.org"] });
+    const user = userEvent.setup();
+    openApp(browser(origin));
+
+    await user.click(await screen.findByRole("link", { name: /questions\? contact jim/i }));
+    const form = await screen.findByRole("form", { name: /contact jim/i });
+    await user.type(within(form).getByLabelText(/what|question|idea/i, { selector: "textarea" }), "Does it work for 200 people?");
+    await user.type(within(form).getByLabelText(/your email, if you'd like a reply/i), "planner@example.com");
+    await user.click(within(form).getByRole("button", { name: /send to jim/i }));
+    expect(await within(form).findByRole("status")).toHaveTextContent(/thanks.*get back to you/i);
+
+    openApp(await signedIn("boss@example.org"), "/admin/feedback");
+    const list = await screen.findByRole("list", { name: /what people said/i });
+    expect(list).toHaveTextContent(/does it work for 200 people\?/i);
+    expect(within(list).getByRole("link", { name: "planner@example.com" })).toHaveAttribute("href", "mailto:planner@example.com");
+  });
+
+  it("isn't at the foot of a Game's pages, so a guest's phone and the big screen stay uncluttered", async () => {
+    const { signedIn } = await startServer();
+    const host = await signedIn("host@example.com");
+    const id = await host.createGame({ name: "Party", options: { ...RECOMMENDED_OPTIONS } });
+    openApp(host, `/games/${id}`);
+    await screen.findByRole("heading", { name: "Party" });
+    expect(screen.queryByRole("link", { name: /contact jim/i })).not.toBeInTheDocument();
   });
 });
 

@@ -72,7 +72,7 @@ function weekOf(at: Date): Date {
  * the Game plays, which features get used, and when Games happen. Over played Games unless it says otherwise.
  */
 export function Insights({ insights, now = new Date() }: { insights: StatsInsights; now?: Date }) {
-  const { funnel, engagement, gameplay, features, returningHosts, startTimes, costs } = insights;
+  const { funnel, engagement, gameplay, features, returningHosts, startTimes, costs, demoVisitors } = insights;
   const starts = startTimes.map((t) => new Date(t));
   const played = starts.length;
 
@@ -180,6 +180,12 @@ export function Insights({ insights, now = new Date() }: { insights: StatsInsigh
             <dt>Busiest day, last 14</dt>
             <dd>
               {busiestEmailDay} <span className="muted small">of {costs.signInEmailCap}</span>
+            </dd>
+          </div>
+          <div>
+            <dt>Demo tries without signing in, today · last 14 days</dt>
+            <dd>
+              {demoVisitors.find((d) => d.day === today)?.count ?? 0} · {demoVisitors.reduce((n, d) => n + d.count, 0)}
             </dd>
           </div>
           <div>

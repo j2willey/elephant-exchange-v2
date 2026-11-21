@@ -7,7 +7,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { and, asc, count, desc, eq, gt, inArray, isNotNull, like, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, inArray, isNotNull, like, lte, or, sql } from "drizzle-orm";
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
@@ -30,7 +30,7 @@ import {
 import { Server as SocketServer } from "socket.io";
 import type { z } from "zod";
 import { createAuth, DEFAULT_LIMITS, logMailer, SESSION_LIFETIME_MS, type LinkLimits, type Mailer } from "./auth.js";
-import { cleanRef, createStats } from "./stats.js";
+import { cleanRef, createStats, isVisitor, VISITOR_DAYS, VISITOR_DOMAIN } from "./stats.js";
 import { createFeedback } from "./feedback.js";
 import {
   isThemeImage,
@@ -64,6 +64,7 @@ import {
   featureBody,
   answerBody,
   suggestionBody,
+  contactBody,
   moderationBody,
   orgBody,
   orgEdit,
@@ -146,6 +147,12 @@ export interface ServerOptions {
 export const BUILD_HEADER = "x-app-build";
 /** A build's name: the content hash in its main script's file name (index-<hash>.js), which changes with any change. */
 export const buildOf = (indexHtml: string) => /\/assets\/index-([\w-]+)\.js/.exec(indexHtml)?.[1];
+
+/** Contact-form messages one address may send in an hour, and how many are emailed to Jim a day (the rest wait on the Feedback page). */
+export const CONTACTS_PER_HOUR = 5;
+/** Demo visitors (trying it without signing in) one address may start in an hour: a party's worth of curious phones. */
+export const DEMO_VISITORS_PER_HOUR = 20;
+export const CONTACT_EMAILS_PER_DAY = 50;
 
 /** How long a Game nobody asks for (and no screen watches) stays in memory; the database always has it. */
 export const IDLE_GAME_HOURS = 6;
@@ -732,6 +739,65 @@ export function createServer({
     return c.body(null, 204);
   });
 
+  /**
+   * The contact form: a message to Jim from anyone, signed in or not, with an address for a reply if they want one.
+   * It's kept with the suggestions on the admin's Feedback page and emailed to the admins, so Jim's own address is
+   * never on the site. At most CONTACTS_PER_HOUR from one address and CONTACT_EMAILS_PER_DAY emailed site-wide (the
+   * rest are still kept); a message with the hidden `website` field filled in came from a bot and is dropped.
+   */
+  /**
+   * Trying the demo without signing in: a stand-in session (see VISITOR_DOMAIN) so the demo opens at once, with
+   * nothing to type. Someone already signed in keeps their own. At most DEMO_VISITORS_PER_HOUR from one address,
+   * and none while the server is too busy.
+   */
+  const visitorsFrom = new Map<string, number[]>();
+  app.post("/api/demo/visitor", (c) => {
+    const email = signedInAs(c);
+    if (email) return c.json({ email, visitor: isVisitor(email) });
+    if (tooBusy()) return c.json({ error: "busy" }, 503);
+    const ip = clientIp(c);
+    const hourAgo = now().getTime() - 60 * 60_000;
+    const recent = (visitorsFrom.get(ip) ?? []).filter((t) => t > hourAgo);
+    if (recent.length >= DEMO_VISITORS_PER_HOUR) return c.json({ error: "tooMany" }, 429);
+    visitorsFrom.set(ip, [...recent, now().getTime()]);
+    const visitor = auth.startVisitor();
+    setCookie(c, SESSION_COOKIE, visitor.sessionToken, {
+      httpOnly: true,
+      sameSite: "Lax",
+      secure: baseUrl.startsWith("https:"),
+      path: "/",
+      maxAge: VISITOR_DAYS * 24 * 60 * 60,
+    });
+    stats.countToday("demoVisitors");
+    return c.json({ email: visitor.email, visitor: true });
+  });
+
+  const contactsFrom = new Map<string, number[]>();
+  let contactEmailsToday = { day: "", sent: 0 };
+  app.post("/api/contact", async (c) => {
+    const body = await parseBody(c, contactBody);
+    if (!body.ok) return body.res;
+    if (body.data.website) return c.body(null, 204); // a bot: say thanks, keep nothing
+    const ip = clientIp(c);
+    const hourAgo = now().getTime() - 60 * 60_000;
+    const recent = (contactsFrom.get(ip) ?? []).filter((t) => t > hourAgo);
+    if (recent.length >= CONTACTS_PER_HOUR) return c.json({ error: "tooMany" }, 429);
+    contactsFrom.set(ip, [...recent, now().getTime()]);
+
+    const signedIn = signedInAs(c);
+    const email = isVisitor(signedIn) ? undefined : signedIn; // someone trying the demo hasn't given an address
+    const replyTo = body.data.replyTo || email;
+    said.suggest(email, body.data.message, replyTo);
+    const day = now().toISOString().slice(0, 10);
+    if (contactEmailsToday.day !== day) contactEmailsToday = { day, sent: 0 };
+    if (mailer.sendContactMessage && admins.size > 0 && contactEmailsToday.sent < CONTACT_EMAILS_PER_DAY) {
+      contactEmailsToday.sent++;
+      // Kept either way, so a failed email never loses the message: it's on the Feedback page.
+      await mailer.sendContactMessage([...admins], body.data.message, replyTo, email ? "a signed-in Host" : "a visitor").catch((e: unknown) => console.error("Contact email failed", e));
+    }
+    return c.body(null, 204);
+  });
+
   /** A browser that arrived from a ?ref= link (it says so once per source): for the statistics. */
   app.post("/api/stats/visit", async (c) => {
     const body = await parseBody(c, visitBody);
@@ -771,6 +837,8 @@ export function createServer({
       feedbackOk: me?.feedbackOk ?? false,
       tipNoteRead: me?.tipNoteRead ?? false,
       admin: isAdmin(email),
+      // Trying the demo without signing in: demo Games only, until they sign in with their email.
+      visitor: isVisitor(email),
       myOptions: mine?.success ? mine.data : null,
       alwaysMyOptions: Boolean(mine?.success && me?.alwaysMyOptions),
     });
@@ -808,6 +876,7 @@ export function createServer({
     const body = await parseBody(c, createGameBody);
     if (!body.ok) return body.res;
     const { orgId } = body.data;
+    if (isVisitor(email) && !body.data.demo) return c.json({ error: "signInToHost" }, 403);
     if (orgId !== undefined && !organizes(orgId, email)) return c.json({ error: "Only an Organization's Organizer can use its Theme" }, 403);
     // 16 random bytes: unguessable, so a Game can't be found without its link or QR code.
     const id = randomBytes(16).toString("base64url");
@@ -1580,7 +1649,7 @@ export function createServer({
 
   app.post("/api/orgs", async (c) => {
     const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
+    if (!email || isVisitor(email)) return c.json({ error: "Sign in first" }, 401);
     const body = await parseBody(c, orgBody);
     if (!body.ok) return body.res;
     const id = randomBytes(12).toString("base64url");
@@ -2061,7 +2130,8 @@ export function createServer({
       .groupBy(gameHosts.email, games.demo)
       .all();
     const orgs = db.select({ email: organizations.organizerEmail, name: organizations.name }).from(organizations).orderBy(asc(organizations.createdAt)).all();
-    const people = db.select().from(users).orderBy(desc(users.createdAt)).all();
+    // Demo visitors aren't people who signed in: they're counted on the Stats page instead.
+    const people = db.select().from(users).orderBy(desc(users.createdAt)).all().filter((u) => !isVisitor(u.email));
     return c.json(
       people.map((u) => ({
         email: u.email,
@@ -2248,9 +2318,26 @@ export function createServer({
     return forgotten;
   }
 
-  /** Clears out what's kept only for a while: old sign-in records, Photos past their time, Games nobody's using. */
+  /** Lets go of demo visitors (and their demo Games) after VISITOR_DAYS. Returns how many visitors went. */
+  function sweepVisitors(): number {
+    const cutoff = new Date(now().getTime() - VISITOR_DAYS * 24 * 60 * 60_000);
+    const gone = db
+      .select({ id: users.id, email: users.email })
+      .from(users)
+      .where(and(like(users.email, `%@${VISITOR_DOMAIN}`), lte(users.createdAt, cutoff)))
+      .all();
+    for (const visitor of gone) {
+      const hosted = db.select({ gameId: gameHosts.gameId }).from(gameHosts).where(eq(gameHosts.email, visitor.email)).all();
+      for (const { gameId } of hosted) deleteGame(gameId);
+      db.delete(sessions).where(eq(sessions.userId, visitor.id)).run();
+      db.delete(users).where(eq(users.id, visitor.id)).run();
+    }
+    return gone.length;
+  }
+
+  /** Clears out what's kept only for a while: old sign-in records, Photos past their time, demo visitors, Games nobody's using. */
   function sweep() {
-    return { ...auth.sweep(), photos: sweepPhotos(), gamesForgotten: forgetIdleGames() };
+    return { ...auth.sweep(), photos: sweepPhotos(), visitors: sweepVisitors(), gamesForgotten: forgetIdleGames() };
   }
 
   /** Serves HTTP and live updates on one port (0 picks a free one). Screens only listen; moves go over HTTP. */

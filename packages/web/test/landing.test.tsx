@@ -109,11 +109,23 @@ describe("The tip jar", () => {
 });
 
 describe("Trying the demo from the front page", () => {
-  it("asks a visitor to sign in first, and brings them back to it", async () => {
+  it("needs no sign-in: a visitor picks how many guests and is in the demo Game, then home lists it and offers to host a real one", async () => {
     const { origin } = await startServer();
-    openApp(browser(origin), "/try");
+    const user = userEvent.setup();
+    const visitor = browser(origin);
+    openApp(visitor, "/try");
 
-    expect(await screen.findByRole("heading", { name: /sign in to try the demo/i })).toBeInTheDocument();
+    expect(await screen.findByText(/no sign-up/i)).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: /create demo game/i }));
+    expect(await screen.findByRole("heading", { name: "Demo game" }, { timeout: 5000 })).toBeInTheDocument();
+    expect(await screen.findByText(/start game/i)).toBeInTheDocument();
+
+    cleanup();
+    openApp(visitor, "/");
+    expect(await screen.findByText(/you're trying the demo/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /host your own party/i })).toBeInTheDocument(); // the sign-in form
+    expect(within(await screen.findByRole("list", { name: /your games/i })).getByText("Demo game")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^new game$/i })).not.toBeInTheDocument();
   });
 
   it("goes straight to the demo's one question for someone signed in", async () => {

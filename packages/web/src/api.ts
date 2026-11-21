@@ -109,6 +109,8 @@ export interface Session {
   myOptions: GameOptions | null;
   /** New Game uses `myOptions` straight away. */
   alwaysMyOptions: boolean;
+  /** Trying the demo without signing in: demo Games only, until they sign in with their email. */
+  visitor?: boolean;
 }
 
 /** How a Host chose a new Game's options, for the statistics. */
@@ -194,6 +196,8 @@ export interface FeedbackSummary {
     again: "yes" | "maybe" | "no" | null;
     thumbs: "up" | "down" | null;
     comment: string | null;
+    /** For a contact-form message: where to reply, if they gave an address. */
+    replyTo: string | null;
     at: string;
   }[];
 }
@@ -214,6 +218,8 @@ export interface StatsInsights {
   returningHosts: { returning: number; hosts: number };
   startTimes: string[];
   costs: { signInEmails: { day: string; count: number }[]; signInEmailCap: number; photoBytes: number };
+  /** People who tried the demo without signing in, per day for the last 14 days. */
+  demoVisitors: { day: string; count: number }[];
   setup: {
     choices: { choice: "recommended" | "customized" | "saved" | "unknown"; games: number; looked: number }[];
     options: {
@@ -599,6 +605,26 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
 
     async suggest(comment: string): Promise<boolean> {
       return (await postJson("/api/feedback/suggestions", { comment })).ok;
+    },
+
+    /**
+     * Lets someone try the demo without signing in: the server gives this browser a stand-in session for demo
+     * Games (someone signed in keeps theirs). Throws ServerBusy when the server is too busy for another.
+     */
+    async startVisitor(): Promise<void> {
+      const res = await postJson("/api/demo/visitor");
+      if (res.status === 503) throw new ServerBusy();
+      if (!res.ok) throw new Error(`starting the demo failed: ${res.status}`);
+    },
+
+    /** A message to Jim from the contact form; `website` is the field only bots fill in. */
+    async contact(message: string, replyTo: string, website = ""): Promise<"sent" | "tooMany" | "failed"> {
+      try {
+        const res = await postJson("/api/contact", { message, replyTo, website });
+        return res.ok ? "sent" : res.status === 429 ? "tooMany" : "failed";
+      } catch {
+        return "failed";
+      }
     },
 
     /** The testimonials on the front page. Empty if they can't be loaded: the page simply goes without. */

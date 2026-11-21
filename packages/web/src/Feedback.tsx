@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import type { FeedbackAsk, FeedbackSummary, GameView } from "./api.js";
 import { useApi } from "./ApiContext.js";
+import { Backdrop } from "./Backdrop.js";
 
 const STARS = [1, 2, 3, 4, 5] as const;
 const AGAIN = [
@@ -190,40 +191,89 @@ function GuestAsk({ gameId }: { gameId: string }) {
 }
 
 /** An idea for Jim, from the Host's home screen. */
-export function SuggestBox() {
+/**
+ * A message to Jim, from anyone: a question, an idea, or something that went wrong. Signed in, he can reply to
+ * their address; otherwise they may give one. It reaches him by email without his address being on the site.
+ */
+export function ContactForm({ email, heading = "Questions? Contact Jim" }: { email?: string | undefined; heading?: string }) {
   const api = useApi();
-  const [text, setText] = useState("");
-  const [state, setState] = useState<"writing" | "sent" | "failed">("writing");
+  const [message, setMessage] = useState("");
+  const [replyTo, setReplyTo] = useState("");
+  const [website, setWebsite] = useState(""); // only bots fill this in
+  const [state, setState] = useState<"writing" | "sending" | "sent" | "tooMany" | "failed">("writing");
+  const [willReply, setWillReply] = useState(false);
 
   async function send(e: FormEvent) {
     e.preventDefault();
-    const ok = await api.suggest(text.trim());
-    setState(ok ? "sent" : "failed");
-    if (ok) setText("");
+    setState("sending");
+    const result = await api.contact(message.trim(), email ? "" : replyTo.trim(), website);
+    setWillReply(Boolean(email || replyTo.trim()));
+    setState(result);
+    if (result === "sent") {
+      setMessage("");
+      setReplyTo("");
+    }
   }
 
   return (
-    <form className="card stack" aria-label="Suggest something" onSubmit={send}>
-      <h3>Suggest something</h3>
-      <label htmlFor="suggestion" className="muted hint">
-        An idea, something that confused you, or something you'd like it to do.
+    <form className="card stack contact-form" aria-label="Contact Jim" onSubmit={send}>
+      <h3>{heading}</h3>
+      <label htmlFor="contact-message" className="muted hint">
+        A question about hosting, an idea, or something that didn't work. Jim reads every one.
       </label>
-      <textarea id="suggestion" rows={3} maxLength={2000} value={text} onChange={(e) => (setText(e.target.value), setState("writing"))} />
-      <button type="submit" className="secondary" disabled={!text.trim()}>
+      <textarea id="contact-message" rows={4} maxLength={2000} required value={message} onChange={(e) => (setMessage(e.target.value), setState("writing"))} />
+      {email ? (
+        <p className="muted hint">Jim can reply to {email}.</p>
+      ) : (
+        <>
+          <label htmlFor="contact-reply">Your email, if you'd like a reply (optional)</label>
+          <input id="contact-reply" type="email" autoComplete="email" maxLength={254} value={replyTo} onChange={(e) => setReplyTo(e.target.value)} />
+        </>
+      )}
+      <div className="visually-hidden" aria-hidden="true">
+        <label htmlFor="contact-website">Leave this empty</label>
+        <input id="contact-website" tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} />
+      </div>
+      <button type="submit" className="secondary" disabled={!message.trim() || state === "sending"}>
         Send to Jim
       </button>
-      {state === "sent" && <p role="status">Thanks! Jim reads every one.</p>}
+      {state === "sent" && <p role="status">Thanks! Jim reads every one{willReply ? " and will get back to you" : ""}.</p>}
+      {state === "tooMany" && (
+        <p className="error" role="alert">
+          That's a lot of messages in an hour. Please try again a little later.
+        </p>
+      )}
       {state === "failed" && (
         <p className="error" role="alert">
-          That didn't send. Please try again.
+          That didn't send. Please check the email address and try again.
         </p>
       )}
     </form>
   );
 }
 
+/** The contact page, linked from the foot of the app's own pages. */
+export function ContactPage() {
+  const api = useApi();
+  const [email, setEmail] = useState<string | undefined | null>(null);
+  useEffect(() => {
+    let current = true;
+    api.session().then((s) => current && setEmail(s?.email));
+    return () => {
+      current = false;
+    };
+  }, [api]);
+  if (email === null) return <p className="muted">Loading…</p>;
+  return (
+    <div className="stack">
+      <Backdrop />
+      <ContactForm email={email} heading="Contact Jim" />
+    </div>
+  );
+}
+
 const when = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-const KIND = { host: "Host", guest: "Guest", suggestion: "Suggestion" } as const;
+const KIND = { host: "Host", guest: "Guest", suggestion: "Message" } as const;
 
 /** What Hosts and guests said, for the admin: the averages, then every answer, newest first. */
 export function FeedbackPage() {
@@ -287,6 +337,11 @@ export function FeedbackPage() {
                   {f.thumbs && <span>{f.thumbs === "up" ? "👍" : "👎"} </span>}
                 </p>
                 {f.comment && <blockquote>{f.comment}</blockquote>}
+                {f.replyTo && (
+                  <p>
+                    Reply to <a href={`mailto:${f.replyTo}`}>{f.replyTo}</a>
+                  </p>
+                )}
                 {f.quoteOk && (
                   <p className="quote-ok">
                     <span>

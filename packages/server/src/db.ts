@@ -421,6 +421,11 @@ export const feedback = sqliteTable(
     /** A guest's thumbs. */
     thumbs: text("thumbs", { enum: ["up", "down"] }),
     comment: text("comment"),
+    /**
+     * For a message from the contact form: the address its sender gave for a reply, if any. Kept only so Jim can
+     * answer; never counted or shown anywhere else.
+     */
+    replyTo: text("reply_to"),
     /** They said their comment may be quoted on the website, under `quoteName` (as they wrote it). */
     quoteOk: integer("quote_ok", { mode: "boolean" }).notNull().default(false),
     quoteName: text("quote_name"),
