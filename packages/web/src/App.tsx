@@ -9,6 +9,7 @@ import { GamePage } from "./GamePage.js";
 import { GameSettings } from "./GameSettings.js";
 import { ConfirmDelete } from "./ConfirmDelete.js";
 import { StatsPage } from "./Stats.js";
+import { SystemPage } from "./System.js";
 import { SAMPLE_GAME_ID, SamplePhone } from "./SamplePhone.js";
 import { ContactForm, ContactPage, FeedbackPage } from "./Feedback.js";
 import { Landing, Playbook, TipJar } from "./Landing.js";
@@ -61,6 +62,7 @@ export function AppRoutes() {
         <Route path="/contact" element={<ContactPage />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/admin/stats" element={<StatsPage />} />
+        <Route path="/admin/system" element={<SystemPage />} />
         <Route path="/admin/feedback" element={<FeedbackPage />} />
       </Routes>
       <SiteFooter />

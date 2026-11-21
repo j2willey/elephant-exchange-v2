@@ -175,6 +175,14 @@ Rather than every server sharing one database, each server keeps its own Games w
 
 **How it would grow (Jim, 2026-11-21):** one server running Caddy and the app; then server 2, with new Games sent to it; then server 3, and so on. Once the first server is busy, it takes no new Games and its own Games end one by one, so it becomes the Caddy server plus everything that isn't about one Game: sign-in, Organizations and Themes, Hosts' Game lists, the contact form, `/admin`. Caddy itself is light (it passes requests on); what loads the first server is the app, so moving new Games elsewhere is what frees it.
 
+#### Watching the servers (built 2026-11-21 for one server)
+
+`/admin/system` (Admin → 🩺 System) shows each server's health, with what's wrong in words. It refreshes every 30 seconds. The server's half is `GET /api/admin/system`, with the readings and the warning rules in `packages/server/src/system.ts`.
+
+- **Each server reports:** its tag and build; screens connected now and the peak since it started; Games being watched and Games kept in memory; the event loop's delay; whether the overload guard is turning new Games away; memory against the container's limit; free disk; photo bytes; the age of the last backup; how long it's been up.
+- **It warns** at: the event loop past half `MAX_LAG_MS`, screens at 80% of `MAX_SCREENS`, memory at 85% of the limit, disk under 10% free, or no backup for 36 hours.
+- **With more servers (not built):** the first server asks the others, rather than the others registering with it. Caddy's config is already the list of servers, since a server gets traffic only once it's added there, so the first server's `.env` would carry the same list (`SERVERS=b=10.0.0.12,...`, tag and private address). For each, it calls a stats endpoint reachable only on the private network, or with a secret shared between the servers. A server that doesn't answer shows as down at once, with no heartbeats to time out. The page already takes a list of servers, so it needs no change.
+
 #### The shared-database path
 
 **How long:** two to three weeks (more tables than when this was first written). **What users notice:** nothing, if it's cut over on a quiet weekday. A cheaper middle step comes first: a much bigger single droplet. That likely covers 1,000 Organizations, since the load is mostly idle phones.
@@ -232,6 +240,8 @@ What users notice: a minute or two of "can't connect" during step 7; phones reco
 - [ ] No deploys on party evenings (Fri/Sat from 4 pm Pacific) in December. Tabs already open keep running the old code until they're reloaded.
 
 ## Watch list for December
+
+- `/admin/system`: everything below at a glance (memory, screens, the event loop, backups, restarts as "up for").
 
 - Resend dashboard: emails a day against the plan.
 - `docker stats elephant-exchange`: memory against `mem_limit`.

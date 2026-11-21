@@ -1,3 +1,4 @@
+import { dirname, join } from "node:path";
 import { resendMailer } from "./mailer.js";
 import { createServer } from "./server.js";
 
@@ -30,6 +31,8 @@ const server = createServer({
   // Past either of these, new Games are asked to try again in a few minutes, so parties under way stay smooth.
   overload: { maxScreens: Number(env["MAX_SCREENS"] ?? 6000), maxLagMs: Number(env["MAX_LAG_MS"] ?? 300) },
   // The tag that starts each new Game's id, naming this server: "a" unless set (docs/scale-plan.md, "One server per Game").
+  // Where backup.ts puts the database's backups (scripts/backup.sh: /data/backups), for the admin's System page.
+  backupsDir: env["BACKUP_DIR"] ?? join(dirname(env["DB_PATH"] ?? "elephant.db"), "backups"),
   ...(env["SERVER_TAG"] ? { serverTag: env["SERVER_TAG"] } : {}),
   ...(env["SIGNIN_LINKS_PER_DAY"] ? { limits: { perDay: Number(env["SIGNIN_LINKS_PER_DAY"]) } } : {}),
 });

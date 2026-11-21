@@ -28,6 +28,7 @@ import {
   type GameState,
 } from "@elephant/rules";
 import { Server as SocketServer } from "socket.io";
+import { diskOf, healthWarnings, lastBackupAt, memoryLimit, type ServerHealth } from "./system.js";
 import type { z } from "zod";
 import { createAuth, DEFAULT_LIMITS, logMailer, SESSION_LIFETIME_MS, type LinkLimits, type Mailer } from "./auth.js";
 import { cleanRef, createStats, isVisitor, VISITOR_DAYS, VISITOR_DOMAIN } from "./stats.js";
@@ -147,6 +148,8 @@ export interface ServerOptions {
    * lowercase letters or digits. Defaults to "a", the first server.
    */
   serverTag?: string;
+  /** Where backup.ts writes the database's backups, so the System page can say when the last was taken. */
+  backupsDir?: string;
 }
 
 /** The header every API answer carries naming the web app's current build. */
@@ -311,11 +314,14 @@ export function createServer({
   adminEmails = [],
   feedSignalMs = 0,
   serverTag = "a",
+  backupsDir,
   overload = {},
 }: ServerOptions) {
   if (!/^[a-z0-9]{1,8}$/.test(serverTag)) throw new Error(`serverTag must be 1–8 lowercase letters or digits, not "${serverTag}"`);
   const db = openDb(dbPath);
-  const photos = photoStore(photosDir ?? mkdtempSync(join(tmpdir(), "elephant-photos-")));
+  const photosRoot = photosDir ?? mkdtempSync(join(tmpdir(), "elephant-photos-"));
+  const photos = photoStore(photosRoot);
+  const startedAt = new Date();
   const themeImages = themeStore(themesDir ?? mkdtempSync(join(tmpdir(), "elephant-themes-")));
   const linkLimits = { ...DEFAULT_LIMITS, ...limits };
   const auth = createAuth(db, now, linkLimits);
@@ -597,6 +603,10 @@ export function createServer({
 
   /** Whether the event loop has lately fallen too far behind (see overload); kept up to date while listening. */
   let lagging = false;
+  /** The event loop's latest delay (99th percentile over 5 s, ms), for the System page; null until measured. */
+  let lagMs: number | null = null;
+  /** The most screens connected at once since this server started, for the System page. */
+  let peakScreens = 0;
   /** Whether to turn away a new Game, to keep the parties under way smooth (see overload). */
   function tooBusy() {
     const screens = io?.engine.clientsCount ?? 0;
@@ -2184,6 +2194,43 @@ export function createServer({
     return c.json(stats.summary({ signInEmailCap: linkLimits.perDay, photoBytes: photos.bytes(), ratings: said.hostRatings() }));
   });
 
+  /** How this server is doing (see system.ts). */
+  function health(): ServerHealth {
+    const rooms = io?.sockets.adapter.rooms;
+    const socketIds = io?.sockets.adapter.sids;
+    // Every screen is in a room named by its own id, as well as its Game's; count only the Games'.
+    const gamesWatched = rooms && socketIds ? [...rooms.keys()].filter((room) => !socketIds.has(room)).length : 0;
+    return {
+      tag: serverTag,
+      build: build ?? null,
+      up: true,
+      startedAt: startedAt.toISOString(),
+      uptimeSeconds: Math.round((Date.now() - startedAt.getTime()) / 1000),
+      screens: io?.engine.clientsCount ?? 0,
+      peakScreens,
+      gamesWatched,
+      gamesInMemory: cache.size,
+      lagMs: lagMs === null ? null : Math.round(lagMs * 10) / 10,
+      busy: tooBusy(),
+      limits: { maxScreens: overload.maxScreens ?? null, maxLagMs: overload.maxLagMs ?? null },
+      memory: { rssBytes: process.memoryUsage.rss(), limitBytes: memoryLimit() },
+      disk: diskOf(photosRoot),
+      photoBytes: photos.bytes(),
+      lastBackupAt: lastBackupAt(backupsDir),
+    };
+  }
+
+  /**
+   * The System page: every server's health, with what's wrong in words. Just this server for now; with more, this
+   * is where the first would ask each of the others for theirs (docs/scale-plan.md, "Watching the servers").
+   */
+  app.get("/api/admin/system", (c) => {
+    c.header("Cache-Control", "no-store");
+    const at = now();
+    const servers = [health()].map((s) => ({ ...s, warnings: healthWarnings(s, at) }));
+    return c.json({ checkedAt: at.toISOString(), servers });
+  });
+
   /** What Hosts and guests said, newest first, with the averages. */
   app.get("/api/admin/feedback", (c) => c.json(said.summary()));
 
@@ -2358,18 +2405,18 @@ export function createServer({
     sweeping.unref(); // never what keeps the process alive
     // How far behind the event loop runs: busy above maxLagMs, and not again until it's back under half that.
     const delay = monitorEventLoopDelay({ resolution: 20 });
-    let watchingLag: ReturnType<typeof setInterval> | undefined;
-    if (overload.maxLagMs !== undefined) {
+    // Measured always, for the System page; it only turns new Games away when overload.maxLagMs is set.
+    delay.enable();
+    const watchingLag = setInterval(() => {
+      const p99 = delay.percentile(99) / 1e6;
+      delay.reset();
+      lagMs = p99;
       const maxLagMs = overload.maxLagMs;
-      delay.enable();
-      watchingLag = setInterval(() => {
-        const p99 = delay.percentile(99) / 1e6;
-        delay.reset();
-        if (!lagging && p99 > maxLagMs) console.warn(`Busy: the event loop is ${Math.round(p99)} ms behind; new Games wait`);
-        lagging = lagging ? p99 > maxLagMs / 2 : p99 > maxLagMs;
-      }, 5_000);
-      watchingLag.unref();
-    }
+      if (maxLagMs === undefined) return;
+      if (!lagging && p99 > maxLagMs) console.warn(`Busy: the event loop is ${Math.round(p99)} ms behind; new Games wait`);
+      lagging = lagging ? p99 > maxLagMs / 2 : p99 > maxLagMs;
+    }, 5_000);
+    watchingLag.unref();
     return new Promise((resolve) => {
       const http = serve({ fetch: app.fetch, port }, (info: AddressInfo) => {
         resolve({
@@ -2377,7 +2424,8 @@ export function createServer({
           // Stops taking requests, then closes the database, which folds SQLite's side file (-wal) back into it.
           close: async () => {
             clearInterval(sweeping);
-            if (watchingLag) clearInterval(watchingLag);
+            clearInterval(watchingLag);
+            delay.disable();
             delay.disable();
             for (const { timer } of feedSignals.values()) clearTimeout(timer);
             feedSignals.clear();
@@ -2403,6 +2451,7 @@ export function createServer({
         const gameId = gameOf(socket) as string;
         void socket.join(gameId);
         stats.notePeakScreens(gameId, sockets.sockets.adapter.rooms.get(gameId)?.size ?? 1);
+        peakScreens = Math.max(peakScreens, sockets.engine.clientsCount);
         socket.emit("game", view(gameId, load(gameId)!, now()));
         socket.emit("posts"); // the Feed may have changed while this screen was asleep
       });

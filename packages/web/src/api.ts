@@ -233,6 +233,32 @@ export interface StatsInsights {
   };
 }
 
+/** How one server is doing (the server's system.ts), with what's wrong in words; for the admin's System page. */
+export interface ServerHealth {
+  tag: string;
+  build: string | null;
+  up: boolean;
+  startedAt: string;
+  uptimeSeconds: number;
+  screens: number;
+  peakScreens: number;
+  gamesWatched: number;
+  gamesInMemory: number;
+  lagMs: number | null;
+  busy: boolean;
+  limits: { maxScreens: number | null; maxLagMs: number | null };
+  memory: { rssBytes: number; limitBytes: number | null };
+  disk: { freeBytes: number; totalBytes: number } | null;
+  photoBytes: number;
+  lastBackupAt: string | null;
+  warnings: string[];
+}
+
+export interface SystemReport {
+  checkedAt: string;
+  servers: ServerHealth[];
+}
+
 export interface StatsSummary {
   insights: StatsInsights;
   records: GameRecord[];
@@ -585,6 +611,14 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
       if (res.status === 404) return "notFound";
       if (!res.ok) throw new Error(`loading the statistics failed: ${res.status}`);
       return (await res.json()) as StatsSummary;
+    },
+
+    /** Every server's health, for the System page: "notFound" for anyone who isn't an admin. */
+    async adminSystem(): Promise<SystemReport | "notFound"> {
+      const res = await fetchFn("/api/admin/system");
+      if (res.status === 404) return "notFound";
+      if (!res.ok) throw new Error(`loading the servers' health failed: ${res.status}`);
+      return (await res.json()) as SystemReport;
     },
 
     /** Leaves a Game out of the statistics (a trial run), or puts it back. */
