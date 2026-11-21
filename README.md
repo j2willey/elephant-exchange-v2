@@ -92,6 +92,7 @@ When developing, sign-in links are printed to the server log instead of being em
 | `FEED_SIGNAL_MS` | The least time between "the Feed changed" signals to a Game's screens; a burst of Posts and Reactions goes out as one | `2000` |
 | `MAX_SCREENS` | Screens connected at once past which new Games are asked to try again in a few minutes (parties under way carry on) | `6000` |
 | `MAX_LAG_MS` | Event-loop delay (99th percentile, over 5 seconds) past which new Games are likewise turned away for now | `300` |
+| `SERVER_TAG` | The tag at the front of every new Game's id (`a.…`), naming the server that holds it, so Games could one day be spread over several servers (`docs/scale-plan.md`). 1–8 lowercase letters or digits | `a` |
 
 In Docker, the data settings point into the `/data` volume.
 

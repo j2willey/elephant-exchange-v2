@@ -19,6 +19,13 @@ services:
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       MAIL_FROM: ${MAIL_FROM:-}
       SIGNIN_LINKS_PER_DAY: ${SIGNIN_LINKS_PER_DAY:-100}
+      # The tag at the front of new Games' ids, naming this server: a, b, ... (docs/scale-plan.md, "One server per Game").
+      SERVER_TAG: ${SERVER_TAG:-a}
+      # The overload guard and the Feed signal (set from the load test). The defaults match main.ts's: never leave
+      # one blank, since a blank becomes 0 (MAX_SCREENS 0 would turn every new Game away).
+      MAX_SCREENS: ${MAX_SCREENS:-6000}
+      MAX_LAG_MS: ${MAX_LAG_MS:-300}
+      FEED_SIGNAL_MS: ${FEED_SIGNAL_MS:-2000}
     # The droplet is shared with other apps (2 GB in all).
     mem_limit: 384m
     networks: [edge]
