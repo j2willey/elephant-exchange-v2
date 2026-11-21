@@ -858,7 +858,7 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
     /** The Feed as this viewer may see it, newest first. */
     async posts(gameId: string): Promise<Post[]> {
       const res = await fetchFn(`/api/games/${encodeURIComponent(gameId)}/posts`);
-      if (!res.ok) throw new Error(`loading the Feed failed: ${res.status}`);
+      if (!res.ok) throw new Error(`loading the Chat failed: ${res.status}`);
       return (await res.json()) as Post[];
     },
 

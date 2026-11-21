@@ -23,7 +23,7 @@ describe("A guest's phone", () => {
     openApp(browser(origin), `/games/${id}`);
 
     expect(await tab(/gifts/i)).toHaveAttribute("aria-selected", "true");
-    for (const name of [/^you$/i, /feed/i, /post/i]) expect(await tab(name)).toHaveAttribute("aria-selected", "false");
+    for (const name of [/^you$/i, /chat/i, /post/i]) expect(await tab(name)).toHaveAttribute("aria-selected", "false");
     expect(await screen.findByRole("listitem", { name: "Socks" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Troop swap" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /scoreboard|link for guests|settings/i })).not.toBeInTheDocument();
@@ -127,20 +127,20 @@ describe("A guest's phone", () => {
     openApp(await signedIn("gus@example.com"), `/games/${id}`);
 
     await user.click(await tab(/^post/i));
-    const form = await screen.findByRole("form", { name: /post to the feed/i });
+    const form = await screen.findByRole("form", { name: /post to the chat/i });
     await user.type(within(form).getByLabelText(/your name/i), "Gus");
     await user.type(within(form).getByLabelText(/what's happening/i), "Nice socks!");
     await user.click(within(form).getByRole("button", { name: /^post$/i }));
 
-    expect(await tab(/feed/i)).toHaveAttribute("aria-selected", "true");
+    expect(await tab(/chat/i)).toHaveAttribute("aria-selected", "true");
     expect(await within(screen.getByRole("feed")).findByText("Nice socks!")).toBeInTheDocument();
-    expect(screen.queryByRole("form", { name: /post to the feed/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("form", { name: /post to the chat/i })).not.toBeInTheDocument();
   });
 
   it("goes back to the Gifts when the Game ends, where the Worst Gift Vote is", async () => {
     const { signedIn, host, id, user } = await underway();
     openApp(await signedIn("gus@example.com"), `/games/${id}`);
-    await user.click(await tab(/feed/i));
+    await user.click(await tab(/chat/i));
     await screen.findByRole("feed");
 
     await host.command(id, { type: "EndGame" });

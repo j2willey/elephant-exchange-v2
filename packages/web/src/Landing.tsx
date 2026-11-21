@@ -54,8 +54,9 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
         <p className="landing-tagline">The White Elephant gift swap that keeps the whole room in the game.</p>
         <p className="landing-lede">
           Run your party's gift exchange from a laptop plugged into the big screen (a TV or projector). Every opened gift,
-          who has it and how many times it's been stolen goes up for the whole room, and everyone follows along on their
-          own phone, where they can share photos and comments, reply to each other and react.
+          who has it and how many times it's been stolen goes up for the whole room. Guests are welcome to follow along on
+          their own phones too, keeping up with the gifts and sharing photos and comments. No phone? No problem: the big
+          screen shows everyone everything.
         </p>
         {ways}
         <p className="landing-party-link">
@@ -91,14 +92,14 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
           <section className="card">
             <h3>📸 Photos and chatter, not just a scoreboard</h3>
             <p>
-              Guests share photos and comments from their phones in the party's own social stream, reply to each other and
+              Guests can share photos and comments from their phones in the party's own social stream, reply to each other and
               react with friendly emoji (yes, there's a leg lamp). Photos attach to the gift they show, so anyone can tap a gift
               and see what it is, and who's grinning about it.
             </p>
           </section>
           <section className="card">
             <h3>⭐ The whole room stays in it</h3>
-            <p>Guests star the gifts they're after, see who's on deck, and vote for the Worst Gift at the end.</p>
+            <p>On their phones, guests can star the gifts they're after, see who's on deck, and vote for the Worst Gift at the end.</p>
           </section>
           <section className="card">
             <h3>⚖️ The app keeps track of the rules</h3>
@@ -110,7 +111,8 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
           <section className="card">
             <h3>📱 Nothing to install</h3>
             <p>
-              It runs in the browser. You run it from a laptop; guests scan the QR code on the big screen with their phones. Free.
+              It runs in the browser. You run it from a laptop; guests who'd like to follow along scan the QR code on the big
+              screen with their phones. Nobody needs a phone to play. Free.
             </p>
           </section>
         </div>
@@ -123,7 +125,7 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
             <strong>Create a Game</strong> and paste in your guest list, or let guests sign themselves up on their phones.
           </li>
           <li>
-            <strong>Put the scoreboard on the big screen</strong> (a TV or projector). Guests scan its QR code to follow along and post.
+            <strong>Put the scoreboard on the big screen</strong> (a TV or projector). Guests who'd like to can scan its QR code to follow along and post from their phones.
           </li>
           <li>
             <strong>Call names, open gifts and make steals</strong> from the Host console on your laptop. The room sees it all, live.
@@ -297,7 +299,7 @@ const SETTINGS_EXPLAINED: [keyof GameOptions, string][] = [
   ["turnSeconds", "Seconds per turn"],
   ["rosterMode", "Who adds the Players?"],
   ["approveNames", "Approve names"],
-  ["moderation", "Feed posting"],
+  ["moderation", "Chat posting"],
 ];
 const RECOMMENDED_WORDS: Record<keyof GameOptions, string> = {
   activeSlots: String(RECOMMENDED_OPTIONS.activeSlots),
@@ -364,7 +366,7 @@ export function Playbook() {
         </p>
         <p>
           <strong>Recruit a Co-host or two.</strong> In a big group, a Co-host at your side can type in what each Gift is
-          while you call the next name, and keep an eye on the Feed. Open 🛡 Co-hosts from your console, find them by name
+          while you call the next name, and keep an eye on the Chat. Open 🛡 Co-hosts from your console, find them by name
           and switch them on. A Co-host can do everything you can at the party, from their own phone or laptop.
         </p>
         <p>
@@ -440,7 +442,7 @@ export function Playbook() {
           <strong>🎤 The pitch.</strong> The holder of a Gift can pitch it from their phone, like an ad: a bold tagline,
           a creative story to tempt someone into stealing a horrible gift (or every reason nobody should take one they
           love), and a photo. When it's stolen, the new holder adds their own part, so the story builds through the
-          night. The holder can tap <strong>Pitch it again</strong> to send their ad back to the top of the Feed, every 5
+          night. The holder can tap <strong>Pitch it again</strong> to send their ad back to the top of the Chat, every 5
           minutes at most so nobody bombards it. You or a Co-host can pitch for a guest without a phone. Read the best
           ones aloud; the big screen's catalog shows the newest part of each.
         </p>
@@ -459,9 +461,9 @@ export function Playbook() {
       </section>
 
       <section className="card">
-        <h3>📸 The party Feed</h3>
+        <h3>📸 The party Chat</h3>
         <p>
-          The Feed is the party's own social stream, on every phone and the big screen. Guests post a few words, a Photo or both,
+          The Chat is the party's own social stream, on guests' phones and the big screen. Guests post a few words, a Photo or both,
           reply to each other's posts and react with friendly emoji: 👍 ❤️ 😂 🎉 🔥 😮, a ⛄ snowman and, of course, the leg
           lamp. Only friendly ones, to keep it in good spirits.
         </p>
@@ -472,10 +474,10 @@ export function Playbook() {
           the Gift? The poster, you or a Co-host can attach it afterwards.
         </p>
         <p>
-          <strong>Get the Feed going.</strong> When you open the Game, tell the room:{" "}
+          <strong>Get the Chat going.</strong> When you open the Game, tell the room:{" "}
           <em>"Post a photo from your phone, and it goes up on the big screen."</em> Then post the first one yourself, a selfie
           with the Gift pile works. Once people see their own photo on the big screen, the rest follow. Guests browsing
-          the Gifts see a little bubble on the 💬 Feed tab counting the new Posts, so nobody misses the fun.
+          the Gifts see a little bubble on the 💬 Chat tab counting the new Posts, so nobody misses the fun.
         </p>
         <p>
           <strong>Sharing the fun.</strong> Anyone can tap <strong>Share</strong> on a Post to send it, Photo and all, to
@@ -483,7 +485,7 @@ export function Playbook() {
           party, so sharing a funny moment doesn't let strangers follow along.
         </p>
         <p>
-          <strong>You stay in charge.</strong> You and your Co-hosts have simple tools to keep the Feed, and the names
+          <strong>You stay in charge.</strong> You and your Co-hosts have simple tools to keep the Chat, and the names
           people choose, right for your crowd, whether it's the office party or a room full of teenagers:
         </p>
         <ul>
@@ -496,7 +498,7 @@ export function Playbook() {
             name until you lock it.
           </li>
           <li>
-            Nobody can flood the Feed: a guest can make 3 Posts a minute, and pitch a Gift again every 5 minutes. You can
+            Nobody can flood the Chat: a guest can make 3 Posts a minute, and pitch a Gift again every 5 minutes. You can
             change both in Settings.
           </li>
           <li>

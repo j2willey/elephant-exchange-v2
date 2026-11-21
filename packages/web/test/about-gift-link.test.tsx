@@ -24,7 +24,7 @@ async function underway() {
 }
 
 const aboutMug = async () =>
-  within(await within(await screen.findByRole("feed", { name: /feed/i })).findByRole("article", { name: /gus/i })).findByRole("button", {
+  within(await within(await screen.findByRole("feed", { name: /chat/i })).findByRole("article", { name: /gus/i })).findByRole("button", {
     name: /about mug/i,
   });
 
@@ -33,7 +33,7 @@ describe("The Gift a Post is about, in the Feed", () => {
     screenWidth(false);
     const { gus, id, user } = await underway();
     openApp(gus, `/games/${id}`);
-    await onTab(/^feed/i);
+    await onTab(/^chat/i);
 
     await user.click(await aboutMug());
 

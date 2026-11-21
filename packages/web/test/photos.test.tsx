@@ -24,13 +24,13 @@ async function underway() {
   openApp(guest, `/games/${id}`);
   const user = userEvent.setup();
   await onTab(/^post/i);
-  const form = await screen.findByRole("form", { name: /post to the feed/i });
+  const form = await screen.findByRole("form", { name: /post to the chat/i });
   return { ...server, id, user, form };
 }
 
 /** The image a Post shows, once it's in the Feed. */
 const photoInFeed = async (author: string) =>
-  (await onTab(/feed/i), within(await screen.findByRole("feed", { name: /feed/i })).findByRole("img", { name: new RegExp(`photo from ${author}`, "i") }));
+  (await onTab(/chat/i), within(await screen.findByRole("feed", { name: /chat/i })).findByRole("img", { name: new RegExp(`photo from ${author}`, "i") }));
 
 describe("Photos in Posts", () => {
   it("lets someone add a Photo to a Post, which everyone sees in the Feed", async () => {

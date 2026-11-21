@@ -182,7 +182,7 @@ export function DemoPage() {
             {/* A new frame for each Player: the phone starts afresh, as theirs. */}
             <iframe key={phonePlayer.id} title={`${phonePlayer.name}'s phone`} src={`/games/${id}?demoPlayer=${encodeURIComponent(phonePlayer.id)}`} />
             <p className="muted hint">
-              Try the 💬 Feed: post a Photo and watch it land on the big screen. Or add a Photo to a Gift once it's opened.
+              Try the 💬 Chat: post a Photo and watch it land on the big screen. Or add a Photo to a Gift once it's opened.
             </p>
           </>
         ) : (

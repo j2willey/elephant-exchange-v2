@@ -21,7 +21,7 @@ async function underway() {
 
 const composer = async () => {
   await onTab(/^post/i);
-  return screen.findByRole("form", { name: /post to the feed/i });
+  return screen.findByRole("form", { name: /post to the chat/i });
 };
 
 async function postAs(user: ReturnType<typeof userEvent.setup>, name: string, words: string) {
@@ -29,7 +29,7 @@ async function postAs(user: ReturnType<typeof userEvent.setup>, name: string, wo
   await user.type(within(form).getByLabelText(/your name/i), name);
   await user.type(within(form).getByLabelText(/what's happening/i), words);
   await user.click(within(form).getByRole("button", { name: /^post$/i }));
-  await within(await screen.findByRole("feed", { name: /feed/i })).findByText(words);
+  await within(await screen.findByRole("feed", { name: /chat/i })).findByText(words);
 }
 
 describe("A Guest's name", () => {

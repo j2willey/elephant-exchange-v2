@@ -167,8 +167,8 @@ const modes: { mode: Moderation; label: string }[] = [
 function Posting({ game }: { game: GameView }) {
   const api = useApi();
   return (
-    <section className="card" aria-label="Feed settings">
-      <h2>Feed</h2>
+    <section className="card" aria-label="Chat settings">
+      <h2>Chat</h2>
       <fieldset className="choices">
         <legend>Posting</legend>
         {modes.map(({ mode, label }) => (
@@ -207,7 +207,7 @@ function FeedLimits({ game }: { game: GameView }) {
   }
 
   return (
-    <form className="stack feed-limits" aria-label="Feed limits" onSubmit={save}>
+    <form className="stack feed-limits" aria-label="Chat limits" onSubmit={save}>
       <label htmlFor="posts-per-minute">Most Posts a guest can make in a minute</label>
       <input
         id="posts-per-minute"
@@ -221,7 +221,7 @@ function FeedLimits({ game }: { game: GameView }) {
         onChange={(e) => (setPerMinute(e.target.value), setStatus("idle"))}
       />
       <p id="posts-per-minute-hint" className="muted hint">
-        A few quick replies are fine; this stops anyone flooding the Feed. You and your Co-hosts aren't limited. 0 for no
+        A few quick replies are fine; this stops anyone flooding the Chat. You and your Co-hosts aren't limited. 0 for no
         limit.
       </p>
       <label htmlFor="repitch-minutes">Minutes before a holder can pitch their Gift again</label>
@@ -237,11 +237,11 @@ function FeedLimits({ game }: { game: GameView }) {
         onChange={(e) => (setRepitch(e.target.value), setStatus("idle"))}
       />
       <p id="repitch-minutes-hint" className="muted hint">
-        "Pitch it again" sends a holder's pitch back to the top of the Feed. This keeps the same ad from bombarding
+        "Pitch it again" sends a holder's pitch back to the top of the Chat. This keeps the same ad from bombarding
         everyone. 0 for no wait.
       </p>
       <button type="submit" className="secondary" disabled={status === "saving"}>
-        Save Feed limits
+        Save Chat limits
       </button>
       {status === "saved" && (
         <p className="muted" role="status">

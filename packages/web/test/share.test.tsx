@@ -26,8 +26,8 @@ async function following() {
   );
   const user = userEvent.setup();
   openApp(browser(server.origin), `/games/${id}`);
-  await onTab(/feed/i);
-  const feed = await screen.findByRole("feed", { name: /feed/i });
+  await onTab(/chat/i);
+  const feed = await screen.findByRole("feed", { name: /chat/i });
   await within(feed).findByRole("img", { name: /photo from gus/i });
   return { ...server, id, user, feed };
 }

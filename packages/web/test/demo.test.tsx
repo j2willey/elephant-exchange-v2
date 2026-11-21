@@ -101,7 +101,7 @@ describe("A demo page's sample phone", () => {
     expect(screen.queryByText(/host console/i)).not.toBeInTheDocument();
     await user.type(screen.getByRole("textbox"), "Hello from Ann");
     await user.click(screen.getByRole("button", { name: /^post$/i }));
-    await user.click(await screen.findByRole("tab", { name: /feed/i }));
+    await user.click(await screen.findByRole("tab", { name: /chat/i }));
     expect(await screen.findByText("Hello from Ann")).toBeInTheDocument();
     expect(screen.getAllByText("Ann").length).toBeGreaterThan(0);
   });

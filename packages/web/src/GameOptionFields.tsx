@@ -42,7 +42,7 @@ export const OPTION_HELP: Record<keyof GameOptions, ReactNode> = {
   ),
   moderation: (
     <>
-      Guests can post words and Photos to the party's Feed, which shows on their phones and the big screen.{" "}
+      Guests can post words and Photos to the party's Chat, which shows on their phones and the big screen.{" "}
       <strong>Open:</strong> Posts appear at once. <strong>Approval:</strong> each waits for you or a Co-host.{" "}
       <strong>Paused:</strong> nobody can post. You can switch at any time, and hide any Post.
     </>
@@ -150,7 +150,7 @@ export function GameOptionFields({ value, onChange }: { value: OptionDraft; onCh
         </label>
       </Labelled>
 
-      <h3>The party Feed</h3>
+      <h3>The party Chat</h3>
       <Labelled label="Posting" help={OPTION_HELP.moderation}>
         <fieldset className="choices">
           <legend className="visually-hidden">Posting</legend>
@@ -174,6 +174,6 @@ export function optionsInWords(o: GameOptions): string {
     o.turnSeconds === 0 ? "no timer" : `${o.turnSeconds}-second timer`,
     o.rosterMode === "self" ? "guests sign up on their phones" : "you enter the Players",
     ...(o.approveNames ? ["names approved first"] : []),
-    o.moderation === "open" ? "open Feed" : o.moderation === "approval" ? "Posts approved first" : "Feed paused",
+    o.moderation === "open" ? "open Chat" : o.moderation === "approval" ? "Posts approved first" : "Chat paused",
   ].join(" · ");
 }

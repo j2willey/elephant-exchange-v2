@@ -56,7 +56,7 @@ describe("The Host renaming someone, and locking the name", () => {
     const { host, guest, id, user } = await party();
     openApp(host, `/games/${id}`);
 
-    const feed = await screen.findByRole("feed", { name: /feed/i });
+    const feed = await screen.findByRole("feed", { name: /chat/i });
     await rename(await within(feed).findByRole("article", { name: /rude dude/i }), /rename rude dude/i, "Guest Gary", user);
 
     await within(feed).findByRole("article", { name: /guest gary/i });
@@ -77,7 +77,7 @@ describe("The Host renaming someone, and locking the name", () => {
     screenWidth(false);
     const { guest, id } = await party();
     openApp(guest, `/games/${id}`);
-    await onTab(/^feed/i);
+    await onTab(/^chat/i);
     await screen.findByRole("article", { name: /mr\. big/i });
     expect(screen.queryByRole("button", { name: /rename/i })).not.toBeInTheDocument();
   });
@@ -92,7 +92,7 @@ describe("A Guest whose name is locked", () => {
     openApp(guest, `/games/${id}`);
     await onTab(/^post/i);
 
-    const form = await screen.findByRole("form", { name: /post to the feed/i });
+    const form = await screen.findByRole("form", { name: /post to the chat/i });
     expect(within(form).queryByLabelText(/your name/i)).not.toBeInTheDocument();
     expect(form).toHaveTextContent(/posting as guest gary/i);
     expect(form).toHaveTextContent(/your host set this name/i);

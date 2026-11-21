@@ -70,9 +70,9 @@ export function Feed({
 
   return (
     <section className="card" aria-label="Posts">
-      <h2>Feed</h2>
+      <h2>Chat</h2>
       {composer && game.phase !== "ended" && <Composer game={game} onPosted={reload} offerSignIn={offerSignIn} />}
-      <div role="feed" aria-label="Feed" className="feed">
+      <div role="feed" aria-label="Chat" className="feed">
         {posts.length === 0 && <p className="muted">No Posts yet.</p>}
         {posts.map((p) => (
           <article key={p.id} id={`feed-post-${p.id}`} tabIndex={-1} aria-label={`Post from ${p.author}`} className={`post ${p.status}`}>
@@ -437,7 +437,7 @@ export function Composer({
   return (
     <form
       className={replyTo || gift ? "stack reply-form" : "stack"}
-      aria-label={replyTo ? `Reply to ${replyTo.author}` : gift ? `Add a photo of ${gift.name}` : "Post to the Feed"}
+      aria-label={replyTo ? `Reply to ${replyTo.author}` : gift ? `Add a photo of ${gift.name}` : "Post to the Chat"}
       onSubmit={submit}
     >
       {locked && (
@@ -480,7 +480,7 @@ export function Composer({
       {game.gifts.length > 0 && !replyTo && !gift && (
         <>
           <label htmlFor={`${ids}-gift`}>About a Gift? (optional)</label>
-          <GiftSelect id={`${ids}-gift`} game={game} value={giftId} onChange={setGiftId} none="No, just the Feed" />
+          <GiftSelect id={`${ids}-gift`} game={game} value={giftId} onChange={setGiftId} none="No, just the Chat" />
         </>
       )}
       {game.moderation === "approval" && <p className="muted hint">The Host approves each Post before others see it.</p>}
@@ -636,7 +636,7 @@ function AttachToGift({ game, post, onDone }: { game: GameView; post: Post; onDo
   return (
     <form className="stack reply-form" aria-label="Which gift is this about?" onSubmit={save}>
       <label htmlFor={`${ids}-gift`}>Which gift is this about?</label>
-      <GiftSelect id={`${ids}-gift`} game={game} value={giftId} onChange={setGiftId} none="None, just the Feed" />
+      <GiftSelect id={`${ids}-gift`} game={game} value={giftId} onChange={setGiftId} none="None, just the Chat" />
       <div className="inline">
         <button type="submit">Save</button>
         <button type="button" className="secondary" onClick={() => setOpen(false)}>

@@ -17,13 +17,13 @@ async function underway() {
   return { ...server, host, gus, id, user: userEvent.setup() };
 }
 
-const gusPost = async () => within(await screen.findByRole("feed", { name: /feed/i })).findByRole("article", { name: /gus/i });
+const gusPost = async () => within(await screen.findByRole("feed", { name: /chat/i })).findByRole("article", { name: /gus/i });
 
 describe("Attaching a Post to a Gift from the Feed", () => {
   it("lets the poster pick the Gift afterwards, and it then shows under that Gift", async () => {
     const { gus, id, user } = await underway();
     openApp(gus, `/games/${id}`);
-    await onTab(/^feed/i);
+    await onTab(/^chat/i);
 
     await user.click(await within(await gusPost()).findByRole("button", { name: /attach to a gift/i }));
     const form = within(await gusPost()).getByRole("form", { name: /which gift/i });
@@ -50,7 +50,7 @@ describe("Attaching a Post to a Gift from the Feed", () => {
   it("isn't offered on someone else's Post", async () => {
     const { signedIn, id } = await underway();
     openApp(await signedIn("dot@example.com"), `/games/${id}`);
-    await onTab(/^feed/i);
+    await onTab(/^chat/i);
     await gusPost();
     expect(screen.queryByRole("button", { name: /attach to a gift/i })).not.toBeInTheDocument();
   });
@@ -76,12 +76,12 @@ describe("Picking the Gift, in a big Game with two of the same", () => {
     const { gus, id, user } = await twoMugs();
     openApp(gus, `/games/${id}`);
     await onTab(/^post/i);
-    const form = await screen.findByRole("form", { name: /post to the feed/i });
+    const form = await screen.findByRole("form", { name: /post to the chat/i });
     const select = within(form).getByLabelText(/about a gift/i);
 
-    expect(choices(select)).toEqual(["No, just the Feed", "Candle (Cat)", "Mug (Ann)", "Mug (Bob)"]);
+    expect(choices(select)).toEqual(["No, just the Chat", "Candle (Cat)", "Mug (Ann)", "Mug (Bob)"]);
     await user.click(within(form).getByRole("button", { name: /sort by holder/i }));
-    expect(choices(select)).toEqual(["No, just the Feed", "Ann: Mug", "Bob: Mug", "Cat: Candle"]);
+    expect(choices(select)).toEqual(["No, just the Chat", "Ann: Mug", "Bob: Mug", "Cat: Candle"]);
 
     // The one picked is the one posted about: Bob's Mug, not Ann's.
     await user.selectOptions(select, "Bob: Mug");
@@ -97,7 +97,7 @@ describe("Changing your mind about a Post", () => {
     const { gus, id, user } = await underway();
     openApp(gus, `/games/${id}`);
     await onTab(/^post/i);
-    const form = await screen.findByRole("form", { name: /post to the feed/i });
+    const form = await screen.findByRole("form", { name: /post to the chat/i });
     expect(within(form).queryByRole("button", { name: /^clear$/i })).not.toBeInTheDocument(); // nothing to clear yet
 
     await user.type(within(form).getByLabelText(/what's happening/i), "Never mind");

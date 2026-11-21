@@ -210,7 +210,7 @@ const OPTIONS: Record<string, string> = {
   turnSeconds: "Seconds per turn",
   rosterMode: "Who adds Players",
   approveNames: "Approve names",
-  moderation: "Feed posting",
+  moderation: "Chat posting",
 };
 const VALUES: Record<string, string> = { host: "Host enters", self: "Sign up on phones", true: "on", false: "off" };
 const valueWords = (v: string) => VALUES[v] ?? v;

@@ -34,7 +34,7 @@ async function party() {
 const shown = async (api: { posts: (id: string) => Promise<{ text: string; status: string }[]> }, id: string) =>
   (await api.posts(id)).filter((p) => p.status === "visible").map((p) => p.text).sort();
 
-const feedPost = async (author: RegExp) => within(await screen.findByRole("feed", { name: /feed/i })).findByRole("article", { name: author });
+const feedPost = async (author: RegExp) => within(await screen.findByRole("feed", { name: /chat/i })).findByRole("article", { name: author });
 
 describe("Hiding a thread from the Feed", () => {
   it("offers Hide with replies on a Post that has replies, and Show again brings them back", async () => {
@@ -82,6 +82,6 @@ describe("Muting a poster from the Feed", () => {
     await onTab(/^post/i);
 
     await screen.findByText(/the host has paused your posting/i);
-    expect(screen.queryByRole("form", { name: /post to the feed/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("form", { name: /post to the chat/i })).not.toBeInTheDocument();
   });
 });

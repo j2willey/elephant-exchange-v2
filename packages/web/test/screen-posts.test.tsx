@@ -79,7 +79,7 @@ describe("Posts on the big screen", () => {
   it("offers no way to post or moderate: the screen only watches", async () => {
     await onTheBigScreen();
     await latest();
-    expect(screen.queryByRole("form", { name: /post to the feed/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("form", { name: /post to the chat/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /hide/i })).not.toBeInTheDocument();
   });

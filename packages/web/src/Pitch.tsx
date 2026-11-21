@@ -61,7 +61,7 @@ export function GiftPitch({
   async function again(part: Post) {
     const result = await api.repitch(game.id, gift.id, hosting && part.pitchFor !== me ? part.pitchFor! : undefined);
     if (result === "sent") {
-      setNote("Sent to the top of the Feed.");
+      setNote("Sent to the top of the Chat.");
       reload?.();
     } else setNote(result === "failed" ? "That didn't work. Please try again." : `You can pitch it again in ${Math.ceil(result.wait / 60)} min.`);
   }

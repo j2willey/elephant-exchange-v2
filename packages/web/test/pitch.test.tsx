@@ -141,7 +141,7 @@ describe("A pitch's tagline, and pitching it again", () => {
     await user.type(perMinute, "3");
     await user.clear(screen.getByLabelText(/minutes before a holder can pitch/i));
     await user.type(screen.getByLabelText(/minutes before a holder can pitch/i), "10");
-    await user.click(screen.getByRole("button", { name: /save feed limits/i }));
+    await user.click(screen.getByRole("button", { name: /save chat limits/i }));
 
     await screen.findByText(/^saved\.$/i);
     expect(await host.game(id)).toMatchObject({ postsPerMinute: 3, repitchMinutes: 10 });

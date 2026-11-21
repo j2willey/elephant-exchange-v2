@@ -18,7 +18,7 @@ describe("The sample phone behind the front page's picture", () => {
 
       await user.click(screen.getByRole("tab", { name: /gifts/i }));
       expect(await screen.findByText(/espresso machine/i)).toBeInTheDocument();
-      await user.click(screen.getByRole("tab", { name: /feed/i }));
+      await user.click(screen.getByRole("tab", { name: /chat/i }));
       expect(await screen.findByText(/one steal from frozen/i)).toBeInTheDocument();
     });
   }

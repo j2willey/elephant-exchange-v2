@@ -250,7 +250,7 @@ type GuestTab = "gifts" | "you" | "feed" | "post";
 const guestTabs: { id: GuestTab; icon: string; label: string }[] = [
   { id: "gifts", icon: "🎁", label: "Gifts" },
   { id: "you", icon: "👤", label: "You" },
-  { id: "feed", icon: "💬", label: "Feed" },
+  { id: "feed", icon: "💬", label: "Chat" },
   { id: "post", icon: "📷", label: "Post" },
 ];
 

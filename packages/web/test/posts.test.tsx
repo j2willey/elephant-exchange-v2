@@ -17,8 +17,8 @@ async function underway() {
 }
 
 const feed = async () => {
-  await onTab(/feed/i);
-  return screen.findByRole("feed", { name: /feed/i });
+  await onTab(/chat/i);
+  return screen.findByRole("feed", { name: /chat/i });
 };
 const postsInFeed = async () => within(await feed()).queryAllByRole("article").map((a) => a.textContent);
 const feedShows = (text: RegExp) => waitFor(async () => expect((await postsInFeed()).join("\n")).toMatch(text));
@@ -26,7 +26,7 @@ const feedShows = (text: RegExp) => waitFor(async () => expect((await postsInFee
 /** Writes a Post from the open screen, about a Gift if one is named; `phone` picks the screen when more than one is open. */
 async function post(user: ReturnType<typeof userEvent.setup>, words: string, opts: { as?: string; about?: string; phone?: HTMLElement } = {}) {
   await onTab(/^post/i, opts.phone);
-  const form = await screen.findByRole("form", { name: /post to the feed/i });
+  const form = await screen.findByRole("form", { name: /post to the chat/i });
   const yourName = within(form).queryByLabelText(/your name/i);
   if (yourName && opts.as) await user.type(yourName, opts.as);
   await user.type(within(form).getByLabelText(/what's happening/i), words);
@@ -63,7 +63,7 @@ describe("Posts", () => {
 
     await feedShows(/dan.*hi all/i);
     await onTab(/^post/i);
-    expect(within(await screen.findByRole("form", { name: /post to the feed/i })).queryByLabelText(/your name/i)).not.toBeInTheDocument();
+    expect(within(await screen.findByRole("form", { name: /post to the chat/i })).queryByLabelText(/your name/i)).not.toBeInTheDocument();
   });
 
   it("shows a Post about a Gift in the Feed and under that Gift", async () => {
@@ -89,7 +89,7 @@ describe("Posts", () => {
     await onTab(/^post/i);
     // The sign-in offer comes once the page has checked who's there, which may be after the Feed loads.
     expect(await screen.findByRole("button", { name: /send.*link/i })).toBeInTheDocument();
-    expect(screen.queryByRole("form", { name: /post to the feed/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("form", { name: /post to the chat/i })).not.toBeInTheDocument();
   });
 });
 
@@ -143,7 +143,7 @@ describe("Moderation", () => {
     await onTab(/^post/i);
 
     expect(await screen.findByText(/the host has paused posting/i)).toBeInTheDocument();
-    expect(screen.queryByRole("form", { name: /post to the feed/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("form", { name: /post to the chat/i })).not.toBeInTheDocument();
   });
 
   it("isn't offered to anyone but the Host and Co-hosts", async () => {

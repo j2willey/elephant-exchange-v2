@@ -93,7 +93,7 @@ describe("Setting up a Game", () => {
     const user = await createGame();
 
     const cards = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
-    expect(cards.indexOf("Players")).toBeLessThan(cards.indexOf("Feed"));
+    expect(cards.indexOf("Players")).toBeLessThan(cards.indexOf("Chat"));
     expect(screen.getByRole("button", { name: /start game/i })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: /how this game looks/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("radio", { name: /approval/i })).not.toBeInTheDocument();

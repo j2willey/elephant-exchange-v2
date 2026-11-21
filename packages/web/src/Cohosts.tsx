@@ -80,7 +80,7 @@ function Panel({ game, changes }: { game: GameView; changes: number }) {
     <section className="card stack" aria-label="Co-hosts">
       <h2>{game.name}: Co-hosts</h2>
       <p className="muted hint">
-        A Co-host can do everything at the party that you can: enter opens and steals, moderate the Feed, run the vote.
+        A Co-host can do everything at the party that you can: enter opens and steals, moderate the Chat, run the vote.
         Only you add Co-hosts or delete the Game. Co-hosts must sign in, so they're found here by the name they joined
         with. Players you typed in are found too, and need an email added.
       </p>

@@ -161,7 +161,7 @@ export function Highlights({ game, posts, random = Math.random }: { game: GameVi
     return (
       <section className="card now highlights-empty" aria-label="Highlights">
         <p className="big">Highlights</p>
-        <p className="muted">Photos and Posts from the Feed will show here. Nobody posted this time.</p>
+        <p className="muted">Photos and Posts from the Chat will show here. Nobody posted this time.</p>
       </section>
     );
   }
