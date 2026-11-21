@@ -141,6 +141,12 @@ export interface ServerOptions {
    * smooth. Left out (as in tests), there's no limit.
    */
   overload?: { maxScreens?: number; maxLagMs?: number };
+  /**
+   * The tag at the front of every new Game's id ("a" makes "a.<random>"): which server holds the Game, so Caddy
+   * could one day send each Game's requests to its own server (docs/scale-plan.md, "One server per Game"). A few
+   * lowercase letters or digits. Defaults to "a", the first server.
+   */
+  serverTag?: string;
 }
 
 /** The header every API answer carries naming the web app's current build. */
@@ -304,8 +310,10 @@ export function createServer({
   build = webRoot ? buildOf(readFileSync(join(webRoot, "index.html"), "utf8")) : undefined,
   adminEmails = [],
   feedSignalMs = 0,
+  serverTag = "a",
   overload = {},
 }: ServerOptions) {
+  if (!/^[a-z0-9]{1,8}$/.test(serverTag)) throw new Error(`serverTag must be 1–8 lowercase letters or digits, not "${serverTag}"`);
   const db = openDb(dbPath);
   const photos = photoStore(photosDir ?? mkdtempSync(join(tmpdir(), "elephant-photos-")));
   const themeImages = themeStore(themesDir ?? mkdtempSync(join(tmpdir(), "elephant-themes-")));
@@ -878,8 +886,8 @@ export function createServer({
     const { orgId } = body.data;
     if (isVisitor(email) && !body.data.demo) return c.json({ error: "signInToHost" }, 403);
     if (orgId !== undefined && !organizes(orgId, email)) return c.json({ error: "Only an Organization's Organizer can use its Theme" }, 403);
-    // 16 random bytes: unguessable, so a Game can't be found without its link or QR code.
-    const id = randomBytes(16).toString("base64url");
+    // 16 random bytes: unguessable, so a Game can't be found without its link or QR code. The tag names its server.
+    const id = `${serverTag}.${randomBytes(16).toString("base64url")}`;
     const { rosterMode, turnSeconds, approveNames, moderation, settings, start, looked, remember } = body.data;
     const options = { ...settings, turnSeconds, rosterMode, approveNames, moderation };
     db.transaction((tx) => {
@@ -2381,14 +2389,18 @@ export function createServer({
       const sockets = new SocketServer(http);
       io = sockets;
 
+      // A screen names its Game in the connection's URL (?game=), where Caddy can see it to route by Game; pages
+      // loaded before that change name it in the handshake's auth instead.
+      const gameOf = (socket: { handshake: { query: Record<string, unknown>; auth: Record<string, unknown> } }): unknown =>
+        socket.handshake.query["game"] ?? socket.handshake.auth["gameId"];
       sockets.use((socket, next) => {
-        const gameId: unknown = socket.handshake.auth["gameId"];
+        const gameId = gameOf(socket);
         if (typeof gameId !== "string" || !load(gameId)) return next(new Error("Game not found"));
         next();
       });
       // On every connection, including a phone waking and reconnecting, send the whole Game.
       sockets.on("connection", (socket) => {
-        const gameId = socket.handshake.auth["gameId"] as string;
+        const gameId = gameOf(socket) as string;
         void socket.join(gameId);
         stats.notePeakScreens(gameId, sockets.sockets.adapter.rooms.get(gameId)?.size ?? 1);
         socket.emit("game", view(gameId, load(gameId)!, now()));

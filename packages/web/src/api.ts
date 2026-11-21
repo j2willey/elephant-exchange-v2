@@ -770,7 +770,8 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
       onPostsChanged?: () => void,
       onStaffChanged?: () => void,
     ): () => void {
-      const socketOptions = { auth: { gameId }, ...(options.transports ? { transports: options.transports } : {}) };
+      // The Game goes in the connection's URL, where Caddy can see it to route by Game (docs/scale-plan.md).
+      const socketOptions = { query: { game: gameId }, ...(options.transports ? { transports: options.transports } : {}) };
       const socket = options.socketOrigin ? io(options.socketOrigin, socketOptions) : io(socketOptions);
       socket.on("game", onGame);
       if (onPostsChanged) socket.on("posts", onPostsChanged);

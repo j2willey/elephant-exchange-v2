@@ -37,7 +37,7 @@ describe("Games over HTTP", () => {
     }
 
     expect(ids.size).toBe(20);
-    for (const id of ids) expect(id).toMatch(/^[A-Za-z0-9_-]{16,}$/); // URL-safe, at least ~96 bits
+    for (const id of ids) expect(id).toMatch(/^a\.[A-Za-z0-9_-]{16,}$/); // its server tag, then URL-safe and at least ~96 bits
   });
 
   it("lists Games only to someone signed in", async () => {

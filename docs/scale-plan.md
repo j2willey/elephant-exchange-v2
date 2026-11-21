@@ -164,14 +164,16 @@ Rather than every server sharing one database, each server keeps its own Games w
 - Photos are already kept in a folder per Game.
 
 **What it would take:**
-- **The server in the id.** New Games get a short server tag at the front of their id (say `b.` + the random part). Caddy matches it with a path regex, so there's no lookup table. Games made before have no tag and stay on the first server. "New Games go to the new server" is a setting on each server: which tag it stamps.
-- **The live connection.** Socket.IO sends the Game id in its handshake body, which Caddy can't see. It has to go in the connection's URL as well (`/socket.io/?game=<id>`), so Caddy can route it, and its polling requests stick to the same server.
+- **The server in the id (done 2026-11-21).** Every new Game's id starts with its server's tag: `a.` + the random part on the first server (`SERVER_TAG`, default `a`). Games made before 11/21 have no tag. A second server would run with `SERVER_TAG=b`. Caddy matches it with a path regex, so there's no lookup table. Untagged Games stay on the first server. Which server new Games go to is a Caddy setting: the route for `POST /api/games`, the one request that has no Game id yet.
+- **The live connection (done 2026-11-21).** Screens now name their Game in the connection's URL (`/socket.io/?game=<id>`), where Caddy can route it, and its polling requests stick to the same server. Pages loaded before the change still send it in the handshake body, which the server also accepts.
 - **Sign-in, shared.** Sessions live in one server's database. Either the session cookie becomes a signed token any server can check with a shared secret, or one server is the sign-in server and the others ask it.
 - **Things that span Games stay on the first server:** Hosts' Game lists (`GET /api/games` must gather from every server, or each server reports its Games to the first), Organizations and their Theme images, Co-hosts' lists, the contact form, `/admin`. Making a Game with an Organization's Theme on the new server needs the first server's say-so.
 - **Statistics:** every server needs the same statistics key (`app_keys`), or people would be counted twice. `/admin/stats` sums the servers. The feedback follow-ups are fine as they are, since each server sends only for its own Games.
 - **Backups and deploys:** per server, as today, just run on each.
 
-**How long:** about a week, roughly half the shared-database path below. **When:** only if the load test, and then December's traffic, show one well-sized box isn't enough. A cheap first step that does no harm on one server is putting the Game id in the Socket.IO URL.
+**How long:** about a week, roughly half the shared-database path below. **When:** only if the load test, and then December's traffic, show one well-sized box isn't enough. The two cheap first steps (the tag, the Game in the connection URL) are done; they change nothing on one server.
+
+**How it would grow (Jim, 2026-11-21):** one server running Caddy and the app; then server 2, with new Games sent to it; then server 3, and so on. Once the first server is busy, it takes no new Games and its own Games end one by one, so it becomes the Caddy server plus everything that isn't about one Game: sign-in, Organizations and Themes, Hosts' Game lists, the contact form, `/admin`. Caddy itself is light (it passes requests on); what loads the first server is the app, so moving new Games elsewhere is what frees it.
 
 #### The shared-database path
 

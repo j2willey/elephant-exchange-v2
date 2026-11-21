@@ -29,6 +29,8 @@ const server = createServer({
   feedSignalMs: Number(env["FEED_SIGNAL_MS"] ?? 2000),
   // Past either of these, new Games are asked to try again in a few minutes, so parties under way stay smooth.
   overload: { maxScreens: Number(env["MAX_SCREENS"] ?? 6000), maxLagMs: Number(env["MAX_LAG_MS"] ?? 300) },
+  // The tag that starts each new Game's id, naming this server: "a" unless set (docs/scale-plan.md, "One server per Game").
+  ...(env["SERVER_TAG"] ? { serverTag: env["SERVER_TAG"] } : {}),
   ...(env["SIGNIN_LINKS_PER_DAY"] ? { limits: { perDay: Number(env["SIGNIN_LINKS_PER_DAY"]) } } : {}),
 });
 const { port, close } = await server.listen(Number(env["PORT"] ?? 3001));

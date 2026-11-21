@@ -281,9 +281,9 @@ function Testimonials() {
 /** A Game's id from its link (any page of it: the Game, its scoreboard) or from the id on its own. */
 function gameIdFrom(text: string): string | null {
   const trimmed = text.trim();
-  const fromLink = trimmed.match(/\/games\/([A-Za-z0-9_-]+)/);
+  const fromLink = trimmed.match(/\/games\/([A-Za-z0-9._-]+)/);
   if (fromLink) return fromLink[1]!;
-  return /^[A-Za-z0-9_-]{4,64}$/.test(trimmed) ? trimmed : null;
+  return /^[A-Za-z0-9._-]{4,64}$/.test(trimmed) ? trimmed : null;
 }
 
 const SETTINGS_EXPLAINED: [keyof GameOptions, string][] = [
