@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import type { GameView, MyOrg } from "./api.js";
 import { useApi } from "./ApiContext.js";
-import party from "./assets/landing-party.webp";
-import { ImageField, ThemeColors } from "./Orgs.js";
+import { ImageField, ReadyLooks, ThemeColors } from "./Orgs.js";
 
 /**
  * For the Host and Co-hosts: which Organization's Theme the Game shows (one they're the Organizer of, or none),
@@ -44,6 +43,12 @@ export function GameLook({ game }: { game: GameView }) {
         {orgs.length === 0 ? "Create an Organization from your home screen to give your Games its Theme. " : ""}
         Anything set below is for this Game only.
       </p>
+      <ReadyLooks
+        current={{ color: theme.color, page: theme.page, background: theme.backgroundUrl !== null }}
+        onPick={async (look, image) =>
+          (await api.setGameImage(game.id, "background", image)) && (await api.editGameTheme(game.id, { color: look.color, page: look.page }))
+        }
+      />
       <ThemeColors
         color={theme.color}
         page={theme.page}
@@ -68,7 +73,6 @@ export function GameLook({ game }: { game: GameView }) {
         url={theme.overrides.background ? theme.backgroundUrl : null}
         removeLabel={`Use ${fallback} background`}
         onChange={async (file) => report(await api.setGameImage(game.id, "background", file))}
-        ready={{ label: "🎄 Use the holiday party photo", src: party }}
       />
       {error && (
         <p className="error" role="alert">

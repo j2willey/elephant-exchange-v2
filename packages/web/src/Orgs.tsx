@@ -2,8 +2,8 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import type { ColorChange, MyOrg } from "./api.js";
 import { useApi } from "./ApiContext.js";
-import party from "./assets/landing-party.webp";
 import { ConfirmDelete } from "./ConfirmDelete.js";
+import { LOOKS, type Look } from "./looks.js";
 
 /** The app's own colors, shown in a color picker when a Theme leaves that part unset. Kept in step with styles.css. */
 export const APP_COLORS = { color: "#b3202e", page: "#f6f4f1" };
@@ -114,6 +114,16 @@ export function OrgPage() {
         <p className="muted">Its Theme shows on every Game you run for it, unless a Game sets its own.</p>
         <Link to="/">Back to your Games</Link>
       </section>
+      <ReadyLooks
+        current={{ color: org.color, page: org.page, background: org.backgroundUrl !== null }}
+        onPick={async (look, image) => {
+          const pictured = await api.setOrgImage(org.id, "background", image);
+          update(pictured);
+          const colored = pictured && (await api.editOrg(org.id, { color: look.color, page: look.page }));
+          update(colored);
+          return colored !== undefined;
+        }}
+      />
       <ThemeColors
         color={org.color}
         page={org.page}
@@ -138,10 +148,70 @@ export function OrgPage() {
           url={org.backgroundUrl}
           removeLabel="Remove the background"
           onChange={async (file) => update(await api.setOrgImage(org.id, "background", file))}
-          ready={{ label: "🎄 Use the holiday party photo", src: party }}
         />
       </section>
     </div>
+  );
+}
+
+/**
+ * The looks the app comes with, one tap each: its image becomes the background and its two colors are saved with
+ * it. The image goes first, so a failed one leaves everything as it was.
+ */
+export function ReadyLooks({
+  current,
+  onPick,
+}: {
+  /** What's in effect, to show which look (if any) it is. */
+  current: { color: string | null; page: string | null; background: boolean };
+  /** Saves the look; false if that didn't work. */
+  onPick: (look: Look, image: File) => Promise<boolean>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const same = (a: string | null, b: string) => a?.toLowerCase() === b.toLowerCase();
+  const isCurrent = (look: Look) => current.background && same(current.color, look.color) && same(current.page, look.page);
+
+  // The image is sent like one the Host picks, so it's stored and shown the same way.
+  const pick = async (look: Look) => {
+    setBusy(true);
+    setFailed(false);
+    try {
+      const res = await fetch(look.image);
+      if (!res.ok) throw new Error(`${res.status}`);
+      const image = new File([await res.arrayBuffer()], `${look.id}.webp`, { type: "image/webp" });
+      if (!(await onPick(look, image))) setFailed(true);
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="card" aria-label="Ready-made looks">
+      <h2>Ready-made looks</h2>
+      <p className="muted hint">One tap sets the background and both colors. You can still change any of them below.</p>
+      <ul className="looks">
+        {LOOKS.map((look) => (
+          <li key={look.id}>
+            <button type="button" className="look" aria-pressed={isCurrent(look)} disabled={busy} onClick={() => void pick(look)}>
+              <img src={look.thumb} alt="" />
+              <span className="look-name">
+                <span className="look-swatch" style={{ background: look.color }} />
+                <span className="look-swatch" style={{ background: look.page }} />
+                {look.name}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {failed && (
+        <p className="error" role="alert">
+          That didn't work. Please try again.
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -208,7 +278,6 @@ export function ImageField({
   url,
   removeLabel,
   onChange,
-  ready,
 }: {
   id: string;
   label: string;
@@ -217,30 +286,12 @@ export function ImageField({
   url: string | null;
   removeLabel: string;
   onChange: (file: File | null) => Promise<void>;
-  /** A ready-made image the app comes with, offered in one tap, for a Host without one of their own. */
-  ready?: { label: string; src: string };
 }) {
   const [busy, setBusy] = useState(false);
-  const [readyFailed, setReadyFailed] = useState(false);
   const change = async (file: File | null) => {
     setBusy(true);
-    setReadyFailed(false);
     await onChange(file);
     setBusy(false);
-  };
-  // Sent like any image the Host picks, so it's stored and shown the same way.
-  const useReady = async (src: string) => {
-    setBusy(true);
-    setReadyFailed(false);
-    try {
-      const res = await fetch(src);
-      if (!res.ok) throw new Error(`${res.status}`);
-      await onChange(new File([await res.arrayBuffer()], "ready-made.webp", { type: "image/webp" }));
-    } catch {
-      setReadyFailed(true); // whatever was there stays
-    } finally {
-      setBusy(false);
-    }
   };
   return (
     <div className="image-field">
@@ -258,16 +309,6 @@ export function ImageField({
           if (file) void change(file);
         }}
       />
-      {ready && (
-        <button type="button" className="link" disabled={busy} onClick={() => void useReady(ready.src)}>
-          {ready.label}
-        </button>
-      )}
-      {readyFailed && (
-        <p className="error" role="alert">
-          That didn't load. Please try again.
-        </p>
-      )}
       {url && (
         <button type="button" className="link danger" disabled={busy} onClick={() => void change(null)}>
           {removeLabel}

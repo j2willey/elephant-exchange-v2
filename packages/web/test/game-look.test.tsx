@@ -79,56 +79,81 @@ describe("A Game's look", () => {
 });
 
 /**
- * The app's own party photo, as the browser would fetch it from the build; anything else goes on to the server.
- * `found: false` is the photo failing to load (a dropped connection, say).
+ * The app's ready-made look images, as the browser would fetch them from the build; anything else goes on to the
+ * server. `found: false` is an image failing to load (a dropped connection, say).
  */
-function partyPhotoServed(found = true) {
+function looksServed(found = true) {
   const real = globalThis.fetch;
-  const bytes = readFileSync(join(import.meta.dirname, "../src/assets/landing-party.webp"));
-  vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) =>
-    String(input).includes("landing-party")
-      ? Promise.resolve(found ? new Response(bytes, { headers: { "content-type": "image/webp" } }) : new Response("gone", { status: 404 }))
-      : real(input, init),
-  );
+  vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+    const asset = /\/src\/(assets\/[^?]+\.webp)/.exec(String(input))?.[1];
+    if (!asset) return real(input, init);
+    return Promise.resolve(
+      found
+        ? new Response(readFileSync(join(import.meta.dirname, "../src", asset)), { headers: { "content-type": "image/webp" } })
+        : new Response("gone", { status: 404 }),
+    );
+  });
 }
 afterEach(() => vi.unstubAllGlobals());
 
-describe("The ready-made party photo", () => {
-  it("becomes the Game's background in one tap, for a Host without a photo of their own", async () => {
-    partyPhotoServed();
+const looks = async () => within(await screen.findByRole("region", { name: /ready-made looks/i }));
+
+describe("Ready-made looks", () => {
+  it("set the Game's background and both colors in one tap, and show which one is in use", async () => {
+    looksServed();
     const { host, user } = await organizer();
     const id = await host.createGame({ name: "Party", options: { ...RECOMMENDED_OPTIONS, rosterMode: "host" } });
     openApp(host, `/games/${id}/settings`);
 
-    await user.click(within(await panel()).getByRole("button", { name: /use the holiday party photo/i }));
+    await user.click((await looks()).getByRole("button", { name: /fireside/i }));
 
     expect(await within(await panel()).findByRole("img", { name: /this game's own background/i })).toBeInTheDocument();
     await waitFor(() => expect(cssVar("--page-image")).toMatch(new RegExp(`url\\("/api/games/${id}/theme/background\\?v=[^"]+"\\)`)));
+    await waitFor(() => expect(cssVar("--brand")).toBe("#a3262a"));
+    expect(cssVar("--page")).toBe("#2b1a0f");
+    // Headings right on the photo sit on a pane of that page color, so they stay readable on a busy picture.
+    expect(cssVar("--on-image")).toContain("#2b1a0f");
+    expect((await looks()).getByRole("button", { name: /fireside/i })).toHaveAttribute("aria-pressed", "true");
+    expect((await looks()).getByRole("button", { name: /golden gala/i })).toHaveAttribute("aria-pressed", "false");
   });
 
-  it("is offered for an Organization's background too", async () => {
-    partyPhotoServed();
+  it("include the office party photo the app has always offered", async () => {
+    looksServed();
+    const { host, user } = await organizer();
+    const id = await host.createGame({ name: "Party", options: { ...RECOMMENDED_OPTIONS, rosterMode: "host" } });
+    openApp(host, `/games/${id}/settings`);
+
+    await user.click((await looks()).getByRole("button", { name: /office party/i }));
+
+    expect(await within(await panel()).findByRole("img", { name: /this game's own background/i })).toBeInTheDocument();
+  });
+
+  it("are offered for an Organization's Theme too", async () => {
+    looksServed();
     const { host, lodge, user } = await organizer();
     openApp(host, `/orgs/${lodge}`);
 
-    await user.click(await screen.findByRole("button", { name: /use the holiday party photo/i }));
+    await user.click((await looks()).getByRole("button", { name: /golden gala/i }));
 
     expect(await screen.findByRole("img", { name: /lodge 22 background/i })).toBeInTheDocument();
-    expect((await host.myOrgs()).find((o) => o.id === lodge)).toMatchObject({ backgroundUrl: expect.stringMatching(/background/) });
+    await waitFor(async () =>
+      expect((await host.myOrgs()).find((o) => o.id === lodge)).toMatchObject({ color: "#b8913a", page: "#1c1813", backgroundUrl: expect.stringMatching(/background/) }),
+    );
+    expect((await looks()).getByRole("button", { name: /golden gala/i })).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("leaves the background as it was if the photo doesn't load, and says so", async () => {
-    partyPhotoServed(false);
+  it("leave the background and colors as they were if the image doesn't load, and say so", async () => {
+    looksServed(false);
     const { host, user } = await organizer();
     const id = await host.createGame({ name: "Party", options: { ...RECOMMENDED_OPTIONS, rosterMode: "host" } });
     await host.setGameImage(id, "background", new File([tinyPng], "bg.png", { type: "image/png" }));
     openApp(host, `/games/${id}/settings`);
-    const look = await panel();
-    const before = (await within(look).findByRole("img", { name: /this game's own background/i })).getAttribute("src");
+    const before = (await within(await panel()).findByRole("img", { name: /this game's own background/i })).getAttribute("src");
 
-    await user.click(within(look).getByRole("button", { name: /use the holiday party photo/i }));
+    await user.click((await looks()).getByRole("button", { name: /fireside/i }));
 
-    expect(await within(look).findByRole("alert")).toHaveTextContent(/didn't load/i);
-    expect(within(look).getByRole("img", { name: /this game's own background/i })).toHaveAttribute("src", before!);
+    expect(await (await looks()).findByRole("alert")).toHaveTextContent(/didn't work/i);
+    expect(within(await panel()).getByRole("img", { name: /this game's own background/i })).toHaveAttribute("src", before!);
+    expect(cssVar("--brand")).not.toBe("#a3262a");
   });
 });

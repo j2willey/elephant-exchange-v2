@@ -89,6 +89,31 @@ body {
   white-space: nowrap;
 }
 
+/*
+ * Text right on the page: over a Theme's background image it sits on a pane of the page color (see theme.tsx), so
+ * it reads on a busy photo; secondary text there is the page's own ink, softened.
+ */
+.brand,
+.top-bar .sign-out,
+.guest-head {
+  padding: var(--on-image-pad, 0);
+  border-radius: 8px;
+  background: var(--on-image, transparent);
+}
+
+.top-bar .sign-out {
+  padding: var(--on-image-pad, 0 8px);
+}
+
+.guest-head {
+  justify-self: start;
+}
+
+.top-bar .sign-out,
+.guest-head .game-tagline {
+  color: color-mix(in srgb, var(--page-ink, var(--ink)) 72%, var(--page));
+}
+
 .brand a {
   color: var(--page-heading);
   text-decoration: none;
@@ -617,7 +642,6 @@ select {
 .guest-head .game-tagline {
   flex-basis: 100%;
   margin-top: -8px;
-  color: var(--muted);
 }
 
 /* The logo sits on a white tile, since a Theme's logo isn't made to be read on its main color. */
@@ -1126,6 +1150,66 @@ button.danger-solid {
   border: 1px solid var(--line);
   border-radius: 8px;
   object-fit: contain;
+}
+
+/* Ready-made looks: a grid of pictures, two or three across on a phone, more on a laptop. */
+.looks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+button.look {
+  display: grid;
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: 10px;
+}
+
+button.look img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.look-name {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+}
+
+.look-swatch {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 1px solid rgb(0 0 0 / 0.25);
+  border-radius: 50%;
+}
+
+.look-swatch + .look-swatch {
+  margin-left: -8px;
+}
+
+.look-swatch:last-of-type {
+  margin-right: 4px;
+}
+
+button.look[aria-pressed="true"] {
+  border-color: var(--brand-text);
+  box-shadow: 0 0 0 2px var(--brand-text);
 }
 
 /* The Game's own links, on the Host's console: in a row that wraps on a phone. */

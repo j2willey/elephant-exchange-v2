@@ -44,10 +44,18 @@ export function themeVariables(theme: Theme): Record<string, string> {
     vars["--brand-ink"] = inkOn(theme.color);
     vars["--brand-text"] = readableOn(theme.color, APP.surface);
   }
-  if (theme.page) vars["--page"] = theme.page;
+  if (theme.page) {
+    vars["--page"] = theme.page;
+    vars["--page-ink"] = inkOn(theme.page);
+  }
   if (theme.color || theme.page) vars["--page-heading"] = readableOn(color, page);
   // The address is ours (a server path with a version), so it's safe inside url("…").
-  if (theme.backgroundUrl) vars["--page-image"] = `url("${theme.backgroundUrl}")`;
+  if (theme.backgroundUrl) {
+    vars["--page-image"] = `url("${theme.backgroundUrl}")`;
+    // Text right on the page sits on a pane of the page color, the color it's made readable against, not on the image.
+    vars["--on-image"] = `color-mix(in srgb, ${page} 88%, transparent)`;
+    vars["--on-image-pad"] = "2px 10px";
+  }
   return vars;
 }
 

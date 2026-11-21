@@ -69,6 +69,7 @@ describe("The Host's Guide", () => {
       expect(screen.getByRole("heading", { level: 3, name: section })).toBeInTheDocument();
     }
     expect(screen.getByRole("main")).toHaveTextContent(/no take-backs/i);
+    expect(screen.getByRole("main")).toHaveTextContent(/ready-made looks/i);
     expect(screen.getByRole("link", { name: /start a game/i })).toHaveAttribute("href", "/");
   });
 });

@@ -355,6 +355,12 @@ export function Playbook() {
           while you call the next name, and keep an eye on the Feed. Open 🛡 Co-hosts from your console, find them by name
           and switch them on. A Co-host can do everything you can at the party, from their own phone or laptop.
         </p>
+        <p>
+          <strong>Dress it up.</strong> In the Game's Settings, pick one of the <strong>Ready-made looks</strong>, from a
+          cozy fireside to retro '80s neon: one tap sets the background on every phone and the big screen, and colors to
+          match. Or use your own logo, background photo and colors. Run parties for the same office or club every year?
+          Create an Organization from your home screen, give it its look once, and every Game you run for it wears it.
+        </p>
       </section>
 
       <section className="card">
