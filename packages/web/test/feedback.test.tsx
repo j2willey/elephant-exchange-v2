@@ -70,7 +70,8 @@ describe("Asking how it went", () => {
     openApp(await signedIn("ann@example.org"));
 
     const box = await screen.findByRole("form", { name: /contact jim/i });
-    expect(box).toHaveTextContent(/jim can reply to ann@example.org/i);
+    expect(box).toHaveTextContent(/jim can reply to the email you signed in with/i);
+    expect(box).not.toHaveTextContent(/ann@example.org/); // never printed: it would be in every screenshot
     await user.type(within(box).getByRole("textbox"), "A dark mode, please");
     await user.click(within(box).getByRole("button", { name: /send to jim/i }));
     expect(await within(box).findByRole("status")).toHaveTextContent(/thanks/i);

@@ -28,12 +28,16 @@ describe("Signing in", () => {
     await askForLink("ann@example.com");
     await screen.findByText(/check your email/i);
 
+    const user = userEvent.setup();
     const { unmount } = openApp(ann, linkFor("ann@example.com"));
-    expect(await screen.findByText(/signed in as ann@example\.com/i)).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: /show my email/i }));
+    expect(screen.getByText(/signed in as ann@example\.com/i)).toBeInTheDocument();
     unmount();
 
     openApp(ann); // reloading the app
-    expect(await screen.findByText(/signed in as ann@example\.com/i)).toBeInTheDocument();
+    // Still signed in; the address isn't on the page until asked for, so it's never in a screenshot.
+    expect(await screen.findByRole("button", { name: /show my email/i })).toBeInTheDocument();
+    expect(screen.queryByText(/signed in as ann@example\.com/i)).not.toBeInTheDocument();
   });
 
   it("says when a link has already been used, and offers to send a new one", async () => {
@@ -44,7 +48,7 @@ describe("Signing in", () => {
     await screen.findByText(/check your email/i);
     const link = linkFor("ann@example.com");
     const first = openApp(ann, link);
-    await screen.findByText(/signed in as/i);
+    await screen.findByRole("button", { name: /show my email/i });
     first.unmount();
 
     openApp(browser(origin), link); // someone opening the same link again, on another phone
@@ -74,7 +78,7 @@ describe("Signing in", () => {
     const ann = browser(origin);
     await ann.requestLink("ann@example.com");
     openApp(ann, linkFor("ann@example.com"));
-    await screen.findByText(/signed in as/i);
+    await screen.findByRole("button", { name: /show my email/i });
 
     await userEvent.setup().click(screen.getByRole("button", { name: /sign out/i }));
 

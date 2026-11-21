@@ -184,6 +184,22 @@ function TryDemo() {
   );
 }
 
+/**
+ * Which account this is, without printing the address on the page (it would be in every screenshot and screen
+ * share of the home screen): shown only when asked for.
+ */
+function SignedInAs({ email }: { email: string }) {
+  const [shown, setShown] = useState(false);
+  return (
+    <p className="signed-in-as">
+      {shown ? <>Signed in as {email}</> : "Signed in"}{" "}
+      <button type="button" className="link" onClick={() => setShown(!shown)}>
+        {shown ? "Hide my email" : "Show my email"}
+      </button>
+    </p>
+  );
+}
+
 /** A way to reach Jim, at the foot of the app's own pages (not a Game's: a guest's phone and the big screen stay uncluttered). */
 function SiteFooter() {
   const { pathname } = useLocation();
@@ -260,7 +276,7 @@ function Home() {
       <TipJar />
       <ContactForm email={session.email} />
       <section className="card">
-        <p>Signed in as {session.email}</p>
+        <SignedInAs email={session.email} />
         <label className="check">
           <input
             type="checkbox"

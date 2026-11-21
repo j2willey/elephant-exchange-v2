@@ -223,7 +223,8 @@ export function ContactForm({ email, heading = "Questions? Contact Jim" }: { ema
       </label>
       <textarea id="contact-message" rows={4} maxLength={2000} required value={message} onChange={(e) => (setMessage(e.target.value), setState("writing"))} />
       {email ? (
-        <p className="muted hint">Jim can reply to {email}.</p>
+        // Not the address itself: it would show up in every screenshot and screen share of this page.
+        <p className="muted hint">Jim can reply to the email you signed in with.</p>
       ) : (
         <>
           <label htmlFor="contact-reply">Your email, if you'd like a reply (optional)</label>

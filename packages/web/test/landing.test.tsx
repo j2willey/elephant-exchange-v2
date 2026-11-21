@@ -54,7 +54,7 @@ describe("The landing page", () => {
   it("links a signed-in Host to the Guide too", async () => {
     const { signedIn } = await startServer();
     openApp(await signedIn("host@example.com"));
-    await screen.findByText(/signed in as/i);
+    await screen.findByRole("button", { name: /show my email/i });
     expect(screen.getByRole("link", { name: /host's guide/i })).toHaveAttribute("href", "/guide");
   });
 });
