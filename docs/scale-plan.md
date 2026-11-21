@@ -119,6 +119,8 @@ It refuses to run against elephantexchange.app. It talks to the server directly 
 
      About 2–3 hours. Users notice an outage of a minute or so while DNS switches.
 - **When:** a resize or a move is never done on a party night. Do it on a weekday morning.
+- **The one-core ceiling (noted 2026-11-21):** the app is one Node process, and its own code (Games, the Feed, live updates) runs on one CPU core. Only sharp's photo resizing (and Caddy, and the OS) use the others. So past 2 vCPUs a bigger droplet buys little; a faster core (CPU-Optimized, Premium) helps more. The load test measures where one process tops out, and that number says whether a viral month fits on one box. Beyond it, see "One server per Game" in limit 5.
+- **During a resize or restart:** ww-edge shows a "Back in a minute" page (HTTP 503) instead of a bare error, and the app's calls get a JSON 503 they retry (`caddy/sites/elephant-exchange.caddy` in ww-edge, 2026-11-21). A resize reboots the whole droplet, Caddy included, so for that minute Cloudflare shows its own "can't reach the server" page.
 
 ### 3. One machine means one point of failure
 
@@ -152,6 +154,26 @@ Several servers is the expensive step, and the app is far from needing it. It wo
   - the peak "screens watching at once" is counted per server process, so with several servers it would undercount until it reads the count from the Redis adapter;
   - the feedback follow-up emails are sent from a timer in every process, so they'd go out twice unless one server is made the only sender (or a row is claimed before sending);
   - the queries are Drizzle's and mostly portable, but the follow-ups find ended Games by a text match on the event log (`like '%"type":"GameEnded"%'`), which should become a real column first.
+
+#### A cheaper path: one server per Game (Jim's idea, 2026-11-21; not scheduled)
+
+Rather than every server sharing one database, each server keeps its own Games whole: their events, Players, Gifts, Posts, Photos and votes, in its own SQLite file and photo folder. Caddy sends each request to the server that holds its Game. A party is at most a few hundred phones, so no single Game outgrows a server; it's the number of Games that grows. This keeps SQLite, skips Postgres and Redis, and a server that fails takes down only its own Games.
+
+**What already fits:**
+- Everything about a Game is under `/api/games/:id/...` and the page `/games/:id`, so Caddy can route by the id in the path.
+- Photos are already kept in a folder per Game.
+
+**What it would take:**
+- **The server in the id.** New Games get a short server tag at the front of their id (say `b.` + the random part). Caddy matches it with a path regex, so there's no lookup table. Games made before have no tag and stay on the first server. "New Games go to the new server" is a setting on each server: which tag it stamps.
+- **The live connection.** Socket.IO sends the Game id in its handshake body, which Caddy can't see. It has to go in the connection's URL as well (`/socket.io/?game=<id>`), so Caddy can route it, and its polling requests stick to the same server.
+- **Sign-in, shared.** Sessions live in one server's database. Either the session cookie becomes a signed token any server can check with a shared secret, or one server is the sign-in server and the others ask it.
+- **Things that span Games stay on the first server:** Hosts' Game lists (`GET /api/games` must gather from every server, or each server reports its Games to the first), Organizations and their Theme images, Co-hosts' lists, the contact form, `/admin`. Making a Game with an Organization's Theme on the new server needs the first server's say-so.
+- **Statistics:** every server needs the same statistics key (`app_keys`), or people would be counted twice. `/admin/stats` sums the servers. The feedback follow-ups are fine as they are, since each server sends only for its own Games.
+- **Backups and deploys:** per server, as today, just run on each.
+
+**How long:** about a week, roughly half the shared-database path below. **When:** only if the load test, and then December's traffic, show one well-sized box isn't enough. A cheap first step that does no harm on one server is putting the Game id in the Socket.IO URL.
+
+#### The shared-database path
 
 **How long:** two to three weeks (more tables than when this was first written). **What users notice:** nothing, if it's cut over on a quiet weekday. A cheaper middle step comes first: a much bigger single droplet. That likely covers 1,000 Organizations, since the load is mostly idle phones.
 
