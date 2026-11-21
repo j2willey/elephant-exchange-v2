@@ -55,6 +55,7 @@ export function themeVariables(theme: Theme): Record<string, string> {
     // Text right on the page sits on a pane of the page color, the color it's made readable against, not on the image.
     vars["--on-image"] = `color-mix(in srgb, ${page} 88%, transparent)`;
     vars["--on-image-pad"] = "2px 10px";
+    vars["--on-image-link"] = readableOn(color, page);
   }
   return vars;
 }

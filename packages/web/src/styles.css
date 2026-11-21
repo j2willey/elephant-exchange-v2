@@ -95,7 +95,8 @@ body {
  */
 .brand,
 .top-bar .sign-out,
-.guest-head {
+.guest-head,
+.page > .stack > .back {
   padding: var(--on-image-pad, 0);
   border-radius: 8px;
   background: var(--on-image, transparent);
@@ -105,8 +106,13 @@ body {
   padding: var(--on-image-pad, 0 8px);
 }
 
-.guest-head {
+.guest-head,
+.page > .stack > .back {
   justify-self: start;
+}
+
+.page > .stack > .back {
+  color: var(--on-image-link, LinkText);
 }
 
 .top-bar .sign-out,
@@ -2803,6 +2809,12 @@ button.info {
   transition: opacity 0.8s ease;
 }
 
+.highlights-grid.portrait {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-rows: repeat(12, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .highlights-grid.clearing {
   opacity: 0;
 }
@@ -2957,4 +2969,116 @@ button.info {
       opacity: 0;
     }
   }
+}
+
+/* The night's highlights page, for anyone after the party: to scroll through on a phone. */
+.highlights-link h2 {
+  margin: 0;
+}
+
+.highlights-page-head {
+  display: grid;
+  gap: 4px;
+}
+
+.highlights-page-head h2,
+.highlights-page-head p {
+  margin: 0;
+}
+
+.highlights-page-head .actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 8px;
+}
+
+.hp-facts,
+.hp-quotes {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hp-facts li,
+.hp-quotes li {
+  display: grid;
+  gap: 2px;
+}
+
+.hp-facts strong {
+  font-size: 1.15rem;
+  color: var(--brand-text);
+}
+
+.hp-quotes blockquote {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.hp-tagline {
+  font-size: 1.2rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.hp-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.hp-photos figure {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.hp-photos img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.hp-photos figcaption {
+  font-size: 0.9rem;
+}
+
+/* The slideshow, over the whole window, with a way back out. */
+.highlights-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 12px;
+  padding: 12px;
+  background-color: var(--page);
+  background-image: var(--page-image, none);
+  background-size: cover;
+  background-position: center;
+}
+
+.highlights-overlay > button {
+  justify-self: end;
+  background: var(--surface);
+}
+
+.highlights-overlay .highlights {
+  height: 100%;
+  min-height: 0;
+}
+
+/* A key to press, in the Guide. */
+kbd {
+  padding: 0 0.35em;
+  font: 600 0.85em var(--font);
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--surface);
 }

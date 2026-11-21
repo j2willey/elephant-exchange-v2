@@ -15,6 +15,7 @@ import { Landing, Playbook, TipJar } from "./Landing.js";
 import { NewGame } from "./NewGame.js";
 import { MyOrgs, OrgPage } from "./Orgs.js";
 import { SignInForm } from "./SignIn.js";
+import { HighlightsPage } from "./HighlightsPage.js";
 import { WatchScreen } from "./WatchScreen.js";
 
 export function AppRoutes() {
@@ -46,6 +47,7 @@ export function AppRoutes() {
         <Route path="/sample" element={<SamplePhone />} />
         <Route path="/games/:id" element={<GamePage />} />
         <Route path="/games/:id/screen" element={<WatchScreen />} />
+        <Route path="/games/:id/highlights" element={<HighlightsPage />} />
         <Route path="/games/:id/demo" element={<DemoPage />} />
         <Route path="/games/:id/settings" element={<GameSettings />} />
         <Route path="/games/:id/cohosts" element={<CohostsPage />} />

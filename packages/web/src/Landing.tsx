@@ -375,6 +375,13 @@ export function Playbook() {
           code for joining, or a catalog of every Gift with its Photo.
         </p>
         <div className="tip">
+          <strong>Tip: fit it to the screen.</strong> On the computer driving the TV, press <kbd>F11</kbd> for full
+          screen (<kbd>Ctrl</kbd> <kbd>⌘</kbd> <kbd>F</kbd> on a Mac). If the words are too small to read from the back,
+          or too big to fit, zoom: <kbd>Ctrl</kbd> and <kbd>+</kbd> makes everything bigger, <kbd>Ctrl</kbd> and{" "}
+          <kbd>−</kbd> smaller, and <kbd>Ctrl</kbd> and <kbd>0</kbd> puts it back (<kbd>⌘</kbd> instead of{" "}
+          <kbd>Ctrl</kbd> on a Mac).
+        </div>
+        <div className="tip">
           <strong>Tip:</strong> when someone opens something small or detailed, a gift card or a book, ask them to post a
           Photo from their phone. It's on the big screen in seconds, and nobody at the back has to ask "what is that?"
         </div>
@@ -493,6 +500,10 @@ export function Playbook() {
           Then switch the big screen to <strong>✨ Highlights</strong>: a slideshow of the night, made up as it goes from
           the Photos, the Posts that got the most laughs, the Pitch taglines and the most-stolen Gift. It keeps going
           as long as the party does.
+        </p>
+        <p>
+          The highlights stay on everyone's phone too: <strong>✨ The night's highlights</strong> opens a page to scroll
+          through, play as a slideshow, and share with a link, for the people who couldn't make it.
         </p>
         <div className="tip">
           <strong>Tip: the consolation prize.</strong> Keep one or two small, genuinely good gifts hidden, like chocolate

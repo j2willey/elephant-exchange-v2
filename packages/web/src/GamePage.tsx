@@ -16,6 +16,7 @@ import { RosterPaste } from "./RosterPaste.js";
 import { ScreenSwitch } from "./WatchScreen.js";
 import { VotePanel } from "./Vote.js";
 import { FeedbackCard } from "./Feedback.js";
+import { HighlightsLink } from "./HighlightsPage.js";
 import { GiftPostsViewer, showGift } from "./GiftPosts.js";
 
 /** `gameId`: the Game to show, when it isn't the one in the address (the front page's sample phone). */
@@ -223,6 +224,7 @@ export function GamePage({ gameId }: { gameId?: string } = {}) {
         <FinalRoundPanel game={game} send={send} />
       )}
 
+      {game.phase === "ended" && <HighlightsLink game={game} />}
       {game.phase === "ended" && <VotePanel game={game} accept={accept} />}
       {game.phase === "ended" && <FeedbackCard game={game} />}
 
@@ -304,6 +306,7 @@ function GuestView({
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className="stack">
         {tab === "gifts" && (
           <>
+            {game.phase === "ended" && <HighlightsLink game={game} />}
             {game.phase === "ended" && <VotePanel game={game} accept={accept} />}
             {game.phase === "ended" && <FeedbackCard game={game} />}
             {joinOffered && (

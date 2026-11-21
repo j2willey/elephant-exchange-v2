@@ -58,6 +58,29 @@ const LAYOUTS: Slot[][] = [
   [{ col: "1 / 6", row: "1 / 4" }, { col: "1 / 6", row: "4 / 7" }, { col: "6 / 13", row: "1 / 7", big: true }],
 ];
 
+/** For a screen taller than it's wide (a phone held upright): fewer, wider tiles, stacked on a 6-by-12 grid. */
+const PORTRAIT_LAYOUTS: Slot[][] = [
+  [{ col: "1 / 7", row: "1 / 8", big: true }, { col: "1 / 7", row: "8 / 13" }],
+  [{ col: "1 / 7", row: "1 / 5" }, { col: "1 / 7", row: "5 / 13", big: true }],
+  [{ col: "1 / 7", row: "1 / 5" }, { col: "1 / 7", row: "5 / 9", big: true }, { col: "1 / 7", row: "9 / 13" }],
+  [{ col: "1 / 7", row: "1 / 7", big: true }, { col: "1 / 7", row: "7 / 10" }, { col: "1 / 7", row: "10 / 13" }],
+];
+
+const PORTRAIT = "(orientation: portrait)";
+
+/** Whether the screen is taller than it's wide, following it as the phone turns. */
+function usePortrait() {
+  const [portrait, setPortrait] = useState(() => window.matchMedia?.(PORTRAIT).matches ?? false);
+  useEffect(() => {
+    const query = window.matchMedia?.(PORTRAIT);
+    if (!query) return;
+    const follow = () => setPortrait(query.matches);
+    query.addEventListener("change", follow);
+    return () => query.removeEventListener("change", follow);
+  }, []);
+  return portrait;
+}
+
 /** Fills a layout's slots from the deck: Photos into the big slots, anything into the rest. */
 function fill(layout: Slot[], deck: Highlight[]): { slot: Slot; item: Highlight }[] {
   const left = [...deck];
@@ -96,13 +119,15 @@ export function Highlights({ game, posts, random = Math.random }: { game: GameVi
 
   // A fresh order for each pass through everything; the same order while a pass lasts, even as the Feed refreshes.
   const [pass, setPass] = useState(0);
+  const portrait = usePortrait();
+  const layouts = portrait ? PORTRAIT_LAYOUTS : LAYOUTS;
   const deck = useMemo(() => shuffled(all, random), [allKeys, pass]);
   const rounds = useMemo(() => {
     const out: { slot: Slot; item: Highlight }[][] = [];
     let rest = deck;
     for (let i = 0; rest.length > 0; i++) {
       // A different first layout each pass, so even a quiet party's screen keeps changing shape.
-      const layout = LAYOUTS[(i + pass) % LAYOUTS.length]!;
+      const layout = layouts[(i + pass) % layouts.length]!;
       // The last screen of a pass is topped up from the start, so it's never half empty (nothing twice on one screen).
       const pool = rest.length >= layout.length ? rest : [...rest, ...deck.filter((h) => !rest.includes(h))];
       const tiles = fill(layout, pool);
@@ -111,7 +136,7 @@ export function Highlights({ game, posts, random = Math.random }: { game: GameVi
       out.push(tiles);
     }
     return out;
-  }, [deck, pass]);
+  }, [deck, pass, layouts]);
   const tiles = rounds[round % Math.max(1, rounds.length)] ?? [];
 
   useEffect(() => {
@@ -149,7 +174,7 @@ export function Highlights({ game, posts, random = Math.random }: { game: GameVi
           <li key={h.key}>{describe(h)}</li>
         ))}
       </ul>
-      <div className={clearing ? "highlights-grid clearing" : "highlights-grid"} aria-hidden="true">
+      <div className={["highlights-grid", portrait && "portrait", clearing && "clearing"].filter(Boolean).join(" ")} aria-hidden="true">
         {tiles.slice(0, shownTiles).map(({ slot, item }, i) => (
           <div key={`${round}-${pass}-${item.key}`} className={`hl-tile hl-${item.kind} ${i % 2 === 0 ? "from-left" : "from-right"}`} style={{ gridColumn: slot.col, gridRow: slot.row }}>
             <Tile item={item} />

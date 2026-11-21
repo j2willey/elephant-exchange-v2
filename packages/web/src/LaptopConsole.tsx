@@ -12,6 +12,7 @@ import { Feed } from "./Feed.js";
 import { EndGame } from "./GameSettings.js";
 import { ThemeLogo } from "./theme.js";
 import { VotePanel } from "./Vote.js";
+import { HighlightsLink } from "./HighlightsPage.js";
 import { FeedbackCard } from "./Feedback.js";
 import { RosterPaste } from "./RosterPaste.js";
 import { ScreenSwitch } from "./WatchScreen.js";
@@ -225,6 +226,7 @@ export function LaptopConsole({
                 <h2>Game over</h2>
                 <p className="muted">Here's who went home with what.</p>
               </section>
+              <HighlightsLink game={game} />
               <VotePanel game={game} accept={accept} />
               <FeedbackCard game={game} />
             </>
