@@ -22,6 +22,10 @@ _Avoid_: Party (as a domain term)
 How an exchange looks: a main color, a page color, a logo and a background image, each optional. Set by an Organizer on their Organization. A Game shows its Organization's Theme, and its Host or a Co-host may override any part of it for that Game alone. A Game's Host picks its Organization (from the ones they're the Organizer of) and can change it at any time; a Game with none, and any part left unset, shows the app's own look.
 _Avoid_: Branding, skin
 
+**Ready-made Look**:
+One of the Themes the app comes with: a background image and the main and page colors that go with it (Fireside, Ugly sweater, Retro '80s and so on). Picking one sets those three parts of a Game's or an Organization's Theme in one tap; they're then ordinary Theme parts, changeable one by one.
+_Avoid_: Template, preset, skin
+
 ### People
 
 **Host**:
@@ -57,6 +61,13 @@ A Player already drawn but not yet called up; drawn as a Turn starts, so they ge
 
 **Game**:
 One gift exchange, from setup through the final results. The Host may end it at any moment, even mid-Turn.
+
+**Game Tagline**:
+An optional line under the Game's name, set by the Host ("Ugly sweaters encouraged"), shown on the big screen and every phone. Not a Pitch's Tagline, which is about one Gift.
+
+**Scoreboard**:
+The big screen at the party (a TV or projector), which only watches. The Host or a Co-host switches its **Screen Mode**: **Gifts** (who's up, On Deck, every Gift with its holder and Steals, the latest Posts and a QR code), **Rules**, **QR code** (filling the screen), **Catalog** (every Gift as a card with its Photo) or, once the Game is over, **Highlights**. A new Game's starts on the QR code and switches to Gifts by itself when the Game starts.
+_Avoid_: TV screen, watch screen, display
 
 **Roster**:
 The list of Players in a Game.
@@ -151,6 +162,14 @@ A Post the Host or a Co-host has taken down; only they and its poster can see it
 **Worst Gift Vote**:
 After the Game ends, the Host or a Co-host opens the vote and later closes it. Everyone signed in (Players, Guests, Hosts) has one vote for the worst Gift, which they can move until it closes, even to the Gift they hold. When it closes, the Gift with the most votes wins (the Host picks among Gifts tied for most) and the results are revealed; its holder chooses a prize from any Leftover and Returned Gifts, in the room.
 _Avoid_: Downvote, poll
+
+**Highlights**:
+The night looked back on, once the Game is over: its visible Photos, the Posts with the most Reactions, the Pitch Taglines, and a few facts (the most-stolen Gift, the Worst Gift, how many played). On the Scoreboard it's a slideshow; for everyone, the Game's highlights page lays them out to scroll through, play as a slideshow and share. Only what everyone could already see.
+_Avoid_: Recap, memory book, summary
+
+**Testimonial**:
+A comment a Host or guest gave after a Game and ticked as OK to quote, with the name they chose to show. It appears on the front page only once the admin publishes it, and comes down if they change it.
+_Avoid_: Review, rating
 
 **Vote Display**:
 What the big screen shows while the vote is open, switchable by the Host at any moment: **Live** (the counts, growing as votes come in), **Hidden** (no counts until the reveal) or **Parade** (every Gift scrolling past, to remind the room what's out there). Under Hidden and Parade nobody sees the counts until the vote closes.

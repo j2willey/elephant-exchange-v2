@@ -360,7 +360,8 @@ export function Playbook() {
         <p>
           <strong>Dress it up.</strong> In the Game's Settings, pick one of the <strong>Ready-made looks</strong>, from a
           cozy fireside to retro '80s neon: one tap sets the background on every phone and the big screen, and colors to
-          match. Or use your own logo, background photo and colors. Run parties for the same office or club every year?
+          match. Or use your own logo, background photo and colors, and add a <strong>tagline</strong> under the Game's name
+          ("Ugly sweaters encouraged"), shown on the big screen and every phone. Run parties for the same office or club every year?
           Create an Organization from your home screen, give it its look once, and every Game you run for it wears it.
         </p>
       </section>
@@ -374,7 +375,8 @@ export function Playbook() {
         </p>
         <p>
           Switch what it shows from your console: the Gifts, the rules (handy while people find their seats), a big QR
-          code for joining, or a catalog of every Gift with its Photo.
+          code for joining, or a catalog of every Gift with its Photo. Until you start the Game it shows the big QR code,
+          so guests can join as they arrive, with a count of who's in; when you start, it switches to the Gifts by itself.
         </p>
         <div className="tip">
           <strong>Tip: fit it to the screen.</strong> On the computer driving the TV, press <kbd>F11</kbd> for full
