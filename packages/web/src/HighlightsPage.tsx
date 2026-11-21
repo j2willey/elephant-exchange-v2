@@ -101,7 +101,7 @@ export function HighlightsPage() {
           <div className="hp-photos">
             {photos.map((p) => (
               <figure key={p.key}>
-                <img src={p.url} alt={p.caption ?? `A Photo from ${p.by}${p.gift ? ` of ${p.gift}` : ""}`} loading="lazy" />
+                <img src={p.smallUrl} alt={p.caption ?? `A Photo from ${p.by}${p.gift ? ` of ${p.gift}` : ""}`} loading="lazy" />
                 <figcaption>
                   {p.caption && <span>{p.caption} </span>}
                   <span className="muted">

@@ -27,6 +27,17 @@ describe("A demo Game", () => {
     expect(screen.getByRole("button", { name: /start game/i })).toBeEnabled();
   });
 
+  it("is turned away kindly when the server is too busy, leaving the parties under way alone", async () => {
+    const { signedIn } = await startServer({ overload: { maxScreens: 0 } });
+    openApp(await signedIn("host@example.com"));
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: /try a demo game/i }));
+    await user.click(screen.getByRole("button", { name: /create demo game/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/very busy right now.*try again in a few minutes/i);
+  });
+
   it("asks for at least 2 Players", async () => {
     const { signedIn } = await startServer();
     openApp(await signedIn("host@example.com"));

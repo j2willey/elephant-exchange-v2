@@ -361,7 +361,7 @@ function EndOfGame({ game, posts }: { game: GameView; posts: Post[] }) {
       <section className="card now reveal" aria-label="Results">
         {winner ? (
           <div className="reveal-winner">
-            {photo && <PostPhoto post={photo} className="reveal-photo" />}
+            {photo && <PostPhoto post={photo} className="reveal-photo" full />}
             <div>
               <p className="label">The votes are in</p>
               <p className="big">Worst Gift: {winner.name}</p>

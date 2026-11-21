@@ -18,6 +18,39 @@ How each part copes:
 - **Email** runs out first, well before 100 Organizations.
 - **One shared droplet** is the next risk. If it goes down, every party in progress goes down with it.
 
+## Peak-season plan (decided 2026-11-20)
+
+The window is short: a launch post around 11/23–25, the best chance to reach hosts 11/30–12/11, and the peak in the week of 12/14–18, before people take Christmas week off. After Christmas it's quiet. So any scale-up only has to last about six weeks. The plan deliberately assumes 100 phones a party (more like 40–50 in practice).
+
+**What a code review found.** The hardware wasn't the first limit; the code was:
+
+- **The Feed.** Every Post or Reaction sent every phone at that party back for the whole Feed, rebuilt from the database for each one. That's about 17 Feed requests a second at one lively 100-phone party, and about 350 a second with 20 parties at once, enough to fill the one core a Node process uses.
+- **Photos.** They were sent full size (up to 1,600 px) to every phone in the Feed, and Cloudflare couldn't cache them: about 1 GB for a 30-Photo party.
+- **One process, one core.** More cores barely help until the app runs on several servers (limit 5, 2–3 weeks), which is too late for this season.
+
+**Fixed 2026-11-20, all tested:**
+
+- **Feed signals are gathered** (`FEED_SIGNAL_MS`, 2,000 by default in production). The first change goes out at once; any more within the next two seconds go out together at the end, so a burst of Reactions means one round of fetches, not one per tap. The poster's own screen still updates at once.
+- **The Feed is read once per change, not once per phone.** Each Game's Posts and Reactions are kept in memory until the Feed changes, and each request picks out what its viewer may see.
+- **Photos have a small copy.** It's at most 640 px and about a quarter of the bytes. The Feed, a Gift's thumbnail, the scoreboard's lists and the highlights page show it; the full Photo loads only in the Photo viewer, the vote's reveal and the Highlights slideshow. A Photo from before the change gets its copy the first time it's asked for.
+- **Cloudflare caches visible Photos.** Their addresses now end in `.jpg`, and a visible Photo is sent as `public, max-age=600`, so the phones at a party mostly get it from Cloudflare. Held and Hidden ones stay `private`. One hidden after it was fetched can still be loaded by its address from the cache for up to 10 minutes. The old address (`…/photo`) still works for pages loaded before.
+- **Games nobody's using are let go from memory.** That's after 6 hours with no request and no screen watching, checked in the hourly sweep; the database always has them.
+- **The overload guard** (`MAX_SCREENS`, 6,000 by default; `MAX_LAG_MS`, 300). When that many screens are connected, or the event loop's 99th-percentile delay passes 300 ms over a 5-second window, creating a Game or a demo is turned away with "Elephant Exchange is very busy right now… try again in a few minutes". Parties already under way carry on. Busy clears once the delay drops below half the limit. `/api/health` reports `busy` but stays healthy, so the uptime monitor doesn't page. **Tune both numbers after the load test.**
+
+**Still to do:**
+
+1. **Load test:** a throwaway droplet for a few hours (under $2), simulating 20, 100 and 200 parties of 100 phones posting, reacting and loading Photos. Set `MAX_SCREENS` and `MAX_LAG_MS` from what it shows.
+2. **Its own droplet for the season:** DigitalOcean CPU-Optimized, 2 dedicated vCPUs and 4 GB, from about $42 a month. Basic 2 vCPU / 4 GB at about $24 if the load test allows. Droplets are billed by the second (since 2026-01-01), so six weeks costs about six weeks. Move on a weekday morning before 11/30 (see "Moving to a new server" below).
+3. **Peak week, only if the load test says so:** resize to 4 dedicated vCPUs (about $84 a month, about $20 for the week). More cores help only with Photo resizing and Caddy; the app itself uses one.
+4. **January:** resize down, or move back to the shared droplet, and delete the seasonal one.
+
+**Rough season total:** about $110–130, covering the droplet, a possible peak resize, Resend for one or two months, backups and load-test droplets. Jim's vault has the reasoning (`10-Projects/Elephant-Exchange/Peak-Scale-Plan.md`).
+
+| Scenario | Parties at the peak hour | Phones connected | Expected after the fixes, on its own 2-dedicated-vCPU droplet |
+|---|---|---|---|
+| 100 companies | 15–25 | 1,500–2,500 | Comfortable |
+| 1,000 companies | 150–250 | 15,000–25,000 | At or past the limit: the overload guard keeps parties already under way smooth |
+
 ## The limits, in the order we'd hit them
 
 ### 1. Sign-in emails (hit first, maybe at launch)
@@ -66,11 +99,11 @@ How each part copes:
   - Add a free uptime monitor (UptimeRobot or similar, checking `https://elephantexchange.app/api/health` every 5 minutes) that emails or texts on an outage.
 - **Later:** Litestream, streaming SQLite to object storage. Conductor plans the same (#36). That cuts the worst-case loss from a day to seconds.
 
-### 4. Games kept in memory
+### 4. Games kept in memory (fixed 2026-11-20)
 
-- **Today:** the server rebuilds each Game from its log once and keeps it in memory (`cache` in `server.ts`). It forgets a Game only when the Game is deleted. Each Game is small (kilobytes), so even thousands would fit. But memory grows with every Game opened since the last restart.
+- **Before:** the server rebuilds each Game from its log once and keeps it in memory (`cache` in `server.ts`). It forgets a Game only when the Game is deleted. Each Game is small (kilobytes), so even thousands would fit. But memory grows with every Game opened since the last restart.
 - **What we'd see:** memory slowly creeping up over a busy December, then a restart.
-- **The change:** forget Games that ended, or that haven't moved in a day. A Game that's opened again is simply rebuilt from the database. About an hour, with a test. Users notice nothing.
+- **The change (done):** the hourly sweep forgets Games (and their Feeds) that nobody has asked for in 6 hours and no screen is watching. A Game that's opened again is simply rebuilt from the database. Users notice nothing.
 
 ### 5. More than one server (only at the 1,000-Organization scale)
 
@@ -135,6 +168,9 @@ What users notice: a minute or two of "can't connect" during step 7; phones reco
 - [ ] Check the droplet's nightly backup cron line is in (`crontab -l`) (limit 3).
 - [x] DigitalOcean droplet backups (Jim believes they're on, about $4 a month; confirm under Droplet → Backups).
 - [ ] A copy of the droplet's `.env` in the password manager.
+- [x] The Feed, Photo, memory and overload fixes (see "Peak-season plan").
+- [ ] Load test, then set `MAX_SCREENS` and `MAX_LAG_MS` from it.
+- [ ] Its own droplet for the season, before 11/30.
 - [ ] No deploys on party evenings (Fri/Sat from 4 pm Pacific) in December. Tabs already open keep running the old code until they're reloaded.
 
 ## Watch list for December

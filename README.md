@@ -88,6 +88,9 @@ When developing, sign-in links are printed to the server log instead of being em
 | `ADMIN_EMAILS` | Who may use the admin page, `/admin` (comma-separated): who has signed in, every Game, deleting a Game or the smoke test's `@example.com` leftovers. To anyone else it isn't there | unset: nobody |
 | `RESEND_API_KEY`, `MAIL_FROM` | Email sign-in links through Resend, from an address on a verified domain | unset: links go to the log |
 | `SIGNIN_LINKS_PER_DAY` | Sign-in links emailed per day, site-wide; match it to the Resend plan | 100 (Resend's free plan) |
+| `FEED_SIGNAL_MS` | The least time between "the Feed changed" signals to a Game's screens; a burst of Posts and Reactions goes out as one | `2000` |
+| `MAX_SCREENS` | Screens connected at once past which new Games are asked to try again in a few minutes (parties under way carry on) | `6000` |
+| `MAX_LAG_MS` | Event-loop delay (99th percentile, over 5 seconds) past which new Games are likewise turned away for now | `300` |
 
 In Docker, the data settings point into the `/data` volume.
 

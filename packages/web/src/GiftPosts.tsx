@@ -52,7 +52,7 @@ export function GiftPostsViewer({ giftName, posts, onClose }: { giftName: string
             ✕
           </button>
         </div>
-        <PostPhoto post={post} className="viewer-photo" />
+        <PostPhoto post={post} className="viewer-photo" full />
         <p>
           <strong>{post.author}</strong>
           {post.text && `: ${post.text}`}

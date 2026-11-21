@@ -1,7 +1,7 @@
 import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import type { Api, Emoji } from "./api.js";
+import { BUSY_MESSAGE, ServerBusy, type Api, type Emoji } from "./api.js";
 import { useApi } from "./ApiContext.js";
 import giftTable from "./assets/demo-gift-table.webp";
 import { useLiveGame } from "./useLiveGame.js";
@@ -26,7 +26,7 @@ export function DemoGame({ startOpen = false }: { startOpen?: boolean }) {
   const [open, setOpen] = useState(startOpen);
   const [players, setPlayers] = useState("8");
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
 
   if (!open) {
     return (
@@ -50,8 +50,8 @@ export function DemoGame({ startOpen = false }: { startOpen?: boolean }) {
       await chatter(api, id, playerIds);
       // On a screen wide enough for it, the demo page shows the Host console, the scoreboard and a phone together.
       navigate(window.matchMedia?.(WIDE_ENOUGH).matches ? `/games/${id}/demo` : `/games/${id}`);
-    } catch {
-      setFailed(true);
+    } catch (e) {
+      setFailed(e instanceof ServerBusy ? BUSY_MESSAGE : "The demo couldn't be created. Please try again.");
       setBusy(false);
     }
   }
@@ -73,7 +73,7 @@ export function DemoGame({ startOpen = false }: { startOpen?: boolean }) {
       />
       {failed && (
         <p className="error" role="alert">
-          The demo couldn't be created. Please try again.
+          {failed}
         </p>
       )}
       <button type="submit" disabled={busy}>

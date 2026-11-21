@@ -25,6 +25,10 @@ const server = createServer({
   // Who may use the admin pages: comma-separated emails. Unset, nobody can.
   adminEmails: (env["ADMIN_EMAILS"] ?? "").split(","),
   // Sign-in links emailed per day, site-wide: match it to the Resend plan (the free plan allows 100).
+  // At a big party, a burst of Posts and Reactions sends phones back for the Feed at most this often (ms).
+  feedSignalMs: Number(env["FEED_SIGNAL_MS"] ?? 2000),
+  // Past either of these, new Games are asked to try again in a few minutes, so parties under way stay smooth.
+  overload: { maxScreens: Number(env["MAX_SCREENS"] ?? 6000), maxLagMs: Number(env["MAX_LAG_MS"] ?? 300) },
   ...(env["SIGNIN_LINKS_PER_DAY"] ? { limits: { perDay: Number(env["SIGNIN_LINKS_PER_DAY"]) } } : {}),
 });
 const { port, close } = await server.listen(Number(env["PORT"] ?? 3001));

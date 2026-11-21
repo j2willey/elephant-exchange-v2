@@ -110,3 +110,59 @@ describe("Posting a Photo", () => {
     expect((await fetchPhoto(url, other)).status).toBe(404);
   });
 });
+
+describe("Serving Photos to a busy party", () => {
+  type Sized = Photo & { smallUrl: string };
+
+  it("has a small copy, no bigger than 640px and much lighter, for the Feed and the scoreboard's lists", async () => {
+    const { as, postPhoto, read, fetchPhoto } = await setup();
+    await postPhoto(await as("gus@example.com"), await cameraPhoto(), { name: "Gus" });
+    const photo = (await read())[0]!.photo as Sized;
+
+    const full = Buffer.from(await (await fetchPhoto(photo.url)).arrayBuffer());
+    const small = Buffer.from(await (await fetchPhoto(photo.smallUrl)).arrayBuffer());
+
+    expect(await sharp(small).metadata()).toMatchObject({ format: "jpeg", width: 427, height: 640 }); // still upright
+    expect(small.length).toBeLessThan(full.length / 2);
+  });
+
+  it("lets a shared cache (Cloudflare) keep a visible Photo for a few minutes, never a held one", async () => {
+    const { app, id, host, as, postPhoto, read, fetchPhoto } = await setup();
+    await app.request(`/api/games/${id}/moderation`, post({ mode: "approval" }, host));
+    const gus = await as("gus@example.com");
+    await postPhoto(gus, await cameraPhoto(), { name: "Gus" });
+    const held = (await read(host))[0]!;
+    const photo = held.photo as Sized;
+
+    for (const url of [photo.url, photo.smallUrl]) {
+      expect(url).toMatch(/\.jpg$/); // what Cloudflare caches by default
+      expect((await fetchPhoto(url, gus)).headers.get("cache-control")).toMatch(/^private/);
+    }
+
+    await app.request(`/api/games/${id}/posts/${held.id}/status`, post({ status: "visible" }, host));
+    for (const url of [photo.url, photo.smallUrl]) expect((await fetchPhoto(url)).headers.get("cache-control")).toBe("public, max-age=600");
+  });
+
+  it("still answers at a Photo's old address, from pages loaded before", async () => {
+    const { as, postPhoto, read, fetchPhoto } = await setup();
+    await postPhoto(await as("gus@example.com"), await cameraPhoto(), { name: "Gus" });
+    const photo = (await read())[0]!.photo!;
+
+    const old = await fetchPhoto(photo.url.replace(/\.jpg$/, ""));
+
+    expect(old.status).toBe(200);
+    expect(old.headers.get("content-type")).toBe("image/jpeg");
+  });
+
+  it("makes the small copy of a Photo kept before there were any, the first time it's asked for", async () => {
+    const { id, as, postPhoto, read, fetchPhoto } = await setup();
+    await postPhoto(await as("gus@example.com"), await cameraPhoto(), { name: "Gus" });
+    const p = (await read())[0]!;
+    rmSync(join(photosDir, id, `${p.id}-small.jpg`)); // as if posted before small copies
+
+    const small = await fetchPhoto((p.photo as Sized).smallUrl);
+
+    expect(small.status).toBe(200);
+    expect(await sharp(Buffer.from(await small.arrayBuffer())).metadata()).toMatchObject({ width: 427, height: 640 });
+  });
+});

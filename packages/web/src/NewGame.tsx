@@ -1,7 +1,7 @@
 import { RECOMMENDED_OPTIONS, type GameOptions } from "@elephant/rules";
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
-import type { MyOrg, NewGameRequest, Session } from "./api.js";
+import { BUSY_MESSAGE, ServerBusy, type MyOrg, type NewGameRequest, type Session } from "./api.js";
 import { useApi } from "./ApiContext.js";
 import { fromDraft, GameOptionFields, optionsInWords, toDraft, type OptionDraft } from "./GameOptionFields.js";
 import { TipNoteDialog } from "./Landing.js";
@@ -36,7 +36,7 @@ export function NewGame({
   const [draft, setDraft] = useState<OptionDraft>(toDraft(saved ?? RECOMMENDED_OPTIONS));
   const [always, setAlways] = useState(session.alwaysMyOptions);
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -69,14 +69,14 @@ export function NewGame({
 
   async function create(request: Omit<NewGameRequest, "name" | "orgId">) {
     setBusy(true);
-    setFailed(false);
+    setFailed(null);
     try {
       const id = await api.createGame({ name: name.trim(), orgId: orgId || undefined, ...request });
       if (request.remember === true) onOptionsSaved(request.options, true);
       if (request.remember === false) onOptionsSaved(saved, false);
       navigate(`/games/${id}`);
-    } catch {
-      setFailed(true);
+    } catch (e) {
+      setFailed(e instanceof ServerBusy ? BUSY_MESSAGE : "The Game couldn't be created. Please try again.");
       setBusy(false);
     }
   }
@@ -161,7 +161,7 @@ export function NewGame({
 
       {failed && (
         <p className="error" role="alert">
-          The Game couldn't be created. Please try again.
+          {failed}
         </p>
       )}
     </form>

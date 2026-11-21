@@ -76,6 +76,17 @@ export interface MyOrg {
 
 export type ThemeImage = "logo" | "background";
 /** A change to Theme colors: a color sets that part, null hands it back (to the Organization, or the app). */
+/** The server turned a new Game away for now, to keep the parties under way smooth (see the overload guard). */
+export class ServerBusy extends Error {
+  constructor() {
+    super("The server is too busy for a new Game right now");
+  }
+}
+
+/** What a Host is told when their new Game is turned away for now. */
+export const BUSY_MESSAGE =
+  "Elephant Exchange is very busy right now with parties under way. Please try again in a few minutes; Games already running aren't affected.";
+
 export type ColorChange = { color?: string | null; page?: string | null };
 
 export type VoteStatus = "none" | "open" | "closed";
@@ -315,7 +326,8 @@ export interface Post {
   /** Empty when the Post is just a Photo. */
   text: string;
   /** Its Photo, if it has one: where to load it, and its size (so the page can make room before it loads). */
-  photo: { url: string; width: number; height: number } | null;
+  /** The Photo full size (url) and as a small copy for lists and thumbnails (smallUrl). */
+  photo: { url: string; smallUrl: string; width: number; height: number } | null;
   /** Pending and Hidden Posts reach only their poster and the Hosts. */
   status: "visible" | "pending" | "hidden";
   createdAt: number;
@@ -663,6 +675,7 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
         ...(remember === undefined ? {} : { remember }),
         ...(demo ? { demo } : {}),
       });
+      if (res.status === 503) throw new ServerBusy();
       if (res.status !== 201) throw new Error(`creating a Game failed: ${res.status}`);
       return ((await res.json()) as { id: string }).id;
     },

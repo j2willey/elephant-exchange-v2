@@ -7,6 +7,11 @@ sharp.cache(false);
 
 /** The longest side a stored Photo may have: plenty for a phone or the big screen. */
 export const PHOTO_MAX_SIDE = 1600;
+/**
+ * The longest side of a Photo's small copy: what the Feed, a Gift's thumbnail and the scoreboard's lists show, sharp
+ * enough on a phone, and a fraction of the bytes when a hundred phones at a party load every Photo.
+ */
+export const PHOTO_SMALL_SIDE = 640;
 /** Photos are deleted this long after their Game's last move (see CONTEXT.md: Photo). */
 export const PHOTO_KEEP_DAYS = 60;
 /** The most a Photo upload may weigh. Phones shrink Photos before sending, so this is only for when they can't. */
@@ -36,24 +41,46 @@ export async function preparePhoto(input: Uint8Array): Promise<StoredPhoto | und
   }
 }
 
+/** A stored Photo's small copy (see PHOTO_SMALL_SIDE). Undefined if it can't be made. */
+export async function smallPhoto(full: Uint8Array): Promise<Buffer | undefined> {
+  try {
+    return await sharp(full)
+      .resize({ width: PHOTO_SMALL_SIDE, height: PHOTO_SMALL_SIDE, fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality: 76, mozjpeg: true })
+      .toBuffer();
+  } catch {
+    return undefined;
+  }
+}
+
+export type PhotoSize = "full" | "small";
+
 /** Where Photos live on disk: one folder per Game, one file per Post. Ids are ours (never taken from a request unchecked). */
 export function photoStore(dir: string) {
-  const file = (gameId: string, postId: string) => join(dir, gameId, `${postId}.jpg`);
+  const file = (gameId: string, postId: string, size: PhotoSize = "full") => join(dir, gameId, size === "small" ? `${postId}-small.jpg` : `${postId}.jpg`);
+  const write = (path: string, data: Buffer) => {
+    writeFileSync(`${path}.partial`, data);
+    renameSync(`${path}.partial`, path);
+  };
   return {
-    save(gameId: string, postId: string, data: Buffer) {
+    /** Keeps a Photo, and its small copy if there is one (one is made when first asked for, otherwise). */
+    save(gameId: string, postId: string, data: Buffer, small?: Buffer) {
       mkdirSync(join(dir, gameId), { recursive: true });
-      const path = file(gameId, postId);
-      writeFileSync(`${path}.partial`, data);
-      renameSync(`${path}.partial`, path);
+      write(file(gameId, postId), data);
+      if (small) write(file(gameId, postId, "small"), small);
+      else rmSync(file(gameId, postId, "small"), { force: true }); // never a stale copy of a replaced Photo
     },
-    read: (gameId: string, postId: string): Buffer | undefined => {
+    read: (gameId: string, postId: string, size: PhotoSize = "full"): Buffer | undefined => {
       try {
-        return readFileSync(file(gameId, postId));
+        return readFileSync(file(gameId, postId, size));
       } catch {
         return undefined;
       }
     },
-    remove: (gameId: string, postId: string) => rmSync(file(gameId, postId), { force: true }),
+    remove: (gameId: string, postId: string) => {
+      rmSync(file(gameId, postId), { force: true });
+      rmSync(file(gameId, postId, "small"), { force: true });
+    },
     removeGame: (gameId: string) => rmSync(join(dir, gameId), { recursive: true, force: true }),
     /** All the Photos kept, in bytes. */
     bytes: () => {

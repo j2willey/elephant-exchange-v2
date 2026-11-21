@@ -3,7 +3,7 @@ import type { GameView, Post } from "./api.js";
 
 /** One thing worth seeing again: a Photo, something funny someone said, a Pitch's tagline, or a fact of the night. */
 export type Highlight =
-  | { kind: "photo"; key: string; url: string; caption: string | null; by: string; gift: string | null }
+  | { kind: "photo"; key: string; url: string; smallUrl: string; caption: string | null; by: string; gift: string | null }
   | { kind: "quote"; key: string; text: string; by: string; gift: string | null; reactions: string }
   | { kind: "tagline"; key: string; tagline: string; by: string; gift: string }
   | { kind: "fact"; key: string; title: string; detail: string };
@@ -20,7 +20,7 @@ export function highlightsOf(game: GameView, posts: Post[]): Highlight[] {
 
   const photos: Highlight[] = shown
     .filter((p) => p.photo)
-    .map((p) => ({ kind: "photo", key: `photo-${p.id}`, url: p.photo!.url, caption: p.text || null, by: p.author, gift: giftName(p.giftId) }));
+    .map((p) => ({ kind: "photo", key: `photo-${p.id}`, url: p.photo!.url, smallUrl: p.photo!.smallUrl ?? p.photo!.url, caption: p.text || null, by: p.author, gift: giftName(p.giftId) }));
   const quotes: Highlight[] = shown
     .filter((p) => !p.photo && !p.pitchFor && p.text && p.text.length <= LONGEST_QUOTE)
     .sort((a, b) => reactionCount(b) - reactionCount(a))

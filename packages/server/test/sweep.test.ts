@@ -39,3 +39,28 @@ describe("Sweeping out old sign-in records", () => {
     expect((await app.request("/api/session", { headers: { cookie: bob } })).status).toBe(200);
   });
 });
+
+describe("Letting go of Games nobody's using", () => {
+  it("forgets a Game left alone for 6 hours, and rebuilds it from the database, unchanged, when it's asked for again", async () => {
+    const { app, sent, sweep, advance } = setup();
+    const host = await signIn(app, sent, "host@example.com");
+    const { id } = (await (await app.request("/api/games", post({ settings: { activeSlots: 1, maxSteals: 3 } }, host))).json()) as { id: string };
+    const command = (cmd: unknown) => app.request(`/api/games/${id}/commands`, post(cmd, host));
+    await command({ type: "AddPlayer", playerId: "ann", name: "Ann" });
+    await app.request(`/api/games/${id}/posts`, post({ text: "Hello", name: "Host" }, host));
+    const read = async () => ({
+      game: (await (await app.request(`/api/games/${id}`, { headers: { cookie: host } })).json()) as Record<string, unknown>,
+      posts: await (await app.request(`/api/games/${id}/posts`)).json(),
+    });
+    const before = await read();
+
+    advance(5 * 60);
+    expect(sweep()).toMatchObject({ gamesForgotten: 0 }); // still in use, as far as anyone knows
+    advance(61);
+    expect(sweep()).toMatchObject({ gamesForgotten: 1 });
+
+    // The same Game and Feed (only the server's clock reading has moved on).
+    expect(await read()).toEqual({ ...before, game: { ...before.game, clock: expect.anything() } });
+    expect(sweep()).toMatchObject({ gamesForgotten: 0 }); // just asked for again
+  });
+});

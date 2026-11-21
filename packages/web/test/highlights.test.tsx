@@ -166,3 +166,19 @@ describe("The night's highlights page, for everyone after the party", () => {
     expect(sent.text).toMatch(/office swap/i);
   });
 });
+
+describe("Photos at a busy party", () => {
+  it("load as small copies in the Feed and the highlights page, and full size in the big screen's slideshow", async () => {
+    const { host, id, origin } = await partyOver();
+    openApp(browser(origin), `/games/${id}/highlights`);
+    const thumb = await within(await screen.findByRole("region", { name: /photos/i })).findByRole("img", { name: /bob's face/i });
+    expect(thumb.getAttribute("src")).toMatch(/\/photo-small\.jpg$/);
+
+    cleanup();
+    await host.setScreen(id, "highlights");
+    const tv = openApp(browser(origin), `/games/${id}/screen`);
+    await waitFor(() => expect(tv.container.querySelector(".hl-photo img")).not.toBeNull());
+    // The first screen's big tile goes to the Photo.
+    expect(tv.container.querySelector(".hl-photo img")!.getAttribute("src")).toMatch(/\/photo\.jpg$/);
+  });
+});

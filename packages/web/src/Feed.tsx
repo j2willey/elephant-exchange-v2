@@ -157,7 +157,7 @@ export function QuoteCard({ quote, onOpen }: { quote: Quote; onOpen?: (postId: s
   const words = quote.text || "a Photo";
   const inside = (
     <>
-      {quote.photo && <img className="quote-photo" src={quote.photo.url} alt="" width={40} height={40} loading="lazy" />}
+      {quote.photo && <img className="quote-photo" src={quote.photo.smallUrl ?? quote.photo.url} alt="" width={40} height={40} loading="lazy" />}
       <span className="quote-text">
         <strong>{quote.author}</strong>: {words}
       </span>
@@ -330,13 +330,16 @@ function ShareButton({ game, post }: { game: GameView; post: Post }) {
   );
 }
 
-/** A Post's Photo, sized from the start so the Feed doesn't jump as it loads. */
-export function PostPhoto({ post, className = "post-photo" }: { post: Post; className?: string }) {
+/**
+ * A Post's Photo, sized from the start so the Feed doesn't jump as it loads. Its small copy unless `full`: a hundred
+ * phones at a party each load every Photo in the Feed, so lists and thumbnails stay light.
+ */
+export function PostPhoto({ post, className = "post-photo", full = false }: { post: Post; className?: string; full?: boolean }) {
   if (!post.photo) return null;
   return (
     <img
       className={className}
-      src={post.photo.url}
+      src={full ? post.photo.url : (post.photo.smallUrl ?? post.photo.url)}
       alt={`Photo from ${post.author}`}
       width={post.photo.width}
       height={post.photo.height}

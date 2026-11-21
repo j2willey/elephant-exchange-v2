@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomInt } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import { serve } from "@hono/node-server";
 import { getConnInfo } from "@hono/node-server/conninfo";
+import { monitorEventLoopDelay } from "node:perf_hooks";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -36,7 +37,9 @@ import {
   PHOTO_KEEP_DAYS,
   PHOTO_MAX_BYTES,
   photoStore,
+  type PhotoSize,
   preparePhoto,
+  smallPhoto,
   prepareThemeImage,
   themeStore,
   type ThemeImage,
@@ -124,12 +127,28 @@ export interface ServerOptions {
   themesDir?: string;
   /** Who may use the admin pages (from ADMIN_EMAILS). Left out, there are none and those pages don't exist. */
   adminEmails?: readonly string[];
+  /**
+   * The least time between "the Feed changed" signals to a Game's screens (ms). The first change is signalled at
+   * once; any more within this time are gathered into one signal at its end, so a burst of Reactions at a big party
+   * doesn't send every phone back for the Feed again and again. 0 (the default, as in tests) signals every change.
+   */
+  feedSignalMs?: number;
+  /**
+   * When the server counts as too busy to take on another Game: this many screens connected at once, or its event
+   * loop falling more than maxLagMs behind (the 99th percentile over a few seconds). Then creating a Game (a demo
+   * too) is turned away with a friendly "try again in a few minutes", so the parties already under way stay
+   * smooth. Left out (as in tests), there's no limit.
+   */
+  overload?: { maxScreens?: number; maxLagMs?: number };
 }
 
 /** The header every API answer carries naming the web app's current build. */
 export const BUILD_HEADER = "x-app-build";
 /** A build's name: the content hash in its main script's file name (index-<hash>.js), which changes with any change. */
 export const buildOf = (indexHtml: string) => /\/assets\/index-([\w-]+)\.js/.exec(indexHtml)?.[1];
+
+/** How long a Game nobody asks for (and no screen watches) stays in memory; the database always has it. */
+export const IDLE_GAME_HOURS = 6;
 
 const randomDraw: DrawFn = (candidates) => candidates[randomInt(candidates.length)]!;
 
@@ -277,6 +296,8 @@ export function createServer({
   webRoot,
   build = webRoot ? buildOf(readFileSync(join(webRoot, "index.html"), "utf8")) : undefined,
   adminEmails = [],
+  feedSignalMs = 0,
+  overload = {},
 }: ServerOptions) {
   const db = openDb(dbPath);
   const photos = photoStore(photosDir ?? mkdtempSync(join(tmpdir(), "elephant-photos-")));
@@ -306,8 +327,11 @@ export function createServer({
     db.select().from(gameHosts).where(and(eq(gameHosts.gameId, gameId), eq(gameHosts.email, email))).get()?.role;
   /** Rebuilt Games, so a Game's log is replayed only once per server start. `seq` counts its logged events. */
   const cache = new Map<string, LoadedGame>();
+  /** When each Game kept in memory (or its Feed) was last asked for, so ones nobody's using can be let go. */
+  const lastUsed = new Map<string, number>();
 
   function load(id: string): LoadedGame | undefined {
+    lastUsed.set(id, now().getTime());
     const cached = cache.get(id);
     if (cached) return cached;
     const row = db.select().from(games).where(eq(games.id, id)).get();
@@ -493,9 +517,59 @@ export function createServer({
     return publish(id, { ...game, clocks, state, screen, seq: game.seq + result.length });
   }
 
-  /** Tells every screen watching that the Feed changed. Each asks for it again, since each may see different Posts. */
+  /**
+   * Each Game's Feed as last read from the database: every Post, newest (or most recently pitched again) first, and
+   * every Reaction. Read once and shared by every screen asking, until the Feed changes; each request then picks
+   * out what its viewer may see.
+   */
+  const feeds = new Map<string, { rows: (typeof posts.$inferSelect)[]; reactions: (typeof postReactions.$inferSelect)[] }>();
+  function feedOf(id: string) {
+    let feed = feeds.get(id);
+    if (!feed) {
+      feed = {
+        rows: db
+          .select()
+          .from(posts)
+          .where(eq(posts.gameId, id))
+          // A Pitch sent again goes back to the top.
+          .orderBy(desc(sql`coalesce(${posts.bumpedAt}, ${posts.createdAt})`), desc(sql`${posts}.rowid`))
+          .all(),
+        reactions: db.select().from(postReactions).where(eq(postReactions.gameId, id)).all(),
+      };
+      feeds.set(id, feed);
+    }
+    return feed;
+  }
+
+  /** Games whose Feed signal waits out feedSignalMs, and whether it changed again meanwhile. */
+  const feedSignals = new Map<string, { again: boolean; timer: ReturnType<typeof setTimeout> }>();
+
+  /**
+   * Tells every screen watching that the Feed changed; each asks for it again, since each may see different Posts.
+   * At most one signal every feedSignalMs per Game: the first at once, the rest gathered into one at the end.
+   */
   function postsChanged(id: string) {
+    feeds.delete(id);
+    if (feedSignalMs <= 0) {
+      io?.to(id).emit("posts");
+      return;
+    }
+    const waiting = feedSignals.get(id);
+    if (waiting) {
+      waiting.again = true;
+      return;
+    }
     io?.to(id).emit("posts");
+    const signal = { again: false, timer: setTimeout(function endOfWait() {
+      if (!signal.again) {
+        feedSignals.delete(id);
+        return;
+      }
+      signal.again = false;
+      io?.to(id).emit("posts");
+      signal.timer = setTimeout(endOfWait, feedSignalMs);
+    }, feedSignalMs) };
+    feedSignals.set(id, signal);
   }
 
   /** Keeps the Game's new copy and sends it to every screen watching. */
@@ -504,6 +578,14 @@ export function createServer({
     const shown = view(id, next, now());
     io?.to(id).emit("game", shown);
     return shown;
+  }
+
+  /** Whether the event loop has lately fallen too far behind (see overload); kept up to date while listening. */
+  let lagging = false;
+  /** Whether to turn away a new Game, to keep the parties under way smooth (see overload). */
+  function tooBusy() {
+    const screens = io?.engine.clientsCount ?? 0;
+    return lagging || (overload.maxScreens !== undefined && screens >= overload.maxScreens);
   }
 
   /** Set once listening: every screen watching a Game sits in a room named by the Game's id. */
@@ -542,7 +624,7 @@ export function createServer({
     c.header("Cache-Control", "no-store");
     try {
       db.$client.prepare("select 1").get();
-      return c.json({ ok: true });
+      return c.json({ ok: true, busy: tooBusy() });
     } catch {
       return c.json({ ok: false }, 503);
     }
@@ -722,6 +804,7 @@ export function createServer({
   app.post("/api/games", async (c) => {
     const email = signedInAs(c);
     if (!email) return c.json({ error: "Sign in to create a Game" }, 401);
+    if (tooBusy()) return c.json({ error: "busy" }, 503);
     const body = await parseBody(c, createGameBody);
     if (!body.ok) return body.res;
     const { orgId } = body.data;
@@ -1110,17 +1193,11 @@ export function createServer({
     if (!load(id)) return c.json({ error: "Game not found" }, 404);
     const email = signedInAs(c);
     const hosting = email !== undefined && roleIn(id, email) !== undefined;
-    const seen = hosting ? undefined : email ? or(eq(posts.status, "visible"), eq(posts.email, email)) : eq(posts.status, "visible");
-    const rows = db
-      .select()
-      .from(posts)
-      .where(seen ? and(eq(posts.gameId, id), seen) : eq(posts.gameId, id))
-      // A Pitch sent again goes back to the top.
-      .orderBy(desc(sql`coalesce(${posts.bumpedAt}, ${posts.createdAt})`), desc(sql`${posts}.rowid`))
-      .all();
+    const feed = feedOf(id);
+    const rows = hosting ? feed.rows : feed.rows.filter((p) => p.status === "visible" || (email !== undefined && p.email === email));
     // Every Reaction in the Game, tallied per Post in the order they're offered, with the viewer's own marked.
     const tallies = new Map<string, Map<string, { count: number; mine: boolean }>>();
-    for (const r of db.select().from(postReactions).where(eq(postReactions.gameId, id)).all()) {
+    for (const r of feed.reactions) {
       const tally = tallies.get(r.postId) ?? new Map<string, { count: number; mine: boolean }>();
       const t = tally.get(r.emoji) ?? { count: 0, mine: false };
       tally.set(r.emoji, { count: t.count + 1, mine: t.mine || r.email === email });
@@ -1137,7 +1214,9 @@ export function createServer({
     const replies = new Map<string, number>();
     for (const p of rows) if (p.replyTo && p.status === "visible") replies.set(p.replyTo, (replies.get(p.replyTo) ?? 0) + 1);
     const photoOf = (p: (typeof rows)[number]) =>
-      p.photoWidth && p.photoHeight ? { url: `/api/games/${id}/posts/${p.id}/photo`, width: p.photoWidth, height: p.photoHeight } : null;
+      p.photoWidth && p.photoHeight
+        ? { url: `/api/games/${id}/posts/${p.id}/photo.jpg`, smallUrl: `/api/games/${id}/posts/${p.id}/photo-small.jpg`, width: p.photoWidth, height: p.photoHeight }
+        : null;
     const mutedPeople = new Set(
       hosting
         ? db
@@ -1242,7 +1321,7 @@ export function createServer({
 
     const status = game.moderation === "approval" ? "pending" : "visible";
     const postId = randomBytes(12).toString("base64url");
-    if (photo) photos.save(id, postId, photo.data);
+    if (photo) photos.save(id, postId, photo.data, await smallPhoto(photo.data));
     try {
       db.insert(posts)
         .values({
@@ -1363,7 +1442,7 @@ export function createServer({
     }
 
     const postId = part?.id ?? randomBytes(12).toString("base64url");
-    if (photo) photos.save(id, postId, photo.data);
+    if (photo) photos.save(id, postId, photo.data, await smallPhoto(photo.data));
     const pictured = photo ? { photoWidth: photo.width, photoHeight: photo.height } : removePhoto ? { photoWidth: null, photoHeight: null } : {};
     if (part) {
       const changed = part.text !== text || (part.tagline ?? "") !== tagline || photo !== undefined || (removePhoto && part.photoWidth !== null);
@@ -1457,17 +1536,37 @@ export function createServer({
     });
   });
 
-  // A Post's Photo, to whoever may see the Post: anyone if it's visible, otherwise only its poster and the Hosts.
-  app.get("/api/games/:id/posts/:postId/photo", (c) => {
-    const { id, postId } = c.req.param();
+  /**
+   * A Post's Photo, full size or its small copy, to whoever may see the Post: anyone if it's visible, otherwise only
+   * its poster and the Hosts. The address ends in .jpg so Cloudflare keeps a visible one for a few minutes and the
+   * phones at a party mostly get it from there; one not everyone may see is never kept by a shared cache. (A Post
+   * hidden after its Photo was fetched can still be loaded from that cache, by its address, for those minutes.)
+   */
+  async function servePhoto(c: Context, size: PhotoSize) {
+    const { id = "", postId = "" } = c.req.param();
     const row = db.select().from(posts).where(and(eq(posts.gameId, id), eq(posts.id, postId))).get();
     const email = signedInAs(c);
-    const mayView = row && (row.status === "visible" || row.email === email || (email !== undefined && roleIn(id, email) !== undefined));
-    const data = mayView && row.photoWidth ? photos.read(row.gameId, row.id) : undefined;
+    const visible = row?.status === "visible";
+    const mayView = row && (visible || row.email === email || (email !== undefined && roleIn(id, email) !== undefined));
+    if (!mayView || !row.photoWidth) return c.json({ error: "No such Photo" }, 404);
+    let data = photos.read(row.gameId, row.id, size);
+    if (!data && size === "small") {
+      // A Photo kept before small copies were made: make its copy now, once.
+      const full = photos.read(row.gameId, row.id);
+      const small = full && (await smallPhoto(full));
+      if (small) photos.save(row.gameId, row.id, full, small);
+      data = small ?? full;
+    }
     if (!data) return c.json({ error: "No such Photo" }, 404);
-    // Private: a Photo shown to one person (a Pending one, say) mustn't be kept by a cache shared with others.
-    return c.body(new Uint8Array(data), 200, { "content-type": "image/jpeg", "cache-control": "private, max-age=86400" });
-  });
+    return c.body(new Uint8Array(data), 200, {
+      "content-type": "image/jpeg",
+      "cache-control": visible ? "public, max-age=600" : "private, max-age=86400",
+    });
+  }
+  app.get("/api/games/:id/posts/:postId/photo.jpg", (c) => servePhoto(c, "full"));
+  app.get("/api/games/:id/posts/:postId/photo-small.jpg", (c) => servePhoto(c, "small"));
+  // Its old address, on pages loaded before the change.
+  app.get("/api/games/:id/posts/:postId/photo", (c) => servePhoto(c, "full"));
 
   // Organizations: anyone signed in may create one, and is then its Organizer, the only one who can change it.
   const orgView = (o: OrgTheme) => ({
@@ -2034,6 +2133,7 @@ export function createServer({
       tx.delete(games).where(eq(games.id, id)).run();
     });
     cache.delete(id);
+    feeds.delete(id);
     photos.removeGame(id);
     for (const kind of ["logo", "background"] as const) themeImages.remove(`game-${id}`, kind);
   }
@@ -2130,8 +2230,27 @@ export function createServer({
   }
 
   /** Clears out what's kept only for a while: old sign-in records, and Photos past their time. */
+  /**
+   * Lets go of the Games (and Feeds) kept in memory that nobody has asked for in IDLE_GAME_HOURS and no screen is
+   * watching. Over a busy December that's thousands of finished parties; one opened again is simply rebuilt from
+   * the database. Returns how many were let go.
+   */
+  function forgetIdleGames(): number {
+    const before = now().getTime() - IDLE_GAME_HOURS * 60 * 60_000;
+    let forgotten = 0;
+    for (const id of new Set([...cache.keys(), ...feeds.keys()])) {
+      if ((lastUsed.get(id) ?? 0) > before || (io?.sockets.adapter.rooms.get(id)?.size ?? 0) > 0) continue;
+      cache.delete(id);
+      feeds.delete(id);
+      lastUsed.delete(id);
+      forgotten++;
+    }
+    return forgotten;
+  }
+
+  /** Clears out what's kept only for a while: old sign-in records, Photos past their time, Games nobody's using. */
   function sweep() {
-    return { ...auth.sweep(), photos: sweepPhotos() };
+    return { ...auth.sweep(), photos: sweepPhotos(), gamesForgotten: forgetIdleGames() };
   }
 
   /** Serves HTTP and live updates on one port (0 picks a free one). Screens only listen; moves go over HTTP. */
@@ -2142,6 +2261,20 @@ export function createServer({
       void followUps();
     }, 60 * 60_000);
     sweeping.unref(); // never what keeps the process alive
+    // How far behind the event loop runs: busy above maxLagMs, and not again until it's back under half that.
+    const delay = monitorEventLoopDelay({ resolution: 20 });
+    let watchingLag: ReturnType<typeof setInterval> | undefined;
+    if (overload.maxLagMs !== undefined) {
+      const maxLagMs = overload.maxLagMs;
+      delay.enable();
+      watchingLag = setInterval(() => {
+        const p99 = delay.percentile(99) / 1e6;
+        delay.reset();
+        if (!lagging && p99 > maxLagMs) console.warn(`Busy: the event loop is ${Math.round(p99)} ms behind; new Games wait`);
+        lagging = lagging ? p99 > maxLagMs / 2 : p99 > maxLagMs;
+      }, 5_000);
+      watchingLag.unref();
+    }
     return new Promise((resolve) => {
       const http = serve({ fetch: app.fetch, port }, (info: AddressInfo) => {
         resolve({
@@ -2149,6 +2282,10 @@ export function createServer({
           // Stops taking requests, then closes the database, which folds SQLite's side file (-wal) back into it.
           close: async () => {
             clearInterval(sweeping);
+            if (watchingLag) clearInterval(watchingLag);
+            delay.disable();
+            for (const { timer } of feedSignals.values()) clearTimeout(timer);
+            feedSignals.clear();
             await new Promise<void>((done) => sockets.close(() => done()));
             db.$client.close();
           },

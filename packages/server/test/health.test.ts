@@ -6,7 +6,7 @@ describe("The health check", () => {
   it("says the app is up and its database answers", async () => {
     const res = await createServer({ dbPath: ":memory:" }).app.request("/api/health");
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true });
+    expect(await res.json()).toEqual({ ok: true, busy: false });
     expect(res.headers.get("cache-control")).toMatch(/no-store/);
   });
 

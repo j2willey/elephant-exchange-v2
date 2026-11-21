@@ -91,7 +91,16 @@ test("a Host runs a Game while a guest follows along on their phone", async ({ b
   expect((await upload.sizes()).requestBodySize).toBeLessThan(200_000 + 2_000); // the photo, plus the form's few fields
   const photo = host.getByRole("feed").getByRole("img", { name: /photo from cat/i });
   await expect(photo).toBeVisible();
-  await expect.poll(() => photo.evaluate((img: HTMLImageElement) => [img.naturalWidth, img.naturalHeight])).toEqual([960, 1280]);
+  // The Feed shows its small copy (at most 640 px), still upright; the full Photo keeps all the phone sent.
+  await expect.poll(() => photo.evaluate((img: HTMLImageElement) => [img.naturalWidth, img.naturalHeight])).toEqual([480, 640]);
+  const full = (await photo.getAttribute("src"))!.replace("/photo-small.jpg", "/photo.jpg");
+  const fullSize = await host.evaluate(async (src) => {
+    const img = new Image();
+    img.src = src;
+    await img.decode();
+    return [img.naturalWidth, img.naturalHeight];
+  }, full);
+  expect(fullSize).toEqual([960, 1280]);
 
   // The Host can keep them all, from the Game's settings.
   await host.getByRole("link", { name: /settings/i }).click();
