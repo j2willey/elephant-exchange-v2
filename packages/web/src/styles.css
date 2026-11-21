@@ -1417,17 +1417,27 @@ label.check input {
   border-color: var(--brand);
 }
 
-.demo-main iframe {
-  width: 100%;
+/* The console or scoreboard, drawn at its own size and shrunk to fit (see ScaledFrame in Demo.tsx). */
+.demo-main .scaled-frame {
   height: calc(100vh - 220px);
   min-height: 560px;
+  overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 0 var(--radius) var(--radius) var(--radius);
   background: var(--page);
 }
 
+.demo-main .scaled-frame[hidden],
 .demo-main iframe[hidden] {
   display: none;
+}
+
+.demo-main iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  transform-origin: top left;
 }
 
 /*
@@ -1444,6 +1454,16 @@ label.check input {
 
 .demo-phone label {
   font-weight: 600;
+}
+
+/* On a smaller laptop, a slimmer phone, so the console has the room. */
+@media (max-width: 1400px) {
+  .demo {
+    grid-template-columns: minmax(0, 1fr) 330px;
+  }
+  .demo-phone iframe {
+    width: 330px;
+  }
 }
 
 /* On a narrower screen the phone goes under the console. */

@@ -48,9 +48,9 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
         <img className="landing-medallion" src={medallion} width={640} height={640} alt="" />
         <p className="landing-tagline">The White Elephant gift swap that keeps the whole room in the game.</p>
         <p className="landing-lede">
-          Run your party's gift exchange from a laptop or a phone. Every opened gift, who has it and how many times it's
-          been stolen goes up on the big screen (a TV or projector), and everyone follows along on their own phone, with the party's own photo feed
-          to post to, reply in and react to.
+          Run your party's gift exchange from a laptop plugged into the big screen (a TV or projector). Every opened gift,
+          who has it and how many times it's been stolen goes up for the whole room, and everyone follows along on their
+          own phone, with the party's own photo feed to post to, reply in and react to.
         </p>
         {ways}
         <p className="landing-party-link">
@@ -105,7 +105,7 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
           <section className="card">
             <h3>📱 Nothing to install</h3>
             <p>
-              It runs in the browser. Guests scan the QR code on the big screen; you run it from a laptop or your phone. Free.
+              It runs in the browser. You run it from a laptop; guests scan the QR code on the big screen with their phones. Free.
             </p>
           </section>
         </div>
@@ -121,7 +121,7 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
             <strong>Put the scoreboard on the big screen</strong> (a TV or projector). Guests scan its QR code to follow along and post.
           </li>
           <li>
-            <strong>Call names, open gifts and make steals</strong> from your console. The room sees it all, live.
+            <strong>Call names, open gifts and make steals</strong> from the Host console on your laptop. The room sees it all, live.
           </li>
         </ol>
         <p className="muted">
@@ -373,6 +373,12 @@ export function Playbook() {
 
       <section className="card">
         <h3>📺 The room</h3>
+        <p>
+          <strong>Plan on a laptop.</strong> The usual setup is one laptop with the TV plugged in: the Host console on the
+          laptop's own screen, where you run the Game, and the scoreboard on the TV (open it from the console, drag that
+          window onto the TV and make it full screen). The console shows everyone and every Gift at once, which a phone
+          can't. A phone works for a Co-host helping out, and for a Host who's run a Game or two.
+        </p>
         <p>
           Put the scoreboard on a TV or projector the whole room can see. It's the flight board: who's up, who's on deck,
           every Gift, who holds it and how many Steals it has left. The quiet ones can plan their move without shouting

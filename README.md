@@ -2,7 +2,7 @@
 
 A live companion for White Elephant (Yankee Swap) gift exchanges.
 
-A swap with 50 Players can drag on for two or three hours, mostly because people don't know what's on the table when their name is called. Elephant Exchange puts the Game on everyone's phone and on a big screen. Everyone can see which Gifts are open, who holds them and how often they've been stolen, so people decide quickly when called. The Host runs the Game from a laptop beside the big screen (or from a phone), and everyone follows along, posts and reacts on their own phones.
+A swap with 50 Players can drag on for two or three hours, mostly because people don't know what's on the table when their name is called. Elephant Exchange puts the Game on everyone's phone and on a big screen. Everyone can see which Gifts are open, who holds them and how often they've been stolen, so people decide quickly when called. The Host runs the Game from a laptop plugged into the big screen (a phone console exists for Co-hosts and seasoned Hosts, but the laptop is the way to start), and everyone follows along, posts and reacts on their own phones.
 
 This is v2, a full rewrite of [v1](https://github.com/j2willey/Elephant-Exchange) as a hosted service that many Organizations can use, live at [elephantexchange.app](https://elephantexchange.app). Its first real event is a holiday party in December 2026.
 

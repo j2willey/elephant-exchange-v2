@@ -1,5 +1,5 @@
 import { RECOMMENDED_OPTIONS } from "@elephant/rules";
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { BUSY_MESSAGE, ServerBusy, type Api, type Emoji } from "./api.js";
 import { useApi } from "./ApiContext.js";
@@ -143,9 +143,10 @@ export function DemoPage() {
   if (game.role === null) return <p className="error">Only the Host of a demo game can open its demo page.</p>;
 
   const phonePlayer = game.players.find((p) => p.id === chosen) ?? game.players[0];
-  const tabs: { id: DemoTab; label: string; src: string }[] = [
-    { id: "console", label: "Host console", src: `/games/${id}` },
-    { id: "screen", label: "Live scoreboard", src: `/games/${id}/screen` },
+  // Each at the size it's made for, shrunk to fit: the console as on a laptop, the scoreboard as on a TV.
+  const tabs: { id: DemoTab; label: string; src: string; width: number }[] = [
+    { id: "console", label: "Host console", src: `/games/${id}`, width: LAPTOP_WIDTH },
+    { id: "screen", label: "Live scoreboard", src: `/games/${id}/screen`, width: TV_WIDTH },
   ];
 
   return (
@@ -160,7 +161,7 @@ export function DemoPage() {
         </div>
         {/* Both stay loaded, so switching is instant and each keeps its place. */}
         {tabs.map((t) => (
-          <iframe key={t.id} id={`demo-${t.id}`} role="tabpanel" aria-labelledby={`demo-tab-${t.id}`} title={t.label} src={t.src} hidden={tab !== t.id} />
+          <ScaledFrame key={t.id} width={t.width} id={`demo-${t.id}`} role="tabpanel" aria-labelledby={`demo-tab-${t.id}`} title={t.label} src={t.src} hidden={tab !== t.id} />
         ))}
         <p className="muted hint">
           Run the game here; the scoreboard and the phone follow along. <Link to={`/games/${id}`}>Open the Host console on its own</Link>
@@ -188,6 +189,38 @@ export function DemoPage() {
           <p className="muted">Add a player to see their phone.</p>
         )}
       </section>
+    </div>
+  );
+}
+
+/** How wide the Host console is drawn in the demo: a laptop's, so it's the two-column console (GamePage's WIDE). */
+const LAPTOP_WIDTH = 1060;
+/** How wide the scoreboard is drawn in the demo: a TV's proportions. */
+const TV_WIDTH = 1280;
+
+/**
+ * A page in a frame drawn at least `width` wide, then shrunk to fit the space it has, like a screenshot. So a laptop
+ * window too narrow for both the console and the phone still shows the console the way a Host will see it on their
+ * laptop, not the phone's single column.
+ */
+function ScaledFrame({ width, hidden, ...frame }: { width: number; hidden: boolean; id: string; role: string; title: string; src: string; "aria-labelledby": string }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [room, setRoom] = useState<{ w: number; h: number } | null>(null);
+  useEffect(() => {
+    const el = box.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const watcher = new ResizeObserver(([entry]) => {
+      const { width: w, height: h } = entry!.contentRect;
+      if (w > 0 && h > 0) setRoom({ w, h }); // a hidden tab measures nothing; keep its last size
+    });
+    watcher.observe(el);
+    return () => watcher.disconnect();
+  }, []);
+  const scale = room ? Math.min(1, room.w / width) : 1;
+  const shrunk = room && scale < 1 ? { width, height: room.h / scale, transform: `scale(${scale})` } : undefined;
+  return (
+    <div ref={box} className="scaled-frame" hidden={hidden}>
+      <iframe {...frame} hidden={hidden} style={shrunk} />
     </div>
   );
 }
