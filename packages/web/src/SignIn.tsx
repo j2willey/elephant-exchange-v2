@@ -44,6 +44,13 @@ export function SignInForm({ next, heading = "Sign in" }: { next?: string; headi
         <p>
           We sent a sign-in link to <strong>{email.trim()}</strong>. It works once, for 15 minutes.
         </p>
+        <p className="muted">
+          Not there in a minute or two? Check your <strong>spam or junk folder</strong> for an email from Elephant
+          Exchange. (Marking it "not spam" helps the next one arrive.)
+        </p>
+        <button type="button" className="secondary" onClick={() => setStatus("idle")}>
+          Wrong address, or send it again
+        </button>
       </section>
     );
   }
@@ -73,6 +80,7 @@ export function SignInForm({ next, heading = "Sign in" }: { next?: string; headi
       <button type="submit" disabled={status === "sending"}>
         Send me a sign-in link
       </button>
+      <p className="muted hint">No password: we email you a link. If it's slow to arrive, look in your spam folder.</p>
     </form>
   );
 }

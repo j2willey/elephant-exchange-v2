@@ -21,6 +21,20 @@ describe("Signing in", () => {
     expect(sent.map((m) => m.email)).toEqual(["ann@example.com"]);
   });
 
+  it("says to look in the spam folder, and lets them send the link again", async () => {
+    const { origin, sent } = await startServer();
+    openApp(browser(origin));
+    expect(await screen.findByText(/look in your spam folder/i)).toBeInTheDocument(); // before asking
+    await askForLink("ann@example.com");
+
+    expect(await screen.findByText(/spam or junk folder/i)).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: /send it again/i }));
+    expect(screen.getByLabelText(/email address/i)).toHaveValue("ann@example.com"); // kept, to fix or resend
+    await userEvent.setup().click(screen.getByRole("button", { name: /send me a sign-in link/i }));
+    await screen.findByText(/spam or junk folder/i);
+    expect(sent.map((m) => m.email)).toEqual(["ann@example.com", "ann@example.com"]);
+  });
+
   it("signs the Host in from the emailed link, and they stay signed in", async () => {
     const { origin, linkFor } = await startServer();
     const ann = browser(origin);
