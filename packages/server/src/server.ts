@@ -30,6 +30,7 @@ import {
 import { Server as SocketServer } from "socket.io";
 import { diskOf, healthWarnings, lastBackupAt, memoryLimit, type ServerHealth } from "./system.js";
 import type { z } from "zod";
+import { createAccess, DEMO_ACTOR, SESSION_COOKIE } from "./access.js";
 import { createAuth, DEFAULT_LIMITS, logMailer, SESSION_LIFETIME_MS, type LinkLimits, type Mailer } from "./auth.js";
 import { cleanRef, createStats, isVisitor, VISITOR_DAYS, VISITOR_DOMAIN } from "./stats.js";
 import { createFeedback } from "./feedback.js";
@@ -89,11 +90,6 @@ import {
 
 export type { Mailer } from "./auth.js";
 
-const SESSION_COOKIE = "session";
-/** Names the made-up Player a demo page's sample phone is (see the middleware on /api/games/:id/*). */
-const DEMO_PLAYER_HEADER = "x-demo-player";
-/** The stand-in "email" a made-up Player acts under: not an address, so nothing is ever sent to it. */
-const DEMO_ACTOR = "demo-player:";
 
 export interface ServerOptions {
   /** SQLite file path, or ":memory:" for tests. */
@@ -340,14 +336,16 @@ export function createServer({
       return "unknown"; // no socket, as in app.request() tests
     }
   }
-  /** Requests from a demo Game's sample phone, and the made-up Player's stand-in email each one acts as. */
-  const demoActors = new WeakMap<Context, string>();
+  /** Game access (access.ts): who is asking about a Game, and whether they may. */
+  const access = createAccess<LoadedGame>({
+    db,
+    sessionEmail: (token) => auth.sessionEmail(token),
+    load: (id) => load(id),
+    onRoster: (game, playerId) => roster(game.state).some((p) => p.id === playerId),
+  });
   /** Who is asking: the signed-in person, or the made-up Player a demo page's sample phone is. */
-  /** Requests from a demo visitor about a real Game: there they count as not signed in (see the gate below). */
-  const strangers = new WeakSet<Context>();
-  const signedInAs = (c: Context) => (strangers.has(c) ? undefined : (demoActors.get(c) ?? auth.sessionEmail(getCookie(c, SESSION_COOKIE))));
-  const roleIn = (gameId: string, email: string) =>
-    db.select().from(gameHosts).where(and(eq(gameHosts.gameId, gameId), eq(gameHosts.email, email))).get()?.role;
+  const signedInAs = access.emailOf;
+  const { roleIn, playerOf, emailOfPlayer } = access;
   /** Rebuilt Games, so a Game's log is replayed only once per server start. `seq` counts its logged events. */
   const cache = new Map<string, LoadedGame>();
   /** When each Game kept in memory (or its Feed) was last asked for, so ones nobody's using can be let go. */
@@ -430,15 +428,6 @@ export function createServer({
     }
   }
 
-  /** The person behind a Player who signed up themselves; none for a Player the Host typed in. */
-  function emailOfPlayer(gameId: string, playerId: string): string | undefined {
-    return db
-      .select({ email: gamePlayers.email })
-      .from(gamePlayers)
-      .where(and(eq(gamePlayers.gameId, gameId), eq(gamePlayers.playerId, playerId)))
-      .get()?.email;
-  }
-
   function nameRow(gameId: string, email: string) {
     return db
       .select()
@@ -496,19 +485,6 @@ export function createServer({
       postsChanged(id);
       staffChanged(id); // it may have settled a name that was waiting
     }
-  }
-
-  function playerOf(gameId: string, email: string, game: LoadedGame): string | undefined {
-    if (email.startsWith(DEMO_ACTOR)) {
-      const playerId = email.slice(DEMO_ACTOR.length);
-      return roster(game.state).some((p) => p.id === playerId) ? playerId : undefined;
-    }
-    const row = db
-      .select({ playerId: gamePlayers.playerId })
-      .from(gamePlayers)
-      .where(and(eq(gamePlayers.gameId, gameId), eq(gamePlayers.email, email)))
-      .get();
-    return row && roster(game.state).some((p) => p.id === row.playerId) ? row.playerId : undefined;
   }
 
   /**
@@ -628,36 +604,10 @@ export function createServer({
     });
   }
 
-  // The demo page's sample phone (Demo.tsx) is one of a demo Game's made-up Players. It runs in the Host's own
-  // browser, so it carries the Host's sign-in, and names the Player in a header. Only in a demo Game, only for
-  // its Hosts and only for a Player on its Roster: the phone then acts as that Player, by the Player's stand-in email
-  // (so, if the Host made that Player a Co-host, as a Co-host; never as the Host).
-  app.use("/api/games/:id/*", async (c, next) => {
-    const playerId = c.req.header(DEMO_PLAYER_HEADER);
-    if (playerId === undefined) return next();
-    const id = c.req.param("id")!;
-    const email = auth.sessionEmail(getCookie(c, SESSION_COOKIE));
-    const row = db.select({ demo: games.demo }).from(games).where(eq(games.id, id)).get();
-    const game = row?.demo ? load(id) : undefined;
-    if (!email || !game || !roleIn(id, email) || !roster(game.state).some((p) => p.id === playerId)) {
-      return c.json({ error: "Only a demo Game's Host can see it as one of its Players" }, 403);
-    }
-    demoActors.set(c, emailOfPlayer(id, playerId) ?? DEMO_ACTOR + playerId);
-    return next();
-  });
-
-  // Someone trying the demo without signing in has no business in a real Game, even with its link: there they're
-  // treated as not signed in, so they can watch like anyone with the link but can't join, post, react or vote.
-  const visitorGate = async (c: Context, next: () => Promise<void>) => {
-    const email = auth.sessionEmail(getCookie(c, SESSION_COOKIE));
-    if (isVisitor(email)) {
-      const row = db.select({ demo: games.demo }).from(games).where(eq(games.id, c.req.param("id")!)).get();
-      if (row && !row.demo) strangers.add(c);
-    }
-    return next();
-  };
-  app.use("/api/games/:id", visitorGate);
-  app.use("/api/games/:id/*", visitorGate);
+  // Who is asking about a Game, worked out once per request: the demo page's sample phone (ADR 0004) and demo
+  // visitors, who count as not signed in in a real Game (see access.ts).
+  app.use("/api/games/:id", access.identify);
+  app.use("/api/games/:id/*", access.identify);
 
   // For Docker's HEALTHCHECK and uptime monitors: up only if the database answers.
   app.get("/api/health", (c) => {
