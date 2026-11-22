@@ -1,8 +1,19 @@
 import type { Command, GameOptions, GameSettings, Phase, RuleErrorCode } from "@elephant/rules";
 import { io } from "socket.io-client";
-import type { GameView, Moderation, MyGame, MyOrg, PendingName, Person, Post, RosterMode, ScreenMode, Session, SharedGame, StaffMember, Theme, VoteDisplay } from "./wire";
+import type { AdminGame, AdminPerson, FeedbackAsk, FeedbackSummary, StatsSummary, SystemReport, Testimonial, GameView, Moderation, MyGame, MyOrg, PendingName, Person, Post, RosterMode, ScreenMode, Session, SharedGame, StaffMember, Theme, VoteDisplay } from "./wire";
 
 export type {
+  AdminGame,
+  AdminPerson,
+  FeedbackAsk,
+  FeedbackSummary,
+  GameRecord,
+  RecordKind,
+  ServerHealth,
+  StatsInsights,
+  StatsSummary,
+  SystemReport,
+  Testimonial,
   GameView,
   Moderation,
   MyGame,
@@ -58,31 +69,7 @@ export interface NewGameRequest {
   demo?: boolean;
 }
 
-export interface AdminPerson {
-  email: string;
-  firstSeen: string;
-  lastSignIn: string | null;
-  feedbackOk: boolean;
-  tipNoteRead: boolean;
-  games: number;
-  demoGames: number;
-  organizations: string[];
-}
 
-/** The usage statistics (ADR-0005), as the admin's Stats page shows them. */
-/** Whether this person is asked how a Game went (as its Host, or as a guest), and what they said. */
-export interface FeedbackAsk {
-  asked: boolean;
-  as: "host" | "guest";
-  given: {
-    rating: number | null;
-    again: "yes" | "maybe" | "no" | null;
-    thumbs: "up" | "down" | null;
-    comment: string | null;
-    quoteOk: boolean;
-    quoteName: string | null;
-  } | null;
-}
 export type FeedbackAnswer = {
   rating?: number;
   again?: "yes" | "maybe" | "no";
@@ -93,152 +80,13 @@ export type FeedbackAnswer = {
   quoteName?: string;
 };
 
-/** Someone's own words on the front page, published by Jim with their OK. */
-export interface Testimonial {
-  quote: string;
-  name: string | null;
-  kind: "host" | "guest";
-  rating: number | null;
-}
 
-export type RecordKind = "players" | "longest" | "steals" | "peakScreens" | "photos";
-export interface GameRecord {
-  record: RecordKind;
-  top: { id: string; name: string; host: string | null; playedAt: string; value: number; players: number; minutes: number | null; activeMinutes: number | null }[];
-}
 
-/** What Hosts and guests said, for the admin. */
-export interface FeedbackSummary {
-  averageRating: number | null;
-  ratings: number;
-  again: { yes: number; maybe: number; no: number };
-  thumbs: { up: number; down: number };
-  suggestions: number;
-  items: {
-    id: string;
-    quoteOk: boolean;
-    quoteName: string | null;
-    published: boolean;
-    kind: "host" | "guest" | "suggestion";
-    game: string | null;
-    from: string | null;
-    rating: number | null;
-    again: "yes" | "maybe" | "no" | null;
-    thumbs: "up" | "down" | null;
-    comment: string | null;
-    /** For a contact-form message: where to reply, if they gave an address. */
-    replyTo: string | null;
-    at: string;
-  }[];
-}
 
-export interface StatsInsights {
-  funnel: { step: "signedIn" | "created" | "started" | "finished" | "voted"; people: number }[];
-  engagement: { averagePlayers: number | null; signedInShare: number | null; averagePeakScreens: number | null };
-  gameplay: {
-    averageSteals: number | null;
-    averageFrozenGifts: number | null;
-    finalRoundShare: number | null;
-    voteShare: number | null;
-    averageSecondsPerPick: number | null;
-    undosPerGame: number | null;
-    skipsPerGame: number | null;
-  };
-  features: { feature: string; games: number }[];
-  returningHosts: { returning: number; hosts: number };
-  startTimes: string[];
-  costs: { signInEmails: { day: string; count: number }[]; signInEmailCap: number; photoBytes: number };
-  /** People who tried the demo without signing in, per day for the last 14 days. */
-  demoVisitors: { day: string; count: number }[];
-  setup: {
-    choices: { choice: "recommended" | "customized" | "saved" | "unknown"; games: number; looked: number }[];
-    options: {
-      option: string;
-      recommended: string;
-      atStart: { value: string; games: number }[];
-      atEnd: { value: string; games: number }[];
-      changedLater: number;
-    }[];
-    timer: { seconds: number; games: number; turns: number; averageTurnSeconds: number | null; overTimerShare: number | null }[];
-  };
-}
 
-/** How one server is doing (the server's system.ts), with what's wrong in words; for the admin's System page. */
-export interface ServerHealth {
-  tag: string;
-  build: string | null;
-  up: boolean;
-  startedAt: string;
-  uptimeSeconds: number;
-  screens: number;
-  peakScreens: number;
-  gamesWatched: number;
-  gamesInMemory: number;
-  lagMs: number | null;
-  busy: boolean;
-  limits: { maxScreens: number | null; maxLagMs: number | null };
-  memory: { rssBytes: number; limitBytes: number | null };
-  disk: { freeBytes: number; totalBytes: number } | null;
-  photoBytes: number;
-  lastBackupAt: string | null;
-  warnings: string[];
-}
 
-export interface SystemReport {
-  checkedAt: string;
-  servers: ServerHealth[];
-}
 
-export interface StatsSummary {
-  insights: StatsInsights;
-  records: GameRecord[];
-  totals: {
-    hosts: number;
-    hostsWhoCreated: number;
-    organizations: number;
-    gamesCreated: number;
-    gamesPlayed: number;
-    gamesFinished: number;
-    people: number;
-    players: number;
-    signedInPlayers: number;
-    averageMinutes: number | null;
-    averageActiveMinutes: number | null;
-  };
-  hosts: { email: string | null; games: number; averageMinutes: number | null }[];
-  organizations: { name: string; deleted: boolean; games: number }[];
-  sources: { ref: string; visits: number; signUps: number }[];
-  games: {
-    id: string;
-    name: string;
-    host: string | null;
-    createdAt: string;
-    firstPickAt: string | null;
-    endedAt: string | null;
-    minutes: number | null;
-    activeMinutes: number | null;
-    players: number;
-    picks: number;
-    steals: number;
-    rating: number | null;
-    demo: boolean;
-    test: boolean;
-    excluded: boolean;
-    deleted: boolean;
-    played: boolean;
-    counted: boolean;
-  }[];
-}
 
-export interface AdminGame {
-  id: string;
-  name: string;
-  demo: boolean;
-  host: string;
-  phase: "setup" | "playing" | "finalRound" | "ended";
-  players: number;
-  createdAt: string;
-}
 
 /**
  * The Reactions anyone can put on a Post, in the order they're shown, each with the name a screen reader says.
