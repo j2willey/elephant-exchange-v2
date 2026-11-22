@@ -36,6 +36,10 @@ _Avoid_: Admin, game admin
 A person the Host has authorized to make Picks in a Game on the Host's behalf, and to moderate its Feed. The Host appoints them in the **Co-hosts panel**, picking from everyone signed in whom the Game knows (by name, never by email), or by email for someone who hasn't opened it yet (a Player the Host typed in is found by name and needs an email added; no email is sent: it counts once they sign in with it). Only the Host appoints Co-hosts. The Host and each Co-host may also play; the Host says which Player each plays as (one who joined as a Player is known already), and the consoles mark those Players, since someone else has to enter their Turns.
 _Avoid_: Proxy, moderator, scorekeeper
 
+**Staff**:
+A Game's Host and its Co-hosts together: what they may do (run the Game, moderate, change its settings), a Player or Guest may not. Some things stay with the Host alone, such as appointing Co-hosts and deleting the Game.
+_Avoid_: Admins, organizers (an Organizer is someone else)
+
 **Player**:
 A person in the swap who brought a Gift and will be called up to take a Turn; may or may not have signed in.
 _Avoid_: Participant
