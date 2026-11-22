@@ -947,13 +947,9 @@ export function createServer({
   }
 
   /** Everyone the Game knows, for the Host's Co-hosts panel: by name where there is one, never by email. */
-  app.get("/api/games/:id/people", (c) => {
-    const id = c.req.param("id");
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
-    const game = load(id);
-    if (!game) return c.json({ error: "Game not found" }, 404);
-    if (roleIn(id, email) !== "host") return c.json({ error: "Only the Host can appoint Co-hosts" }, 403);
+  app.get("/api/games/:id/people", access.need("host", "Only the Host can appoint Co-hosts"), (c) => {
+    const { id, game } = c.var.access;
+    const email = c.var.access.email!;
     const roles = new Map(db.select().from(gameHosts).where(eq(gameHosts.gameId, id)).all().map((h) => [h.email, h]));
     const names = new Map(roster(game.state).map((p) => [p.id, p.name]));
     const people = [...knownPeople(id)].map((who) => {
@@ -979,15 +975,11 @@ export function createServer({
   });
 
   /** The Host switches someone's Co-host role on or off, or says which Player a Host or Co-host plays as. */
-  app.post("/api/games/:id/people/:key", async (c) => {
-    const { id, key } = c.req.param();
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
+  app.post("/api/games/:id/people/:key", access.need("host", "Only the Host can appoint Co-hosts"), async (c) => {
+    const { id, game } = c.var.access;
+    const key = c.req.param("key");
     const body = await parseBody(c, personBody);
     if (!body.ok) return body.res;
-    const game = load(id);
-    if (!game) return c.json({ error: "Game not found" }, 404);
-    if (roleIn(id, email) !== "host") return c.json({ error: "Only the Host can appoint Co-hosts" }, 403);
     const who = [...knownPeople(id)].find((e) => personKey(id, e) === key);
     if (!who) return c.json({ error: "Nobody like that in this Game" }, 404);
     const { cohost, playsAs } = body.data;
@@ -1008,13 +1000,8 @@ export function createServer({
 
   /** Which Players are the Host or a Co-host, for their consoles to mark: they may need to step in on those turns. */
   /** Under Approve names: the names people asked for, waiting for the Host or a Co-host, with what's shown meanwhile. */
-  app.get("/api/games/:id/names/pending", (c) => {
-    const id = c.req.param("id");
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
-    const game = load(id);
-    if (!game) return c.json({ error: "Game not found" }, 404);
-    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts approve names" }, 403);
+  app.get("/api/games/:id/names/pending", access.need("staff", "Only the Host and Co-hosts approve names"), (c) => {
+    const { id, game } = c.var.access;
     const rows = db
       .select()
       .from(gameNames)
@@ -1028,15 +1015,10 @@ export function createServer({
     return c.json({ pending });
   });
 
-  app.post("/api/games/:id/names/approve", async (c) => {
-    const id = c.req.param("id");
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
+  app.post("/api/games/:id/names/approve", access.need("staff", "Only the Host and Co-hosts approve names"), async (c) => {
+    const { id, game } = c.var.access;
     const body = await parseBody(c, approveNameBody);
     if (!body.ok) return body.res;
-    const game = load(id);
-    if (!game) return c.json({ error: "Game not found" }, 404);
-    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts approve names" }, 403);
     const row = db
       .select()
       .from(gameNames)
@@ -1049,14 +1031,11 @@ export function createServer({
   });
 
   /** Someone changes their own name in a Game (a Player's or a Guest's), unless the Host or a Co-host locked it. */
-  app.post("/api/games/:id/me/name", async (c) => {
-    const id = c.req.param("id");
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
+  app.post("/api/games/:id/me/name", access.need("signedIn"), async (c) => {
+    const { id, game } = c.var.access;
+    const email = c.var.access.email!;
     const body = await parseBody(c, joinBody);
     if (!body.ok) return body.res;
-    const game = load(id);
-    if (!game) return c.json({ error: "Game not found" }, 404);
     if (nameRow(id, email)?.locked) return c.json({ code: "NameLocked", message: "Your Host set this name" }, 409);
     if (needsApproval(id, email, game)) {
       holdName(id, email, body.data.name);
@@ -1067,15 +1046,10 @@ export function createServer({
   });
 
   /** The Host or a Co-host renames someone, found by their Player or one of their Posts, and locks the name or not. */
-  app.post("/api/games/:id/names", async (c) => {
-    const id = c.req.param("id");
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
+  app.post("/api/games/:id/names", access.need("staff", "Only the Host and Co-hosts can rename people"), async (c) => {
+    const { id, game } = c.var.access;
     const body = await parseBody(c, renameBody);
     if (!body.ok) return body.res;
-    const game = load(id);
-    if (!game) return c.json({ error: "Game not found" }, 404);
-    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can rename people" }, 403);
     const { playerId, postId, key, name, locked } = body.data;
     if (key !== undefined) {
       const who = [...knownPeople(id)].find((e) => personKey(id, e) === key);
@@ -1096,25 +1070,15 @@ export function createServer({
     return c.body(null, 204);
   });
 
-  app.get("/api/games/:id/staff", (c) => {
-    const id = c.req.param("id");
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
-    const game = load(id);
-    if (!game) return c.json({ error: "Game not found" }, 404);
-    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts" }, 403);
+  app.get("/api/games/:id/staff", access.need("staff", "Only the Host and Co-hosts"), (c) => {
+    const { id, game } = c.var.access;
     return c.json({ staff: staffOf(id, game).map(({ playerId, role }) => ({ playerId, role })) });
   });
 
-  app.post("/api/games/:id/cohosts", async (c) => {
-    const id = c.req.param("id");
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
+  app.post("/api/games/:id/cohosts", access.need("host", "Only the Host can appoint Co-hosts"), async (c) => {
+    const { id, game } = c.var.access;
     const body = await parseBody(c, cohostBody);
     if (!body.ok) return body.res;
-    const game = load(id);
-    if (!game) return c.json({ error: "Game not found" }, 404);
-    if (roleIn(id, email) !== "host") return c.json({ error: "Only the Host can appoint Co-hosts" }, 403);
     const { email: who, playsAs } = body.data;
     if (playsAs !== undefined && !roster(game.state).some((p) => p.id === playsAs)) return c.json({ error: "No such Player in this Game" }, 400);
     const row = { gameId: id, email: who, role: "cohost" as const, ...(playsAs ? { playerId: playsAs } : {}) };
@@ -1129,12 +1093,8 @@ export function createServer({
   });
 
   /** Who co-hosts this Game, for the Host and the Co-hosts themselves. */
-  app.get("/api/games/:id/cohosts", (c) => {
-    const id = c.req.param("id");
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
-    if (!load(id)) return c.json({ error: "Game not found" }, 404);
-    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts" }, 403);
+  app.get("/api/games/:id/cohosts", access.need("staff", "Only the Host and Co-hosts"), (c) => {
+    const { id } = c.var.access;
     const rows = db
       .select({ email: gameHosts.email })
       .from(gameHosts)
@@ -1145,12 +1105,8 @@ export function createServer({
   });
 
   /** The Host takes someone off the Game's Co-hosts. The Host can't be removed this way. */
-  app.delete("/api/games/:id/cohosts/:email", (c) => {
-    const id = c.req.param("id");
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
-    if (!load(id)) return c.json({ error: "Game not found" }, 404);
-    if (roleIn(id, email) !== "host") return c.json({ error: "Only the Host can remove Co-hosts" }, 403);
+  app.delete("/api/games/:id/cohosts/:email", access.need("host", "Only the Host can remove Co-hosts"), (c) => {
+    const { id } = c.var.access;
     const who = c.req.param("email").trim().toLowerCase();
     db.delete(gameHosts)
       .where(and(eq(gameHosts.gameId, id), eq(gameHosts.email, who), eq(gameHosts.role, "cohost")))
@@ -1189,7 +1145,6 @@ export function createServer({
 
   app.post("/api/games/:id/commands", access.need("staff", "Only the Host and Co-hosts can run this Game"), async (c) => {
     const { id, game } = c.var.access;
-    const email = c.var.access.email!;
     const body = await parseBody(c, command);
     if (!body.ok) return body.res;
 
