@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { gifts } from "@elephant/rules";
+import { gifts, phase, roster } from "@elephant/rules";
 import { and, desc, eq, gt, sql } from "drizzle-orm";
 import { gameNames, postReactions, posts, type Db } from "./db.js";
 import type { GameStore } from "./game-store.js";
@@ -14,9 +14,10 @@ import { REACTIONS } from "./schemas.js";
  * - NotFound: no such Post, or not one this person may see.
  * - NotYours: only its poster or the Staff may.
  * - NotHolder: only the Gift's holder may.
+ * - GameOver: Pitches can't change once the Game has ended.
  */
 export type Refusal = {
-  refused: "Paused" | "Muted" | "TooSoon" | "Invalid" | "NotFound" | "NotYours" | "NotHolder";
+  refused: "Paused" | "Muted" | "TooSoon" | "Invalid" | "NotFound" | "NotYours" | "NotHolder" | "GameOver";
   message: string;
   wait?: number;
 };
@@ -38,6 +39,9 @@ export interface Viewer {
 }
 
 export type PostRow = typeof posts.$inferSelect;
+
+/** Someone writing a Pitch: signed in, and the Player they are in this Game, if any. */
+export type PitchViewer = Viewer & { email: string; playerId: string | undefined };
 
 /** Where a Post's Photo can be fetched, and its size; null when it has none. */
 export function photoOf(gameId: string, p: Pick<PostRow, "id" | "photoWidth" | "photoHeight">) {
@@ -281,6 +285,117 @@ export function createFeed(deps: {
     return null;
   }
 
+  /**
+   * The part of a Gift's Pitch a request is about, and whether this person may touch it: the holder their own part,
+   * the Staff any part (for a guest without a phone), and not once the Game is over, Paused, or for someone Muted
+   * (the Staff aside).
+   */
+  function pitchPart(id: string, viewer: PitchViewer, giftId: string, playerIdAsked: string | undefined) {
+    const game = store.get(id)!;
+    const gift = gifts(game.state).find((g) => g.id === giftId);
+    if (!gift) return refuse("NotFound", "No such Gift in this Game");
+    const playerId = playerIdAsked ?? viewer.playerId;
+    if (!playerId) return refuse("NotHolder", "Only the Gift's holder writes its pitch");
+    if (!viewer.staff && playerId !== viewer.playerId) return refuse("NotYours", "You can only write your own part");
+    const part = db
+      .select()
+      .from(posts)
+      .where(and(eq(posts.gameId, id), eq(posts.giftId, giftId), eq(posts.pitchFor, playerId)))
+      .get();
+    if (!viewer.staff) {
+      if (phase(game.state) === "ended") return refuse("GameOver", "The Game is over");
+      if (game.moderation === "paused") return refuse("Paused", "The Host has paused posting");
+      if (isMuted(id, viewer.email)) return refuse("Muted", "The Host has paused your posting");
+    }
+    return { game, gift, playerId, part };
+  }
+
+  /** Whether this person may write this part of a Gift's Pitch now; checked before any work on its Photo. */
+  function mayPitch(id: string, viewer: PitchViewer, giftId: string, playerIdAsked: string | undefined): Refusal | null {
+    const found = pitchPart(id, viewer, giftId, playerIdAsked);
+    if (isRefusal(found)) return found;
+    // A new part only from the Gift's holder; an existing one may still be changed after the Gift moves on.
+    if (!found.part && found.gift.holderId !== found.playerId) return refuse("NotHolder", "Only the Gift's holder writes its pitch");
+    return null;
+  }
+
+  /**
+   * Writes, changes or removes (nothing left: no tagline, words or Photo) a part of a Gift's Pitch. Changed words
+   * wait again under Approval; a part the Staff hid stays hidden. Says whether a new part was written.
+   */
+  function writePitch(
+    id: string,
+    viewer: PitchViewer,
+    giftId: string,
+    input: { playerId?: string | undefined; tagline: string; text: string; removePhoto?: boolean | undefined; photo?: ReadyPhoto | undefined },
+  ): Refusal | { created: boolean } {
+    const no = mayPitch(id, viewer, giftId, input.playerId);
+    if (no) return no;
+    const { game, playerId, part } = pitchPart(id, viewer, giftId, input.playerId) as Exclude<ReturnType<typeof pitchPart>, Refusal>;
+    const { tagline, text, removePhoto, photo } = input;
+    const keepsPhoto = Boolean(photo) || (Boolean(part?.photoWidth) && !removePhoto);
+    if (!tagline && !text && !keepsPhoto) {
+      if (part) {
+        db.delete(posts).where(eq(posts.id, part.id)).run();
+        if (part.photoWidth) photos.remove(id, part.id);
+        changed(id);
+      }
+      return { created: false };
+    }
+    const waits = !viewer.staff && game.moderation === "approval";
+    const postId = part?.id ?? randomBytes(12).toString("base64url");
+    if (photo) photos.save(id, postId, photo.data, photo.small);
+    const pictured = photo ? { photoWidth: photo.width, photoHeight: photo.height } : removePhoto ? { photoWidth: null, photoHeight: null } : {};
+    if (part) {
+      const differs = part.text !== text || (part.tagline ?? "") !== tagline || photo !== undefined || (removePhoto && part.photoWidth !== null);
+      if (differs) {
+        const status = part.status === "hidden" ? "hidden" : waits ? "pending" : part.status;
+        db.update(posts)
+          .set({ text, tagline: tagline || null, status, ...pictured })
+          .where(eq(posts.id, part.id))
+          .run();
+        if (removePhoto && !photo && part.photoWidth) photos.remove(id, part.id);
+      }
+    } else {
+      db.insert(posts)
+        .values({
+          id: postId,
+          gameId: id,
+          email: viewer.email,
+          author: roster(game.state).find((p) => p.id === playerId)!.name,
+          giftId,
+          pitchFor: playerId,
+          tagline: tagline || null,
+          text,
+          photoWidth: photo?.width ?? null,
+          photoHeight: photo?.height ?? null,
+          status: waits ? "pending" : "visible",
+          createdAt: now(),
+        })
+        .run();
+    }
+    changed(id);
+    return { created: !part };
+  }
+
+  /**
+   * "Pitch it again": the Gift's holder sends their part back to the top of the Feed. Not more often than the Game
+   * allows, so nobody bombards the Feed; the Staff may do it any time, for any holder.
+   */
+  function pitchAgain(id: string, viewer: PitchViewer, giftId: string, playerIdAsked: string | undefined): Refusal | null {
+    const found = pitchPart(id, viewer, giftId, playerIdAsked);
+    if (isRefusal(found)) return found;
+    const { game, gift, playerId, part } = found;
+    if (!part || part.status !== "visible") return refuse("NotFound", "There's no pitch to send again");
+    if (gift.holderId !== playerId) return refuse("NotHolder", "Only the Gift's holder pitches it again");
+    const last = (part.bumpedAt ?? part.createdAt).getTime();
+    const wait = viewer.staff ? 0 : Math.ceil((last + game.repitchMinutes * 60_000 - now().getTime()) / 1000);
+    if (wait > 0) return refuse("TooSoon", `You can pitch it again in ${Math.ceil(wait / 60)} min`, { wait });
+    db.update(posts).set({ bumpedAt: now() }).where(eq(posts.id, part.id)).run();
+    changed(id);
+    return null;
+  }
+
   /** Lets go of a Game's shared copy (the database keeps it). */
   const forget = (id: string) => void feeds.delete(id);
 
@@ -289,7 +404,9 @@ export function createFeed(deps: {
     mayPost,
     post,
     react,
-    tooSoon,
+    mayPitch,
+    writePitch,
+    pitchAgain,
     changed,
     forget,
     /** The Games with a shared copy in memory. */

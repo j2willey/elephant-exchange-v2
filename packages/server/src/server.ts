@@ -408,6 +408,7 @@ export function createServer({
     switch (r.refused) {
       case "Paused":
       case "Muted":
+      case "GameOver":
         return c.json({ code: r.refused, message: r.message }, 409);
       case "TooSoon":
         return c.json({ code: r.refused, message: r.message, wait: r.wait }, 429);
@@ -1086,32 +1087,6 @@ export function createServer({
    * guest without a phone) and change any part. It's a Post, so the Feed's rules apply: Approval, Paused, Mute, Hide.
    */
 
-  /** The part of a Gift's Pitch that a request is about, with what's needed to decide whether it's allowed. */
-  function pitchPart(id: string, giftId: string, email: string, playerIdAsked: string | undefined) {
-    const game = load(id);
-    if (!game) return { error: { status: 404, message: "Game not found" } } as const;
-    const gift = gifts(game.state).find((g) => g.id === giftId);
-    if (!gift) return { error: { status: 404, message: "No such Gift in this Game" } } as const;
-    const hosting = roleIn(id, email) !== undefined;
-    const me = playerOf(id, email, game);
-    const playerId = playerIdAsked ?? me;
-    if (!playerId) return { error: { status: 403, message: "Only the Gift's holder writes its pitch" } } as const;
-    if (!hosting && playerId !== me) return { error: { status: 403, message: "You can only write your own part" } } as const;
-    const part = db
-      .select()
-      .from(posts)
-      .where(and(eq(posts.gameId, id), eq(posts.giftId, giftId), eq(posts.pitchFor, playerId)))
-      .get();
-    if (!hosting) {
-      if (phase(game.state) === "ended") return { error: { status: 409, code: "GameOver", message: "The Game is over" } } as const;
-      if (game.moderation === "paused") return { error: { status: 409, code: "Paused", message: "The Host has paused posting" } } as const;
-      if (nameRow(id, email)?.muted) return { error: { status: 409, code: "Muted", message: "The Host has paused your posting" } } as const;
-    }
-    return { game, gift, hosting, playerId, part } as const;
-  }
-
-  const pitchError = (c: Context, e: { status: number; code?: string; message: string }) =>
-    c.json(e.code ? { code: e.code, message: e.message } : { error: e.message }, e.status as 403);
 
   /**
    * A Gift's Pitch: the story its holder tells, to tempt a Steal or to fend one off. Each holder writes their own
@@ -1122,7 +1097,7 @@ export function createServer({
    * multipart form, its file in `photo`. Nothing left (no tagline, words or Photo) removes the part.
    */
   app.put("/api/games/:id/gifts/:giftId/pitch", access.need("signedIn"), photoSizeLimit, async (c) => {
-    const { id } = c.var.access;
+    const { id, role } = c.var.access;
     const email = c.var.access.email!;
     const giftId = c.req.param("giftId");
     let upload: File | undefined;
@@ -1138,58 +1113,17 @@ export function createServer({
       body = await parseBody(c, pitchBody);
     }
     if (!body.ok) return body.res;
-    const found = pitchPart(id, giftId, email, body.data.playerId);
-    if ("error" in found) return pitchError(c, found.error);
-    const { game, gift, hosting, playerId, part } = found;
-    if (!part && gift.holderId !== playerId) return c.json({ error: "Only the Gift's holder writes its pitch" }, 403);
+    const viewer = { email, staff: role !== undefined, playerId: c.var.access.playerId };
+    const no = feed.mayPitch(id, viewer, giftId, body.data.playerId);
+    if (no) return refused(c, no);
 
     const photo = upload && (await preparePhoto(new Uint8Array(await upload.arrayBuffer())));
     if (upload && !photo) return c.json({ error: "That doesn't look like a photo we can use" }, 400);
-    const { tagline, text, removePhoto } = body.data;
-    const keepsPhoto = Boolean(photo) || (Boolean(part?.photoWidth) && !removePhoto);
-    if (!tagline && !text && !keepsPhoto) {
-      if (part) {
-        db.delete(posts).where(eq(posts.id, part.id)).run();
-        if (part.photoWidth) photos.remove(id, part.id);
-        postsChanged(id);
-      }
-      return c.body(null, 204);
-    }
-
-    const postId = part?.id ?? randomBytes(12).toString("base64url");
-    if (photo) photos.save(id, postId, photo.data, await smallPhoto(photo.data));
-    const pictured = photo ? { photoWidth: photo.width, photoHeight: photo.height } : removePhoto ? { photoWidth: null, photoHeight: null } : {};
-    if (part) {
-      const changed = part.text !== text || (part.tagline ?? "") !== tagline || photo !== undefined || (removePhoto && part.photoWidth !== null);
-      if (changed) {
-        // Changed words wait again under Approval; a part a Host hid stays hidden.
-        const status = part.status === "hidden" ? "hidden" : !hosting && game.moderation === "approval" ? "pending" : part.status;
-        db.update(posts)
-          .set({ text, tagline: tagline || null, status, ...pictured })
-          .where(eq(posts.id, part.id))
-          .run();
-        if (removePhoto && !photo && part.photoWidth) photos.remove(id, part.id);
-      }
-    } else {
-      db.insert(posts)
-        .values({
-          id: postId,
-          gameId: id,
-          email,
-          author: roster(game.state).find((p) => p.id === playerId)!.name,
-          giftId,
-          pitchFor: playerId,
-          tagline: tagline || null,
-          text,
-          photoWidth: photo?.width ?? null,
-          photoHeight: photo?.height ?? null,
-          status: !hosting && game.moderation === "approval" ? "pending" : "visible",
-          createdAt: now(),
-        })
-        .run();
-      stats.noteFeature(id, "pitch");
-    }
-    postsChanged(id);
+    const { tagline, text, removePhoto, playerId } = body.data;
+    const ready = photo && { ...photo, small: await smallPhoto(photo.data) };
+    const written = feed.writePitch(id, viewer, giftId, { playerId, tagline, text, removePhoto, photo: ready });
+    if (isRefusal(written)) return refused(c, written);
+    if (written.created) stats.noteFeature(id, "pitch");
     return c.body(null, 204);
   });
 
@@ -1204,17 +1138,9 @@ export function createServer({
     const giftId = c.req.param("giftId");
     const body = await parseBody(c, repitchBody);
     if (!body.ok) return body.res;
-    const found = pitchPart(id, giftId, email, body.data.playerId);
-    if ("error" in found) return pitchError(c, found.error);
-    const { game, gift, hosting, playerId, part } = found;
-    if (!part || part.status !== "visible") return c.json({ error: "There's no pitch to send again" }, 404);
-    if (gift.holderId !== playerId) return c.json({ error: "Only the Gift's holder pitches it again" }, 403);
-    const last = (part.bumpedAt ?? part.createdAt).getTime();
-    const wait = hosting ? 0 : Math.ceil((last + game.repitchMinutes * 60_000 - now().getTime()) / 1000);
-    if (wait > 0) return c.json({ code: "TooSoon", message: `You can pitch it again in ${Math.ceil(wait / 60)} min`, wait }, 429);
-    db.update(posts).set({ bumpedAt: now() }).where(eq(posts.id, part.id)).run();
-    postsChanged(id);
-    return c.body(null, 204);
+    const viewer = { email, staff: c.var.access.role !== undefined, playerId: c.var.access.playerId };
+    const no = feed.pitchAgain(id, viewer, giftId, body.data.playerId);
+    return no ? refused(c, no) : c.body(null, 204);
   });
 
   // Every visible Photo in one zip, for the Host to keep before they're deleted (hidden ones stay out).

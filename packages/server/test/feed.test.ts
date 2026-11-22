@@ -100,6 +100,38 @@ describe("The Feed", () => {
     });
   });
 
+  describe("Pitches", () => {
+    /** Ann and Bob are Players; Ann opened g1. */
+    function withGift() {
+      const t = setup();
+      for (const p of ["ann", "bob"]) t.store.command("g", { type: "AddPlayer", playerId: p, name: p.toUpperCase() });
+      t.store.command("g", { type: "StartGame" });
+      t.store.command("g", { type: "OpenGift", playerId: "ann", giftId: "g1", name: "Socks" });
+      return t;
+    }
+    const ann = { email: "ann@x", staff: false, playerId: "ann" };
+    const bob = { email: "bob@x", staff: false, playerId: "bob" };
+    const host = { email: "host@x", staff: true, playerId: undefined };
+
+    it("lets the holder write their own part, the Staff write it for them, and nobody else", () => {
+      const { feed } = withGift();
+      expect(feed.writePitch("g", bob, "g1", { tagline: "", text: "Mine now?" })).toMatchObject({ refused: "NotHolder" });
+      expect(feed.writePitch("g", bob, "g1", { playerId: "ann", tagline: "", text: "x" })).toMatchObject({ refused: "NotYours" });
+      expect(feed.writePitch("g", ann, "g1", { tagline: "Cozy", text: "Warm socks" })).toEqual({ created: true });
+      expect(feed.writePitch("g", host, "g1", { playerId: "ann", tagline: "Cozy!", text: "Warm socks" })).toEqual({ created: false });
+      expect(feed.list("g", host).map((p) => [p.author, p.tagline])).toEqual([["ANN", "Cozy!"]]);
+    });
+
+    it("sends a part back to the top no more often than the Game allows, unless the Staff do", () => {
+      const { feed, store } = withGift();
+      store.change("g", () => ({ repitchMinutes: 5 }));
+      feed.writePitch("g", ann, "g1", { tagline: "Cozy", text: "" });
+      expect(feed.pitchAgain("g", ann, "g1", undefined)).toMatchObject({ refused: "TooSoon" });
+      expect(feed.pitchAgain("g", host, "g1", "ann")).toBeNull();
+      expect(feed.pitchAgain("g", bob, "g1", undefined)).toMatchObject({ refused: "NotFound" });
+    });
+  });
+
   it("keeps one shared copy until it changes", () => {
     const { feed, add } = setup();
     add({ id: "one" });
