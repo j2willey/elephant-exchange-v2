@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { gifts, phase, roster } from "@elephant/rules";
-import { and, desc, eq, gt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNotNull, sql } from "drizzle-orm";
 import { gameNames, postReactions, posts, type Db } from "./db.js";
 import type { GameStore } from "./game-store.js";
 import type { photoStore } from "./photos.js";
@@ -15,9 +15,10 @@ import { REACTIONS } from "./schemas.js";
  * - NotYours: only its poster or the Staff may.
  * - NotHolder: only the Gift's holder may.
  * - GameOver: Pitches can't change once the Game has ended.
+ * - Fixed: that can't change (a Pitch part stays with its Gift).
  */
 export type Refusal = {
-  refused: "Paused" | "Muted" | "TooSoon" | "Invalid" | "NotFound" | "NotYours" | "NotHolder" | "GameOver";
+  refused: "Paused" | "Muted" | "TooSoon" | "Invalid" | "NotFound" | "NotYours" | "NotHolder" | "GameOver" | "Fixed";
   message: string;
   wait?: number;
 };
@@ -396,6 +397,115 @@ export function createFeed(deps: {
     return null;
   }
 
+  /**
+   * The Staff approve a Pending Post or show a Hidden one again (the same: it becomes visible, and whatever was
+   * hidden along with it comes back too), or hide one, with every visible reply under it if `thread`.
+   */
+  function setStatus(id: string, postId: string, status: "visible" | "hidden", thread = false): Refusal | null {
+    const all = db.select({ id: posts.id, replyTo: posts.replyTo, status: posts.status }).from(posts).where(eq(posts.gameId, id)).all();
+    if (!all.some((p) => p.id === postId)) return refuse("NotFound", "Post not found");
+    db.transaction((tx) => {
+      const at = and(eq(posts.gameId, id), eq(posts.id, postId));
+      if (status === "visible") {
+        tx.update(posts).set({ status: "visible", hiddenWith: null }).where(at).run();
+        // Whatever was hidden along with it (its thread) comes back too; a reply hidden on its own stays hidden.
+        tx.update(posts)
+          .set({ status: "visible", hiddenWith: null })
+          .where(and(eq(posts.gameId, id), eq(posts.hiddenWith, postId)))
+          .run();
+        return;
+      }
+      tx.update(posts).set({ status: "hidden" }).where(at).run();
+      if (!thread) return;
+      // Every visible reply under it, however deep, goes with it.
+      const under = new Set([postId]);
+      for (let grew = true; grew; ) {
+        grew = false;
+        for (const p of all) if (p.replyTo && under.has(p.replyTo) && !under.has(p.id)) (under.add(p.id), (grew = true));
+      }
+      under.delete(postId);
+      const replies = all.filter((p) => under.has(p.id) && p.status === "visible").map((p) => p.id);
+      if (replies.length > 0)
+        tx.update(posts)
+          .set({ status: "hidden", hiddenWith: postId })
+          .where(and(eq(posts.gameId, id), inArray(posts.id, replies)))
+          .run();
+    });
+    changed(id);
+    return null;
+  }
+
+  /**
+   * Attaches a Post to a Gift after it was posted (a great photo whose poster didn't pick the Gift), or takes it off
+   * (null). For its poster and the Staff; a Pitch part stays with its Gift.
+   */
+  function moveToGift(id: string, viewer: Viewer & { email: string }, postId: string, giftId: string | null): Refusal | null {
+    const row = db
+      .select({ email: posts.email, pitchFor: posts.pitchFor })
+      .from(posts)
+      .where(and(eq(posts.gameId, id), eq(posts.id, postId)))
+      .get();
+    if (!row) return refuse("NotFound", "Post not found");
+    if (row.pitchFor !== null) return refuse("Fixed", "A pitch stays with its Gift");
+    if (row.email !== viewer.email && !viewer.staff) return refuse("NotYours", "Only its poster, the Host and Co-hosts can change this Post");
+    const game = store.get(id)!;
+    if (giftId !== null && !gifts(game.state).some((g) => g.id === giftId)) return refuse("Invalid", "No such Gift in this Game");
+    db.update(posts)
+      .set({ giftId })
+      .where(and(eq(posts.gameId, id), eq(posts.id, postId)))
+      .run();
+    changed(id);
+    return null;
+  }
+
+  /**
+   * The Staff mute whoever wrote a Post (they can't post or reply), hiding everything they posted if `hidePosts`,
+   * or unmute them, which brings back what the mute hid and nothing hidden for another reason. The Muted flag is
+   * on the person's Name in the Game, written here in the same step as the hiding.
+   */
+  function mute(id: string, postId: string, muted: boolean, hidePosts = false): Refusal | null {
+    const by = db
+      .select({ email: posts.email })
+      .from(posts)
+      .where(and(eq(posts.gameId, id), eq(posts.id, postId)))
+      .get();
+    if (!by) return refuse("NotFound", "Post not found");
+    const theirs = and(eq(posts.gameId, id), eq(posts.email, by.email));
+    db.transaction((tx) => {
+      tx.insert(gameNames)
+        .values({ gameId: id, email: by.email, muted })
+        .onConflictDoUpdate({ target: [gameNames.gameId, gameNames.email], set: { muted } })
+        .run();
+      if (muted && hidePosts)
+        tx.update(posts)
+          .set({ status: "hidden", hiddenWith: "mute" })
+          .where(and(theirs, eq(posts.status, "visible")))
+          .run();
+      if (!muted)
+        tx.update(posts)
+          .set({ status: "visible", hiddenWith: null })
+          .where(and(theirs, eq(posts.hiddenWith, "mute")))
+          .run();
+    });
+    changed(id);
+    return null;
+  }
+
+  /** The Post behind a Photo address, if this viewer may see it and it has a Photo. */
+  function photoFor(id: string, viewer: Viewer, postId: string): PostRow | undefined {
+    const row = db.select().from(posts).where(and(eq(posts.gameId, id), eq(posts.id, postId))).get();
+    return row && row.photoWidth && canSee(viewer, row) ? row : undefined;
+  }
+
+  /** Every visible Post with a Photo, oldest first: the Game's album. */
+  const album = (id: string): PostRow[] =>
+    db
+      .select()
+      .from(posts)
+      .where(and(eq(posts.gameId, id), eq(posts.status, "visible"), isNotNull(posts.photoWidth)))
+      .orderBy(asc(posts.createdAt), asc(sql`${posts}.rowid`))
+      .all();
+
   /** Lets go of a Game's shared copy (the database keeps it). */
   const forget = (id: string) => void feeds.delete(id);
 
@@ -407,6 +517,11 @@ export function createFeed(deps: {
     mayPitch,
     writePitch,
     pitchAgain,
+    setStatus,
+    moveToGift,
+    mute,
+    photoFor,
+    album,
     changed,
     forget,
     /** The Games with a shared copy in memory. */

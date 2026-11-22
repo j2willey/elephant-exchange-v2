@@ -419,6 +419,8 @@ export function createServer({
       case "NotYours":
       case "NotHolder":
         return c.json({ error: r.message }, 403);
+      case "Fixed":
+        return c.json({ error: r.message }, 409);
     }
   }
   /** After any change to a Game's Posts or Reactions: every screen watching asks for the Feed again. */
@@ -1147,12 +1149,7 @@ export function createServer({
   app.get("/api/games/:id/album.zip", access.need("staff", "Only the Host and Co-hosts can download the album"), (c) => {
     const { id, game } = c.var.access;
 
-    const rows = db
-      .select()
-      .from(posts)
-      .where(and(eq(posts.gameId, id), eq(posts.status, "visible"), isNotNull(posts.photoWidth)))
-      .orderBy(asc(posts.createdAt), asc(sql`${posts}.rowid`))
-      .all();
+    const rows = feed.album(id);
     const digits = Math.max(2, String(rows.length).length);
     const files: { name: string; data: Uint8Array }[] = [];
     const captions: string[] = [];
@@ -1180,11 +1177,10 @@ export function createServer({
    */
   async function servePhoto(c: Context, size: PhotoSize) {
     const { id = "", postId = "" } = c.req.param();
-    const row = db.select().from(posts).where(and(eq(posts.gameId, id), eq(posts.id, postId))).get();
     const email = signedInAs(c);
-    const visible = row?.status === "visible";
-    const mayView = row && (visible || row.email === email || (email !== undefined && roleIn(id, email) !== undefined));
-    if (!mayView || !row.photoWidth) return c.json({ error: "No such Photo" }, 404);
+    const row = feed.photoFor(id, { email, staff: email !== undefined && roleIn(id, email) !== undefined }, postId);
+    if (!row) return c.json({ error: "No such Photo" }, 404);
+    const visible = row.status === "visible";
     let data = photos.read(row.gameId, row.id, size);
     if (!data && size === "small") {
       // A Photo kept before small copies were made: make its copy now, once.
@@ -1461,37 +1457,8 @@ export function createServer({
     const postId = c.req.param("postId");
     const body = await parseBody(c, postStatusBody);
     if (!body.ok) return body.res;
-    const all = db.select({ id: posts.id, replyTo: posts.replyTo, status: posts.status }).from(posts).where(eq(posts.gameId, id)).all();
-    if (!all.some((p) => p.id === postId)) return c.json({ error: "Post not found" }, 404);
-    db.transaction((tx) => {
-      const at = and(eq(posts.gameId, id), eq(posts.id, postId));
-      if (body.data.status === "visible") {
-        tx.update(posts).set({ status: "visible", hiddenWith: null }).where(at).run();
-        // Whatever was hidden along with it (its thread) comes back too; a reply hidden on its own stays hidden.
-        tx.update(posts)
-          .set({ status: "visible", hiddenWith: null })
-          .where(and(eq(posts.gameId, id), eq(posts.hiddenWith, postId)))
-          .run();
-        return;
-      }
-      tx.update(posts).set({ status: "hidden" }).where(at).run();
-      if (!body.data.thread) return;
-      // Every visible reply under it, however deep, goes with it.
-      const under = new Set([postId]);
-      for (let grew = true; grew; ) {
-        grew = false;
-        for (const p of all) if (p.replyTo && under.has(p.replyTo) && !under.has(p.id)) (under.add(p.id), (grew = true));
-      }
-      under.delete(postId);
-      const replies = all.filter((p) => under.has(p.id) && p.status === "visible").map((p) => p.id);
-      if (replies.length > 0)
-        tx.update(posts)
-          .set({ status: "hidden", hiddenWith: postId })
-          .where(and(eq(posts.gameId, id), inArray(posts.id, replies)))
-          .run();
-    });
-    postsChanged(id);
-    return c.body(null, 204);
+    const no = feed.setStatus(id, postId, body.data.status, body.data.thread);
+    return no ? refused(c, no) : c.body(null, 204);
   });
 
   /**
@@ -1504,23 +1471,8 @@ export function createServer({
     const postId = c.req.param("postId");
     const body = await parseBody(c, postGiftBody);
     if (!body.ok) return body.res;
-    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
-    const row = db
-      .select({ email: posts.email, pitchFor: posts.pitchFor })
-      .from(posts)
-      .where(and(eq(posts.gameId, id), eq(posts.id, postId)))
-      .get();
-    if (!row) return c.json({ error: "Post not found" }, 404);
-    if (row.pitchFor !== null) return c.json({ error: "A pitch stays with its Gift" }, 409);
-    if (row.email !== email && !role) return c.json({ error: "Only its poster, the Host and Co-hosts can change this Post" }, 403);
-    const { giftId } = body.data;
-    if (giftId !== null && !gifts(game.state).some((g) => g.id === giftId)) return c.json({ error: "No such Gift in this Game" }, 400);
-    db.update(posts)
-      .set({ giftId })
-      .where(and(eq(posts.gameId, id), eq(posts.id, postId)))
-      .run();
-    postsChanged(id);
-    return c.body(null, 204);
+    const no = feed.moveToGift(id, { email, staff: role !== undefined }, postId, body.data.giftId);
+    return no ? refused(c, no) : c.body(null, 204);
   });
 
   /** The Host or a Co-host mutes whoever wrote a Post (they can't post or reply), or unmutes them. */
@@ -1529,32 +1481,8 @@ export function createServer({
     const body = await parseBody(c, muteBody);
     if (!body.ok) return body.res;
     const { postId, muted, hidePosts } = body.data;
-    const by = db
-      .select({ email: posts.email })
-      .from(posts)
-      .where(and(eq(posts.gameId, id), eq(posts.id, postId)))
-      .get();
-    if (!by) return c.json({ error: "Post not found" }, 404);
-    const theirs = and(eq(posts.gameId, id), eq(posts.email, by.email));
-    db.transaction((tx) => {
-      tx.insert(gameNames)
-        .values({ gameId: id, email: by.email, muted })
-        .onConflictDoUpdate({ target: [gameNames.gameId, gameNames.email], set: { muted } })
-        .run();
-      if (muted && hidePosts)
-        tx.update(posts)
-          .set({ status: "hidden", hiddenWith: "mute" })
-          .where(and(theirs, eq(posts.status, "visible")))
-          .run();
-      // Unmuting brings back what the mute hid, and nothing hidden for another reason.
-      if (!muted)
-        tx.update(posts)
-          .set({ status: "visible", hiddenWith: null })
-          .where(and(theirs, eq(posts.hiddenWith, "mute")))
-          .run();
-    });
-    postsChanged(id);
-    return c.body(null, 204);
+    const no = feed.mute(id, postId, muted, hidePosts);
+    return no ? refused(c, no) : c.body(null, 204);
   });
 
   // A person adds themselves as a Player, in a Self sign-up Game. The server picks the Player's id and
