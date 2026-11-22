@@ -13,24 +13,19 @@ import { bodyLimit } from "hono/body-limit";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import {
   activePlayers,
-  decide,
-  evolve,
   gifts,
   leftoverGiftCount,
-  newGame,
   onDeck,
   phase,
   roster,
   type Command,
   type DrawFn,
-  type Event,
-  type GameSettings,
-  type GameState,
 } from "@elephant/rules";
 import { Server as SocketServer } from "socket.io";
 import { diskOf, healthWarnings, lastBackupAt, memoryLimit, type ServerHealth } from "./system.js";
 import type { z } from "zod";
 import { createAccess, DEMO_ACTOR, SESSION_COOKIE } from "./access.js";
+import { createGameStore, type LoadedGame, type OrgTheme } from "./game-store.js";
 import { createAuth, DEFAULT_LIMITS, logMailer, SESSION_LIFETIME_MS, type LinkLimits, type Mailer } from "./auth.js";
 import { cleanRef, createStats, isVisitor, VISITOR_DAYS, VISITOR_DOMAIN } from "./stats.js";
 import { createFeedback } from "./feedback.js";
@@ -164,49 +159,6 @@ export const IDLE_GAME_HOURS = 6;
 
 const randomDraw: DrawFn = (candidates) => candidates[randomInt(candidates.length)]!;
 
-/** A Game as the server holds it: what's stored alongside the log, its state rebuilt from the log, and the log's length. */
-interface LoadedGame {
-  name: string;
-  /** Made with "Try a demo game": its Host console offers the demo view. */
-  demo: boolean;
-  /** The line under the name; "" for none. */
-  tagline: string;
-  rosterMode: "host" | "self";
-  moderation: "open" | "approval" | "paused";
-  approveNames: boolean;
-  turnSeconds: number;
-  /** Against flooding the Feed: the most Posts a guest makes in a minute, and minutes between sending a Pitch again. */
-  postsPerMinute: number;
-  repitchMinutes: number;
-  /** When each Player who's up was called up, or had their timer reset (ms since 1970). */
-  clocks: ReadonlyMap<string, number>;
-  state: GameState;
-  seq: number;
-  theme: {
-    /** The Organization the Game shows the Theme of, with that Theme as it stands. */
-    org: OrgTheme | null;
-    /** The Game's own parts, which win over the Organization's. */
-    own: ThemeParts;
-  };
-  /** What the big screen shows: the Gift board, the rules, the join code, or the catalog. */
-  screen: "gifts" | "rules" | "qr" | "catalog" | "highlights";
-  vote: {
-    status: "none" | "open" | "closed";
-    display: "live" | "hidden" | "parade";
-    winner: string | null;
-    /** Each voter's Gift, by email. Never sent as is: screens get counts, and each person their own vote. */
-    ballots: ReadonlyMap<string, string>;
-  };
-}
-
-/** A Theme's parts, each null when unset: colors as "#rrggbb", images as the version of the stored file. */
-interface ThemeParts {
-  color: string | null;
-  page: string | null;
-  logo: string | null;
-  background: string | null;
-}
-type OrgTheme = ThemeParts & { id: string; name: string };
 
 /**
  * The Theme a Game is shown with: each part from the Game's own override, else its Organization's, else unset
@@ -346,50 +298,9 @@ export function createServer({
   /** Who is asking: the signed-in person, or the made-up Player a demo page's sample phone is. */
   const signedInAs = access.emailOf;
   const { roleIn, playerOf, emailOfPlayer } = access;
-  /** Rebuilt Games, so a Game's log is replayed only once per server start. `seq` counts its logged events. */
-  const cache = new Map<string, LoadedGame>();
-  /** When each Game kept in memory (or its Feed) was last asked for, so ones nobody's using can be let go. */
-  const lastUsed = new Map<string, number>();
-
-  function load(id: string): LoadedGame | undefined {
-    lastUsed.set(id, now().getTime());
-    const cached = cache.get(id);
-    if (cached) return cached;
-    const row = db.select().from(games).where(eq(games.id, id)).get();
-    if (!row) return undefined;
-    const log = db.select().from(gameEvents).where(eq(gameEvents.gameId, id)).orderBy(asc(gameEvents.seq)).all();
-    // Replaying the log never draws: every Draw was logged as a PlayerDrawn event (ADR-0001).
-    const state = log.map((e) => JSON.parse(e.event) as Event).reduce(evolve, newGame(JSON.parse(row.settings) as GameSettings));
-    const clocks = db.select().from(turnClocks).where(eq(turnClocks.gameId, id)).all();
-    const ballots = db.select().from(votes).where(eq(votes.gameId, id)).all();
-    const game: LoadedGame = {
-      theme: {
-        org: row.orgId ? orgTheme(row.orgId) : null,
-        own: { color: row.themeColor, page: row.themePage, logo: row.themeLogo, background: row.themeBackground },
-      },
-      screen: row.screenMode,
-      vote: {
-        status: row.voteStatus,
-        display: row.voteDisplay,
-        winner: row.voteWinner,
-        ballots: new Map(ballots.map((b) => [b.email, b.giftId])),
-      },
-      name: row.name,
-      tagline: row.tagline,
-      demo: row.demo,
-      rosterMode: row.rosterMode,
-      moderation: row.moderation,
-      approveNames: row.approveNames,
-      turnSeconds: row.turnSeconds,
-      postsPerMinute: row.postsPerMinute,
-      repitchMinutes: row.repitchMinutes,
-      clocks: new Map(clocks.map((c) => [c.playerId, c.startedAt.getTime()])),
-      state,
-      seq: log.length,
-    };
-    cache.set(id, game);
-    return game;
-  }
+  /** Every Game a request asks for, and every change to one (game-store.ts). */
+  const store = createGameStore({ db, now, draw, orgTheme: (orgId) => orgTheme(orgId) });
+  const load = (id: string) => store.get(id);
 
   /** An Organization's Theme as it stands, with its id and name; null if there's no such Organization. */
   function orgTheme(orgId: string): OrgTheme | null {
@@ -402,13 +313,7 @@ export function createServer({
     db.select({ id: organizations.id }).from(organizations).where(and(eq(organizations.id, orgId), eq(organizations.organizerEmail, email))).get() !== undefined;
 
   /** After an Organizer changes their Organization, brings every Game showing it up to date on every screen. */
-  function orgChanged(orgId: string) {
-    const org = orgTheme(orgId);
-    for (const { id } of db.select({ id: games.id }).from(games).where(eq(games.orgId, orgId)).all()) {
-      const game = cache.get(id);
-      if (game) publish(id, { ...game, theme: { ...game.theme, org } });
-    }
-  }
+  const orgChanged = (orgId: string) => store.orgChanged(orgId);
 
   /** The Player this person signed up as, if they did and are still on the Roster. */
   /** A demo Player's stand-in email: "fay@example.com", or "fay2@example.com" when there's already a Fay. */
@@ -479,7 +384,7 @@ export function createServer({
         .run();
       tx.update(posts).set({ author: name }).where(and(eq(posts.gameId, id), eq(posts.email, email))).run();
     };
-    if (playerId) run(id, game, { type: "RenamePlayer", playerId, name }, write);
+    if (playerId) run(id, { type: "RenamePlayer", playerId, name }, write);
     else db.transaction(write);
     if (email) {
       postsChanged(id);
@@ -488,32 +393,12 @@ export function createServer({
   }
 
   /**
-   * Decides a command, logs its events and tells every screen. `alsoWrite` goes in the same transaction,
-   * so what's stored beside the log never disagrees with it. Synchronous from start to finish, so two
-   * commands never interleave. Returns the Game as now shown, or the rule that refused the command.
+   * Decides a command against the latest copy of the Game, logs its events and tells every screen (see the Game
+   * store). Returns the Game as now shown, or the rule that refused the command. The Game must exist.
    */
-  function run(id: string, game: LoadedGame, cmd: Command, alsoWrite?: (tx: Tx) => void) {
-    const result = decide(game.state, cmd, draw);
-    if (!Array.isArray(result)) return result;
-    const at = now();
-    const state = result.reduce(evolve, game.state);
-    // The join code has done its job once the Game starts: the big screen turns to the Gifts. Anything else the
-    // Host chose for it (the rules, read out at the start) stays.
-    const started = game.state.phase === "setup" && state.phase !== "setup";
-    const screen = started && game.screen === "qr" ? ("gifts" as const) : game.screen;
-    // A Player's clock starts when they're called up (a Victim's too) and goes once they're no longer up.
-    const clocks = new Map<string, number>();
-    for (const playerId of activePlayers(state)) clocks.set(playerId, game.clocks.get(playerId) ?? at.getTime());
-    db.transaction((tx) => {
-      result.forEach((event, i) => {
-        tx.insert(gameEvents).values({ gameId: id, seq: game.seq + i + 1, event: JSON.stringify(event), createdAt: at }).run();
-      });
-      tx.delete(turnClocks).where(eq(turnClocks.gameId, id)).run();
-      for (const [playerId, ms] of clocks) tx.insert(turnClocks).values({ gameId: id, playerId, startedAt: new Date(ms) }).run();
-      if (screen !== game.screen) tx.update(games).set({ screenMode: screen }).where(eq(games.id, id)).run();
-      alsoWrite?.(tx);
-    });
-    return publish(id, { ...game, clocks, state, screen, seq: game.seq + result.length });
+  function run(id: string, cmd: Command, alsoWrite?: (tx: Tx, game: LoadedGame) => void) {
+    const result = store.command(id, cmd, alsoWrite)!;
+    return "code" in result ? result : view(id, result, now());
   }
 
   /**
@@ -571,13 +456,8 @@ export function createServer({
     feedSignals.set(id, signal);
   }
 
-  /** Keeps the Game's new copy and sends it to every screen watching. */
-  function publish(id: string, next: LoadedGame) {
-    cache.set(id, next);
-    const shown = view(id, next, now());
-    io?.to(id).emit("game", shown);
-    return shown;
-  }
+  /** Every change to a Game goes to every screen watching it. */
+  store.onChange((id, game) => io?.to(id).emit("game", view(id, game, now())));
 
   /** Whether the event loop has lately fallen too far behind (see overload); kept up to date while listening. */
   let lagging = false;
@@ -1150,7 +1030,7 @@ export function createServer({
     // make one a Co-host, as with real people. At example.com, which takes no mail: nobody can ever sign in as one.
     const cmd = body.data;
     const standIn = game.demo && cmd.type === "AddPlayer" ? demoEmail(id, cmd.name) : undefined;
-    const result = run(id, game, cmd, (tx) => {
+    const result = run(id, cmd, (tx) => {
       if (standIn && cmd.type === "AddPlayer") tx.insert(gamePlayers).values({ gameId: id, playerId: cmd.playerId, email: standIn }).run();
     });
     if (!("code" in result) && cmd.type === "ChangeSettings")
@@ -1164,17 +1044,10 @@ export function createServer({
     const { id } = c.var.access;
     const body = await parseBody(c, timerBody);
     if (!body.ok) return body.res;
-    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
-    const { playerId } = body.data;
-    if (!game.clocks.has(playerId)) return c.json({ code: "NotActive", message: "That Player isn't up" }, 409);
-
-    const at = now();
-    db.update(turnClocks)
-      .set({ startedAt: at })
-      .where(and(eq(turnClocks.gameId, id), eq(turnClocks.playerId, playerId)))
-      .run();
     // The version doesn't change, since the Game didn't: screens take a copy at the same version as the newer one.
-    return c.json(publish(id, { ...game, clocks: new Map(game.clocks).set(playerId, at.getTime()) }));
+    const game = store.resetClock(id, body.data.playerId);
+    if (!game) return c.json({ code: "NotActive", message: "That Player isn't up" }, 409);
+    return c.json(view(id, game, now()));
   });
 
   // The Feed, as this viewer may see it: every visible Post, plus their own and, for a Host, all the others.
@@ -1599,17 +1472,13 @@ export function createServer({
     if (!email) return c.json({ error: "Sign in first" }, 401);
     if (!orgTheme(orgId)) return c.json({ error: "No such Organization" }, 404);
     if (!organizes(orgId, email)) return c.json({ error: "Only its Organizer can delete an Organization" }, 403);
-    const using = db.select({ id: games.id }).from(games).where(eq(games.orgId, orgId)).all();
     stats.orgDeleted(orgId);
     db.transaction((tx) => {
       tx.update(games).set({ orgId: null }).where(eq(games.orgId, orgId)).run();
       tx.delete(organizations).where(eq(organizations.id, orgId)).run();
     });
     for (const kind of ["logo", "background"] as const) themeImages.remove(`org-${orgId}`, kind);
-    for (const { id } of using) {
-      const game = cache.get(id);
-      if (game) publish(id, { ...game, theme: { ...game.theme, org: null } });
-    }
+    store.orgChanged(orgId);
     return c.body(null, 204);
   });
 
@@ -1679,13 +1548,9 @@ export function createServer({
       if (!isThemeImage(kind)) return c.json({ error: "Not found" }, 404);
       const changed = await changeThemeImage(c, method, `game-${id}`, kind);
       if (changed instanceof Response) return changed;
-      const game = load(id)!; // the latest copy, read after the upload: see GameAccess.game
-      db.update(games)
-        .set(kind === "logo" ? { themeLogo: changed.version } : { themeBackground: changed.version })
-        .where(eq(games.id, id))
-        .run();
+      const game = store.change(id, () => ({ own: { [kind]: changed.version } }))!;
       if (method === "put") stats.noteFeature(id, "ownLook");
-      return c.json(publish(id, { ...game, theme: { ...game.theme, own: { ...game.theme.own, [kind]: changed.version } } }).theme);
+      return c.json(view(id, game, now()).theme);
     });
   }
 
@@ -1695,11 +1560,9 @@ export function createServer({
     const email = c.var.access.email!;
     const body = await parseBody(c, gameOrgBody);
     if (!body.ok) return body.res;
-    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
     const { orgId } = body.data;
     if (orgId !== null && !organizes(orgId, email)) return c.json({ error: "Only an Organization's Organizer can use its Theme" }, 403);
-    db.update(games).set({ orgId }).where(eq(games.id, id)).run();
-    publish(id, { ...game, theme: { ...game.theme, org: orgId ? orgTheme(orgId) : null } });
+    store.change(id, () => ({ orgId }));
     return c.body(null, 204);
   });
 
@@ -1709,41 +1572,24 @@ export function createServer({
     const { id } = c.var.access;
     const body = await parseBody(c, gameOptionsEdit);
     if (!body.ok) return body.res;
-    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
     const { name, tagline, turnSeconds, rosterMode, approveNames, postsPerMinute, repitchMinutes } = body.data;
-    const set = {
-      ...(tagline !== undefined ? { tagline } : {}),
-      ...(postsPerMinute !== undefined ? { postsPerMinute } : {}),
-      ...(repitchMinutes !== undefined ? { repitchMinutes } : {}),
-      ...(approveNames !== undefined ? { approveNames } : {}),
-      ...(name !== undefined ? { name } : {}),
-      ...(turnSeconds !== undefined ? { turnSeconds } : {}),
-      ...(rosterMode !== undefined ? { rosterMode } : {}),
-    };
-    if (Object.keys(set).length > 0) db.update(games).set(set).where(eq(games.id, id)).run();
-    const was = {
-      turnSeconds: game.turnSeconds,
-      rosterMode: game.rosterMode,
-      approveNames: game.approveNames,
-      postsPerMinute: game.postsPerMinute,
-      repitchMinutes: game.repitchMinutes,
-    };
-    for (const [option, value] of Object.entries({ turnSeconds, rosterMode, approveNames, postsPerMinute, repitchMinutes }))
-      if (value !== undefined && value !== was[option as keyof typeof was]) stats.optionChanged(id, option);
-    return c.json(publish(id, { ...game, ...set }));
+    const counted = { turnSeconds, rosterMode, approveNames, postsPerMinute, repitchMinutes };
+    const game = store.change(id, (was) => {
+      for (const [option, value] of Object.entries(counted))
+        if (value !== undefined && value !== was[option as keyof typeof counted]) stats.optionChanged(id, option);
+      return { name, tagline, ...counted };
+    })!;
+    return c.json(view(id, game, now()));
   });
 
   app.patch("/api/games/:id/theme", access.need("staff", "Only the Host and Co-hosts can change the Game's look"), async (c) => {
     const { id } = c.var.access;
     const body = await parseBody(c, gameThemeEdit);
     if (!body.ok) return body.res;
-    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
     const { color, page } = body.data;
-    const set = { ...(color !== undefined ? { themeColor: color } : {}), ...(page !== undefined ? { themePage: page } : {}) };
-    if (Object.keys(set).length > 0) db.update(games).set(set).where(eq(games.id, id)).run();
-    const own = { ...game.theme.own, ...(color !== undefined ? { color } : {}), ...(page !== undefined ? { page } : {}) };
+    const game = store.change(id, () => ({ own: { color, page } }))!;
     if (color !== undefined || page !== undefined) stats.noteFeature(id, "ownLook");
-    return c.json(publish(id, { ...game, theme: { ...game.theme, own } }).theme);
+    return c.json(view(id, game, now()).theme);
   });
 
   // The Host or a Co-host opens the Worst Gift Vote once the Game has ended, and closes it to reveal the results.
@@ -1751,29 +1597,26 @@ export function createServer({
     const { id } = c.var.access;
     const body = await parseBody(c, voteStatusBody);
     if (!body.ok) return body.res;
-    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
-
-    if (body.data.status === "open") {
-      if (phase(game.state) !== "ended") return c.json({ code: "GameNotOver", message: "End the Game before the vote" }, 409);
-      db.update(games).set({ voteStatus: "open", voteWinner: null }).where(eq(games.id, id)).run();
-      publish(id, { ...game, vote: { ...game.vote, status: "open", winner: null } });
-      return c.body(null, 204);
-    }
-
-    if (game.vote.status !== "open") return c.json({ code: "VoteNotOpen", message: "The vote isn't open" }, 409);
-    const counts = tally(game.vote.ballots);
-    const most = Math.max(0, ...Object.values(counts));
-    // In the order the Gifts were opened, so the Host sees them as they remember them.
-    const tied = most === 0 ? [] : gifts(game.state).map((g) => g.id).filter((g) => counts[g] === most);
-    const picked = body.data.winner;
-    if (picked !== undefined && !tied.includes(picked)) return c.json({ error: "That Gift isn't one with the most votes" }, 400);
-    if (tied.length > 1 && picked === undefined) {
-      return c.json({ code: "Tie", message: "Gifts are tied for most votes: pick the winner", tied }, 409);
-    }
-    const winner = picked ?? tied[0] ?? null;
-    db.update(games).set({ voteStatus: "closed", voteWinner: winner }).where(eq(games.id, id)).run();
-    publish(id, { ...game, vote: { ...game.vote, status: "closed", winner } });
-    return c.body(null, 204);
+    // Decided on the latest copy of the Game, in the same step as the change, so no ballot slips in between.
+    let refusal: Response | undefined;
+    const { status, winner: picked } = body.data;
+    store.change(id, (game) => {
+      if (status === "open") {
+        if (phase(game.state) !== "ended") return (refusal = c.json({ code: "GameNotOver", message: "End the Game before the vote" }, 409)), null;
+        return { vote: { status: "open", winner: null } };
+      }
+      if (game.vote.status !== "open") return (refusal = c.json({ code: "VoteNotOpen", message: "The vote isn't open" }, 409)), null;
+      const counts = tally(game.vote.ballots);
+      const most = Math.max(0, ...Object.values(counts));
+      // In the order the Gifts were opened, so the Host sees them as they remember them.
+      const tied = most === 0 ? [] : gifts(game.state).map((g) => g.id).filter((g) => counts[g] === most);
+      if (picked !== undefined && !tied.includes(picked)) return (refusal = c.json({ error: "That Gift isn't one with the most votes" }, 400)), null;
+      if (tied.length > 1 && picked === undefined) {
+        return (refusal = c.json({ code: "Tie", message: "Gifts are tied for most votes: pick the winner", tied }, 409)), null;
+      }
+      return { vote: { status: "closed", winner: picked ?? tied[0] ?? null } };
+    });
+    return refusal ?? c.body(null, 204);
   });
 
   // The Host switches the big screen between the Gift board, the rules, the join code and the catalog.
@@ -1781,10 +1624,8 @@ export function createServer({
     const { id } = c.var.access;
     const body = await parseBody(c, screenModeBody);
     if (!body.ok) return body.res;
-    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
-    db.update(games).set({ screenMode: body.data.mode }).where(eq(games.id, id)).run();
+    store.change(id, () => ({ screen: body.data.mode }));
     stats.noteFeature(id, `screen:${body.data.mode}`);
-    publish(id, { ...game, screen: body.data.mode });
     return c.body(null, 204);
   });
 
@@ -1792,9 +1633,7 @@ export function createServer({
     const { id } = c.var.access;
     const body = await parseBody(c, voteDisplayBody);
     if (!body.ok) return body.res;
-    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
-    db.update(games).set({ voteDisplay: body.data.display }).where(eq(games.id, id)).run();
-    publish(id, { ...game, vote: { ...game.vote, display: body.data.display } });
+    store.change(id, () => ({ vote: { display: body.data.display } }));
     return c.body(null, 204);
   });
 
@@ -1804,16 +1643,12 @@ export function createServer({
     const email = c.var.access.email!;
     const body = await parseBody(c, voteBody);
     if (!body.ok) return body.res;
-    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
+    // Checked and cast in one step, so the vote can't close in between.
+    const game = load(id)!;
     if (game.vote.status !== "open") return c.json({ code: "VoteNotOpen", message: "The vote isn't open" }, 409);
     const { giftId } = body.data;
     if (!gifts(game.state).some((g) => g.id === giftId)) return c.json({ error: "No such Gift in this Game" }, 400);
-
-    db.insert(votes)
-      .values({ gameId: id, email, giftId })
-      .onConflictDoUpdate({ target: [votes.gameId, votes.email], set: { giftId } })
-      .run();
-    publish(id, { ...game, vote: { ...game.vote, ballots: new Map(game.vote.ballots).set(email, giftId) } });
+    store.castBallot(id, email, giftId);
     return c.json({ myVote: giftId });
   });
 
@@ -1821,10 +1656,10 @@ export function createServer({
     const { id } = c.var.access;
     const body = await parseBody(c, moderationBody);
     if (!body.ok) return body.res;
-    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
-    db.update(games).set({ moderation: body.data.mode }).where(eq(games.id, id)).run();
-    if (body.data.mode !== game.moderation) stats.optionChanged(id, "moderation");
-    publish(id, { ...game, moderation: body.data.mode });
+    store.change(id, (game) => {
+      if (body.data.mode !== game.moderation) stats.optionChanged(id, "moderation");
+      return { moderation: body.data.mode };
+    });
     return c.body(null, 204);
   });
 
@@ -1968,7 +1803,7 @@ export function createServer({
     const playerId = randomBytes(12).toString("base64url");
     // Under Approve names, they play as "New player" until the Host or a Co-host approves the name they gave.
     const held = needsApproval(id, email, game);
-    const result = run(id, game, { type: "AddPlayer", playerId, name: held ? WAITING_PLAYER : body.data.name }, (tx) => {
+    const result = run(id, { type: "AddPlayer", playerId, name: held ? WAITING_PLAYER : body.data.name }, (tx) => {
       if (held)
         tx.insert(gameNames)
           .values({ gameId: id, email, pending: body.data.name })
@@ -2063,7 +1898,7 @@ export function createServer({
       screens: io?.engine.clientsCount ?? 0,
       peakScreens,
       gamesWatched,
-      gamesInMemory: cache.size,
+      gamesInMemory: store.size(),
       lagMs: lagMs === null ? null : Math.round(lagMs * 10) / 10,
       busy: tooBusy(),
       limits: { maxScreens: overload.maxScreens ?? null, maxLagMs: overload.maxLagMs ?? null },
@@ -2111,7 +1946,7 @@ export function createServer({
       for (const table of [votes, postReactions, posts, gameNames, gameVisitors, turnClocks, gamePlayers, gameHosts, gameEvents]) tx.delete(table).where(eq(table.gameId, id)).run();
       tx.delete(games).where(eq(games.id, id)).run();
     });
-    cache.delete(id);
+    store.forget(id);
     feeds.delete(id);
     photos.removeGame(id);
     for (const kind of ["logo", "background"] as const) themeImages.remove(`game-${id}`, kind);
@@ -2151,7 +1986,7 @@ export function createServer({
     });
     for (const { id } of testOrgs) for (const kind of ["logo", "background"] as const) themeImages.remove(`org-${id}`, kind);
     // Games that showed a removed Organization's Theme are rebuilt without it.
-    cache.clear();
+    store.clear();
     return c.json({ people: people.length, games: testGames.length, organizations: testOrgs.length });
   });
 
@@ -2216,15 +2051,10 @@ export function createServer({
    */
   function forgetIdleGames(): number {
     const before = now().getTime() - IDLE_GAME_HOURS * 60 * 60_000;
-    let forgotten = 0;
-    for (const id of new Set([...cache.keys(), ...feeds.keys()])) {
-      if ((lastUsed.get(id) ?? 0) > before || (io?.sockets.adapter.rooms.get(id)?.size ?? 0) > 0) continue;
-      cache.delete(id);
-      feeds.delete(id);
-      lastUsed.delete(id);
-      forgotten++;
-    }
-    return forgotten;
+    const watched = (id: string) => (io?.sockets.adapter.rooms.get(id)?.size ?? 0) > 0;
+    const gone = store.forgetIdle(before, watched, feeds.keys());
+    for (const id of gone) feeds.delete(id);
+    return gone.length;
   }
 
   /** Lets go of demo visitors (and their demo Games) after VISITOR_DAYS. Returns how many visitors went. */

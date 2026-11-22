@@ -47,23 +47,26 @@ export interface LoadedGame {
   };
 }
 
-/** What a change to a Game's settings may set, in the Game's own terms. Anything left out stays as it is. */
-export interface GamePatch {
-  name?: string;
-  tagline?: string;
-  rosterMode?: LoadedGame["rosterMode"];
-  moderation?: LoadedGame["moderation"];
-  approveNames?: boolean;
-  turnSeconds?: number;
-  postsPerMinute?: number;
-  repitchMinutes?: number;
-  screen?: LoadedGame["screen"];
-  vote?: Partial<Pick<LoadedGame["vote"], "status" | "display" | "winner">>;
+/** Each part optional, and `undefined` the same as left out. */
+type Optional<T> = { [K in keyof T]?: T[K] | undefined };
+
+/** What a change to a Game's settings may set, in the Game's own terms. Anything left out (or undefined) stays as it is. */
+export type GamePatch = Optional<{
+  name: string;
+  tagline: string;
+  rosterMode: LoadedGame["rosterMode"];
+  moderation: LoadedGame["moderation"];
+  approveNames: boolean;
+  turnSeconds: number;
+  postsPerMinute: number;
+  repitchMinutes: number;
+  screen: LoadedGame["screen"];
+  vote: Optional<Pick<LoadedGame["vote"], "status" | "display" | "winner">>;
   /** The Game's own Theme parts. */
-  own?: Partial<ThemeParts>;
+  own: Optional<ThemeParts>;
   /** Which Organization's Theme the Game shows; null for none. */
-  orgId?: string | null;
-}
+  orgId: string | null;
+}>;
 
 type GameRow = typeof games.$inferInsert;
 
