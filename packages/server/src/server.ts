@@ -24,6 +24,7 @@ import { Server as SocketServer } from "socket.io";
 import { diskOf, healthWarnings, lastBackupAt, memoryLimit, type ServerHealth } from "./system.js";
 import { createAccess, DEMO_ACTOR, SESSION_COOKIE } from "./access.js";
 import { createFeed } from "./feed.js";
+import { createPeople } from "./people.js";
 import type * as Wire from "./wire.js";
 import { feedRoutes } from "./feed-routes.js";
 import { parseBody, photoSizeLimit } from "./http.js";
@@ -265,16 +266,18 @@ export function createServer({
       return "unknown"; // no socket, as in app.request() tests
     }
   }
+  /** People in a Game: who someone is there, and their role (people.ts). */
+  const people = createPeople<LoadedGame>({ db, rosterOf: (game) => roster(game.state).map((p) => p.id) });
   /** Game access (access.ts): who is asking about a Game, and whether they may. */
   const access = createAccess<LoadedGame>({
-    db,
     sessionEmail: (token) => auth.sessionEmail(token),
     load: (id) => load(id),
     onRoster: (game, playerId) => roster(game.state).some((p) => p.id === playerId),
+    people,
   });
   /** Who is asking: the signed-in person, or the made-up Player a demo page's sample phone is. */
   const signedInAs = access.emailOf;
-  const { roleIn, playerOf, emailOfPlayer } = access;
+  const { roleIn, playerOf, emailOfPlayer } = people;
   /** Every Game a request asks for, and every change to one (game-store.ts). */
   const store = createGameStore({ db, now, draw, orgTheme: (orgId) => orgTheme(orgId) });
   const load = (id: string) => store.get(id);
@@ -296,14 +299,7 @@ export function createServer({
   /** A demo Player's stand-in email: "fay@example.com", or "fay2@example.com" when there's already a Fay. */
   function demoEmail(gameId: string, name: string): string {
     const base = name.toLowerCase().replace(/[^a-z0-9]/g, "") || "player";
-    const taken = new Set(
-      db
-        .select({ email: gamePlayers.email })
-        .from(gamePlayers)
-        .where(eq(gamePlayers.gameId, gameId))
-        .all()
-        .map((r) => r.email),
-    );
+    const taken = new Set(people.playerEmails(gameId));
     for (let n = 1; ; n++) {
       const email = `${base}${n === 1 ? "" : n}@example.com`;
       if (!taken.has(email)) return email;
@@ -710,7 +706,7 @@ export function createServer({
           createdAt: now(),
         })
         .run();
-      tx.insert(gameHosts).values({ gameId: id, email, role: "host" }).run();
+      people.addHost(tx, id, email);
       // The whole set is saved, so the Host's Games never change behind their back.
       if (remember === true) tx.update(users).set({ myOptions: JSON.stringify(options), alwaysMyOptions: true }).where(eq(users.email, email)).run();
       if (remember === false) tx.update(users).set({ alwaysMyOptions: false }).where(eq(users.email, email)).run();
@@ -761,26 +757,15 @@ export function createServer({
   }
 
   /** The Host and Co-hosts who play in the Game, and as which Player: the one the Host named, or the one they joined as. */
-  function staffOf(id: string, game: LoadedGame) {
-    const inRoster = new Set(roster(game.state).map((p) => p.id));
-    return db
-      .select()
-      .from(gameHosts)
-      .where(eq(gameHosts.gameId, id))
-      .all()
-      .flatMap((h) => {
-        const playerId = h.playerId ?? playerOf(id, h.email, game);
-        return playerId && inRoster.has(playerId) ? [{ email: h.email, playerId, role: h.role }] : [];
-      });
-  }
+  const staffOf = (id: string, game: LoadedGame) => people.staffOf(id, game);
 
   /** Everyone the Game knows, for the Host's Co-hosts panel: by name where there is one, never by email. */
   app.get("/api/games/:id/people", access.need("host", "Only the Host can appoint Co-hosts"), (c) => {
     const { id, game } = c.var.access;
     const email = c.var.access.email!;
-    const roles = new Map(db.select().from(gameHosts).where(eq(gameHosts.gameId, id)).all().map((h) => [h.email, h]));
+    const roles = people.staff(id);
     const names = new Map(roster(game.state).map((p) => [p.id, p.name]));
-    const people = [...knownPeople(id)].map((who) => {
+    const list = [...knownPeople(id)].map((who) => {
       const playerId = roles.get(who)?.playerId ?? playerOf(id, who, game) ?? null;
       const posted = db
         .select({ author: posts.author })
@@ -798,8 +783,8 @@ export function createServer({
       } satisfies Wire.Person;
     });
     // By name; those with none yet go last, by their email hint.
-    people.sort((a, b) => (a.name === null ? 1 : 0) - (b.name === null ? 1 : 0) || (a.name ?? a.hint).localeCompare(b.name ?? b.hint));
-    return c.json({ people });
+    list.sort((a, b) => (a.name === null ? 1 : 0) - (b.name === null ? 1 : 0) || (a.name ?? a.hint).localeCompare(b.name ?? b.hint));
+    return c.json({ people: list });
   });
 
   /** The Host switches someone's Co-host role on or off, or says which Player a Host or Co-host plays as. */
@@ -818,11 +803,7 @@ export function createServer({
     const staffAfter = cohost ?? role !== undefined;
     if (playsAs !== undefined && !staffAfter) return c.json({ error: "Only a Host or Co-host plays as someone here" }, 400);
 
-    db.transaction((tx) => {
-      if (cohost === true && !role) tx.insert(gameHosts).values({ gameId: id, email: who, role: "cohost" }).run();
-      if (cohost === false && role === "cohost") tx.delete(gameHosts).where(and(eq(gameHosts.gameId, id), eq(gameHosts.email, who))).run();
-      if (playsAs !== undefined) tx.update(gameHosts).set({ playerId: playsAs }).where(and(eq(gameHosts.gameId, id), eq(gameHosts.email, who))).run();
-    });
+    people.setStaff(id, who, { cohost, playsAs });
     staffChanged(id);
     return c.body(null, 204);
   });
@@ -914,13 +895,7 @@ export function createServer({
     const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
     const { email: who, playsAs } = body.data;
     if (playsAs !== undefined && !roster(game.state).some((p) => p.id === playsAs)) return c.json({ error: "No such Player in this Game" }, 400);
-    const row = { gameId: id, email: who, role: "cohost" as const, ...(playsAs ? { playerId: playsAs } : {}) };
-    if (playsAs)
-      db.insert(gameHosts)
-        .values(row)
-        .onConflictDoUpdate({ target: [gameHosts.gameId, gameHosts.email], set: { playerId: playsAs } })
-        .run();
-    else db.insert(gameHosts).values(row).onConflictDoNothing().run();
+    people.addCohost(id, who, playsAs);
     staffChanged(id);
     return c.body(null, 204);
   });
@@ -928,22 +903,15 @@ export function createServer({
   /** Who co-hosts this Game, for the Host and the Co-hosts themselves. */
   app.get("/api/games/:id/cohosts", access.need("staff", "Only the Host and Co-hosts"), (c) => {
     const { id } = c.var.access;
-    const rows = db
-      .select({ email: gameHosts.email })
-      .from(gameHosts)
-      .where(and(eq(gameHosts.gameId, id), eq(gameHosts.role, "cohost")))
-      .orderBy(asc(gameHosts.email))
-      .all();
-    return c.json({ cohosts: rows.map((r) => r.email) });
+    const cohosts = [...people.staff(id)].filter(([, h]) => h.role === "cohost").map(([email]) => email);
+    return c.json({ cohosts: cohosts.sort() });
   });
 
   /** The Host takes someone off the Game's Co-hosts. The Host can't be removed this way. */
   app.delete("/api/games/:id/cohosts/:email", access.need("host", "Only the Host can remove Co-hosts"), (c) => {
     const { id } = c.var.access;
     const who = c.req.param("email").trim().toLowerCase();
-    db.delete(gameHosts)
-      .where(and(eq(gameHosts.gameId, id), eq(gameHosts.email, who), eq(gameHosts.role, "cohost")))
-      .run();
+    people.removeCohost(id, who);
     staffChanged(id);
     return c.body(null, 204);
   });
@@ -985,8 +953,9 @@ export function createServer({
     const cmd = body.data;
     const standIn = game.demo && cmd.type === "AddPlayer" ? demoEmail(id, cmd.name) : undefined;
     const result = run(id, cmd, (tx) => {
-      if (standIn && cmd.type === "AddPlayer") tx.insert(gamePlayers).values({ gameId: id, playerId: cmd.playerId, email: standIn }).run();
+      if (standIn && cmd.type === "AddPlayer") people.linkPlayer(tx, id, cmd.playerId, standIn);
     });
+    people.changed(id); // in case the Pick was refused after the link was written
     if (!("code" in result) && cmd.type === "ChangeSettings")
       for (const [option, value] of Object.entries(cmd.settings))
         if (value !== game.state.settings[option as keyof typeof game.state.settings]) stats.optionChanged(id, option);
@@ -1268,9 +1237,9 @@ export function createServer({
           .onConflictDoUpdate({ target: [gameNames.gameId, gameNames.email], set: { pending: body.data.name } })
           .run();
       // A link left over from a Player the Host has since removed gives way to the new one.
-      tx.delete(gamePlayers).where(and(eq(gamePlayers.gameId, id), eq(gamePlayers.email, email))).run();
-      tx.insert(gamePlayers).values({ gameId: id, playerId, email }).run();
+      people.linkPlayer(tx, id, playerId, email);
     });
+    people.changed(id);
     if (held && !("code" in result)) staffChanged(id);
     return "code" in result ? c.json(result, 409) : c.json({ ...result, me: { playerId } });
   });
@@ -1406,6 +1375,7 @@ export function createServer({
     });
     store.forget(id);
     feed.forget(id);
+    people.forget(id);
     photos.removeGame(id);
     for (const kind of ["logo", "background"] as const) themeImages.remove(`game-${id}`, kind);
   }
@@ -1511,7 +1481,7 @@ export function createServer({
     const before = now().getTime() - IDLE_GAME_HOURS * 60 * 60_000;
     const watched = (id: string) => (io?.sockets.adapter.rooms.get(id)?.size ?? 0) > 0;
     const gone = store.forgetIdle(before, watched, feed.held());
-    for (const id of gone) feed.forget(id);
+    for (const id of gone) (feed.forget(id), people.forget(id));
     return gone.length;
   }
 

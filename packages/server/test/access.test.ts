@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
 import { createAccess, DEMO_ACTOR, DEMO_PLAYER_HEADER, type Need } from "../src/access.js";
 import { gameHosts, gamePlayers, games, openDb } from "../src/db.js";
+import { createPeople } from "../src/people.js";
 
 type FakeGame = { demo: boolean; roster: string[] };
 
@@ -21,11 +22,12 @@ function setup() {
     db.insert(gameHosts).values([{ gameId: id, email: "host@x", role: "host" }, { gameId: id, email: "co@x", role: "cohost" }]).run();
     db.insert(gamePlayers).values({ gameId: id, playerId: "pam", email: "pam@x" }).run();
   }
+  const people = createPeople<FakeGame>({ db, rosterOf: (game) => game.roster });
   const access = createAccess<FakeGame>({
-    db,
     sessionEmail: (token) => token,
     load: (id) => fakeGames[id],
     onRoster: (game, playerId) => game.roster.includes(playerId),
+    people,
   });
   const app = new Hono();
   app.use("/games/:id/*", access.identify);
@@ -42,7 +44,7 @@ function setup() {
       method: "POST",
       headers: { ...(who ? { cookie: `session=${who}` } : {}), ...(demoPlayer ? { [DEMO_PLAYER_HEADER]: demoPlayer } : {}) },
     });
-  return { access, ask, db };
+  return { access, ask, db, people };
 }
 
 const VISITOR = "vic@visitors.invalid";
@@ -98,8 +100,8 @@ describe("Game access", () => {
     });
 
     it("acts as a Co-host if the Host made that Player one, never as the Host", async () => {
-      const { ask, db } = setup();
-      db.insert(gameHosts).values({ gameId: "demo", email: "pam@x", role: "cohost" }).run();
+      const { ask, people } = setup();
+      people.addCohost("demo", "pam@x", undefined);
       expect(await (await ask("demo", "staff", "co@x", "pam")).json()).toMatchObject({ email: "pam@x", role: "cohost" });
       expect((await ask("demo", "host", "host@x", "pam")).status).toBe(403);
     });
