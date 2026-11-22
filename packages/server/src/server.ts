@@ -24,6 +24,7 @@ import { Server as SocketServer } from "socket.io";
 import { diskOf, healthWarnings, lastBackupAt, memoryLimit, type ServerHealth } from "./system.js";
 import { createAccess, DEMO_ACTOR, SESSION_COOKIE } from "./access.js";
 import { createFeed } from "./feed.js";
+import type * as Wire from "./wire.js";
 import { feedRoutes } from "./feed-routes.js";
 import { parseBody, photoSizeLimit } from "./http.js";
 import { createGameStore, type LoadedGame, type OrgTheme } from "./game-store.js";
@@ -72,6 +73,8 @@ import {
 } from "./schemas.js";
 
 export type { Mailer } from "./auth.js";
+/** Every response, as the browser receives it, for the web app (wire.ts). */
+export type * from "./wire.js";
 
 
 export interface ServerOptions {
@@ -178,7 +181,7 @@ function tally(ballots: ReadonlyMap<string, string>): Record<string, number> {
 }
 
 /** What screens are shown about a Game: answers from the rules module, never its internal state. */
-function view(id: string, game: LoadedGame, now: Date) {
+export function view(id: string, game: LoadedGame, now: Date) {
   const { name, tagline, demo, rosterMode, moderation, approveNames, turnSeconds, postsPerMinute, repitchMinutes, clocks, state, seq, vote, screen } = game;
   return {
     id,
@@ -507,7 +510,7 @@ export function createServer({
       asked,
       as,
       given: given && { rating: given.rating, again: given.again, thumbs: given.thumbs, comment: given.comment, quoteOk: given.quoteOk, quoteName: given.quoteName },
-    });
+    } satisfies Wire.FeedbackAsk);
   });
 
   app.post("/api/games/:id/feedback", access.need("signedIn"), async (c) => {
@@ -648,7 +651,7 @@ export function createServer({
       visitor: isVisitor(email),
       myOptions: mine?.success ? mine.data : null,
       alwaysMyOptions: Boolean(mine?.success && me?.alwaysMyOptions),
-    });
+    } satisfies Wire.Session);
   });
 
   /** They've read and considered Jim's tip note: New Game stops showing it. Never unset. */
@@ -729,7 +732,7 @@ export function createServer({
     return c.json(
       rows.map(({ id, role }) => {
         const game = load(id)!;
-        return { id, name: game.name, phase: phase(game.state), players: roster(game.state).length, role };
+        return { id, name: game.name, phase: phase(game.state), players: roster(game.state).length, role } satisfies Wire.MyGame;
       }),
     );
   });
@@ -791,7 +794,7 @@ export function createServer({
         playerId,
         role: roles.get(who)?.role ?? null,
         you: who === email,
-      };
+      } satisfies Wire.Person;
     });
     // By name; those with none yet go last, by their email hint.
     people.sort((a, b) => (a.name === null ? 1 : 0) - (b.name === null ? 1 : 0) || (a.name ?? a.hint).localeCompare(b.name ?? b.hint));
@@ -835,7 +838,7 @@ export function createServer({
     const pending = rows.map((r) => {
       const playerId = playerOf(id, r.email, game) ?? null;
       const shown = playerId ? (roster(game.state).find((p) => p.id === playerId)?.name ?? WAITING_PLAYER) : (r.name ?? WAITING_GUEST);
-      return { key: personKey(id, r.email), shown, wants: r.pending!, playerId };
+      return { key: personKey(id, r.email), shown, wants: r.pending!, playerId } satisfies Wire.PendingName;
     });
     return c.json({ pending });
   });
@@ -900,7 +903,7 @@ export function createServer({
 
   app.get("/api/games/:id/staff", access.need("staff", "Only the Host and Co-hosts"), (c) => {
     const { id, game } = c.var.access;
-    return c.json({ staff: staffOf(id, game).map(({ playerId, role }) => ({ playerId, role })) });
+    return c.json({ staff: staffOf(id, game).map(({ playerId, role }) => ({ playerId, role }) satisfies Wire.StaffMember) });
   });
 
   app.post("/api/games/:id/cohosts", access.need("host", "Only the Host can appoint Co-hosts"), async (c) => {
@@ -960,14 +963,14 @@ export function createServer({
     // Remembered so the Host can find them by name in the Co-hosts panel (not the demo's stand-ins).
     if (email && !email.startsWith(DEMO_ACTOR))
       db.insert(gameVisitors).values({ gameId: id, email, firstSeenAt: now() }).onConflictDoNothing().run();
-    return c.json({
-      ...view(id, game, now()),
+    const viewer = {
       role: role ?? null,
       me: playerId ? { playerId } : null,
       myName: email ? nameIn(id, email, game) : null,
-      muted: (email && nameRow(id, email)?.muted) ?? false,
+      muted: email ? (nameRow(id, email)?.muted ?? false) : false,
       myVote: (email && game.vote.ballots.get(email)) ?? null,
-    });
+    } satisfies Wire.Viewer;
+    return c.json({ ...view(id, game, now()), ...viewer });
   });
 
   app.post("/api/games/:id/commands", access.need("staff", "Only the Host and Co-hosts can run this Game"), async (c) => {
@@ -1004,7 +1007,7 @@ export function createServer({
   app.route("/", feedRoutes({ access, feed, photos, now, nameToPostAs, noteFeature: (id, feature) => stats.noteFeature(id, feature) }));
 
   // Organizations: anyone signed in may create one, and is then its Organizer, the only one who can change it.
-  const orgView = (o: OrgTheme) => ({
+  const orgView = (o: OrgTheme): Wire.MyOrg => ({
     id: o.id,
     name: o.name,
     color: o.color,
@@ -1303,7 +1306,7 @@ export function createServer({
         games: hosted.find((h) => h.email === u.email && !h.demo)?.n ?? 0,
         demoGames: hosted.find((h) => h.email === u.email && h.demo)?.n ?? 0,
         organizations: orgs.filter((o) => o.email === u.email).map((o) => o.name),
-      })),
+      }) satisfies Wire.AdminPerson),
     );
   });
 
@@ -1326,7 +1329,7 @@ export function createServer({
           phase: phase(game.state),
           players: roster(game.state).length,
           createdAt: r.createdAt.toISOString(),
-        };
+        } satisfies Wire.AdminGame;
       }),
     );
   });
