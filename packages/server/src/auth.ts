@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { and, count, eq, gt, isNull, lte, type SQL } from "drizzle-orm";
+import { and, count, eq, gt, isNull, lte, sql, type SQL } from "drizzle-orm";
 import { users, sessions, signInLinks, type Db } from "./db.js";
 import { VISITOR_DAYS, VISITOR_DOMAIN } from "./stats.js";
 
@@ -47,6 +47,13 @@ const newToken = () => randomBytes(32).toString("base64url");
 const hash = (token: string) => createHash("sha256").update(token).digest("hex");
 
 export function createAuth(db: Db, now: () => Date, limits: LinkLimits) {
+  /** Asked on nearly every request, so prepared once. */
+  const sessionByHash = db
+    .select({ email: users.email })
+    .from(sessions)
+    .innerJoin(users, eq(users.id, sessions.userId))
+    .where(and(eq(sessions.tokenHash, sql.placeholder("hash")), gt(sessions.expiresAt, sql.placeholder("now"))))
+    .prepare();
   /** Links asked for in the last `minutes` that match the condition. */
   const recent = (minutes: number, where?: SQL) =>
     db
@@ -120,13 +127,7 @@ export function createAuth(db: Db, now: () => Date, limits: LinkLimits) {
     /** The signed-in person's email, or undefined for no session or an expired one. */
     sessionEmail(sessionToken: string | undefined): string | undefined {
       if (!sessionToken) return undefined;
-      const row = db
-        .select({ email: users.email })
-        .from(sessions)
-        .innerJoin(users, eq(users.id, sessions.userId))
-        .where(and(eq(sessions.tokenHash, hash(sessionToken)), gt(sessions.expiresAt, now())))
-        .get();
-      return row?.email;
+      return sessionByHash.get({ hash: hash(sessionToken), now: now().getTime() })?.email;
     },
 
     endSession(sessionToken: string): void {

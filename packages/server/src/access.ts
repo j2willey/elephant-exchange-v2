@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { Context, MiddlewareHandler } from "hono";
 import { getCookie } from "hono/cookie";
 import { gameHosts, gamePlayers, type Db } from "./db.js";
@@ -70,8 +70,24 @@ export function createAccess<G extends { demo: boolean }>(deps: {
   /** Requests from a demo visitor about a real Game. */
   const strangers = new WeakSet<Context>();
 
-  const roleIn = (gameId: string, email: string): Role | undefined =>
-    db.select().from(gameHosts).where(and(eq(gameHosts.gameId, gameId), eq(gameHosts.email, email))).get()?.role;
+  // Asked on nearly every request, so prepared once.
+  const roleQuery = db
+    .select({ role: gameHosts.role })
+    .from(gameHosts)
+    .where(and(eq(gameHosts.gameId, sql.placeholder("gameId")), eq(gameHosts.email, sql.placeholder("email"))))
+    .prepare();
+  const playerQuery = db
+    .select({ playerId: gamePlayers.playerId })
+    .from(gamePlayers)
+    .where(and(eq(gamePlayers.gameId, sql.placeholder("gameId")), eq(gamePlayers.email, sql.placeholder("email"))))
+    .prepare();
+  const roleIn = (gameId: string, email: string): Role | undefined => roleQuery.get({ gameId, email })?.role;
+  /** The session's email, worked out once per request. */
+  const sessions = new WeakMap<Context, string | undefined>();
+  const sessionOf = (c: Context) => {
+    if (!sessions.has(c)) sessions.set(c, sessionEmail(getCookie(c, SESSION_COOKIE)));
+    return sessions.get(c);
+  };
 
   const emailOfPlayer = (gameId: string, playerId: string): string | undefined =>
     db
@@ -82,25 +98,21 @@ export function createAccess<G extends { demo: boolean }>(deps: {
 
   /** Who is asking, on any route: the signed-in person, a demo Player's stand-in, or nobody. */
   const emailOf = (c: Context): string | undefined =>
-    strangers.has(c) ? undefined : (demoActors.get(c) ?? sessionEmail(getCookie(c, SESSION_COOKIE)));
+    strangers.has(c) ? undefined : (demoActors.get(c) ?? sessionOf(c));
 
   function playerOf(gameId: string, email: string, game: G): string | undefined {
     if (email.startsWith(DEMO_ACTOR)) {
       const playerId = email.slice(DEMO_ACTOR.length);
       return onRoster(game, playerId) ? playerId : undefined;
     }
-    const row = db
-      .select({ playerId: gamePlayers.playerId })
-      .from(gamePlayers)
-      .where(and(eq(gamePlayers.gameId, gameId), eq(gamePlayers.email, email)))
-      .get();
+    const row = playerQuery.get({ gameId, email });
     return row && onRoster(game, row.playerId) ? row.playerId : undefined;
   }
 
   const identify: MiddlewareHandler = async (c, next) => {
     const id = c.req.param("id");
     if (id === undefined) return next();
-    const session = sessionEmail(getCookie(c, SESSION_COOKIE));
+    const session = sessionOf(c);
     const playerId = c.req.header(DEMO_PLAYER_HEADER);
     if (playerId !== undefined) {
       const game = load(id);

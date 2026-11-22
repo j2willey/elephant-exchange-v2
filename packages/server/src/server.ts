@@ -310,12 +310,13 @@ export function createServer({
     }
   }
 
+  const nameQuery = db
+    .select()
+    .from(gameNames)
+    .where(and(eq(gameNames.gameId, sql.placeholder("gameId")), eq(gameNames.email, sql.placeholder("email"))))
+    .prepare();
   function nameRow(gameId: string, email: string) {
-    return db
-      .select()
-      .from(gameNames)
-      .where(and(eq(gameNames.gameId, gameId), eq(gameNames.email, email)))
-      .get();
+    return nameQuery.get({ gameId, email });
   }
 
   /** The name someone goes by in a Game (a Player's roster name, or a Guest's), and whether it's locked. */
