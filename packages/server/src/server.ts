@@ -7,7 +7,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { and, asc, count, desc, eq, inArray, isNotNull, like, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, like, lte, sql } from "drizzle-orm";
 import { Hono, type Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import {
@@ -21,10 +21,11 @@ import {
   type DrawFn,
 } from "@elephant/rules";
 import { Server as SocketServer } from "socket.io";
-import { diskOf, healthWarnings, lastBackupAt, memoryLimit, type ServerHealth } from "./system.js";
+import { diskOf, lastBackupAt, memoryLimit, type ServerHealth } from "./system.js";
 import { createAccess, DEMO_ACTOR, SESSION_COOKIE } from "./access.js";
 import { createFeed } from "./feed.js";
 import { createGameLifecycle } from "./games.js";
+import { adminRoutes } from "./admin-routes.js";
 import { createPeople } from "./people.js";
 import { peopleRoutes } from "./people-routes.js";
 import type * as Wire from "./wire.js";
@@ -42,12 +43,11 @@ import {
   themeStore,
   type ThemeImage,
 } from "./photos.js";
-import { gameEvents, gameHosts, games, gameVisitors, openDb, organizations, postReactions, posts, sessions, signInLinks, users, type Tx } from "./db.js";
+import { gameEvents, gameHosts, games, gameVisitors, openDb, organizations, postReactions, posts, sessions, users, type Tx } from "./db.js";
 import {
   command,
   createGameBody,
   feedbackBody,
-  publishBody,
   gameOptions,
   gameOptionsEdit,
   gameOrgBody,
@@ -55,7 +55,6 @@ import {
   linkRedemption,
   linkRequest,
   visitBody,
-  excludeBody,
   featureBody,
   answerBody,
   suggestionBody,
@@ -322,6 +321,8 @@ export function createServer({
   const feed = createFeed({ db, now, store, photos, muted: people, signal: (id) => io?.to(id).emit("posts"), signalMs: feedSignalMs });
   /** Creating, forgetting and deleting Games: the one place that knows every part of one (games.ts). */
   const lifecycle = createGameLifecycle({ db, store, feed, people, photos, themeImages, lastWord: (id) => stats.snapshotGame(id, true) });
+  /** Removes a Game and everything kept for it (games.ts). */
+  const deleteGame = (id: string) => lifecycle.remove(id);
   /** After any change to a Game's Posts or Reactions: every screen watching asks for the Feed again. */
   const postsChanged = (id: string) => feed.changed(id);
 
@@ -970,62 +971,6 @@ export function createServer({
     await next();
   });
 
-  /** Everyone who has signed in, newest first: when, whether a feedback email is OK, and what they've made. */
-  app.get("/api/admin/people", (c) => {
-    const hosted = db
-      .select({ email: gameHosts.email, demo: games.demo, n: count() })
-      .from(gameHosts)
-      .innerJoin(games, eq(games.id, gameHosts.gameId))
-      .where(eq(gameHosts.role, "host"))
-      .groupBy(gameHosts.email, games.demo)
-      .all();
-    const orgs = db.select({ email: organizations.organizerEmail, name: organizations.name }).from(organizations).orderBy(asc(organizations.createdAt)).all();
-    // Demo visitors aren't people who signed in: they're counted on the Stats page instead.
-    const people = db.select().from(users).orderBy(desc(users.createdAt)).all().filter((u) => !isVisitor(u.email));
-    return c.json(
-      people.map((u) => ({
-        email: u.email,
-        firstSeen: u.createdAt.toISOString(),
-        lastSignIn: u.lastSignInAt?.toISOString() ?? null,
-        feedbackOk: u.feedbackOk,
-        tipNoteRead: u.tipNoteRead,
-        games: hosted.find((h) => h.email === u.email && !h.demo)?.n ?? 0,
-        demoGames: hosted.find((h) => h.email === u.email && h.demo)?.n ?? 0,
-        organizations: orgs.filter((o) => o.email === u.email).map((o) => o.name),
-      }) satisfies Wire.AdminPerson),
-    );
-  });
-
-  /** Every Game, newest first, with its Host and how far along it is. */
-  app.get("/api/admin/games", (c) => {
-    const rows = db
-      .select({ id: games.id, demo: games.demo, createdAt: games.createdAt, host: gameHosts.email })
-      .from(games)
-      .leftJoin(gameHosts, and(eq(gameHosts.gameId, games.id), eq(gameHosts.role, "host")))
-      .orderBy(desc(games.createdAt), desc(sql`${games}.rowid`))
-      .all();
-    return c.json(
-      rows.map((r) => {
-        const game = load(r.id)!;
-        return {
-          id: r.id,
-          name: game.name,
-          demo: r.demo,
-          host: r.host ?? "",
-          phase: phase(game.state),
-          players: roster(game.state).length,
-          createdAt: r.createdAt.toISOString(),
-        } satisfies Wire.AdminGame;
-      }),
-    );
-  });
-
-  /** The usage statistics (ADR-0005), brought up to date first. */
-  app.get("/api/admin/stats", (c) => {
-    stats.refresh();
-    return c.json(stats.summary({ signInEmailCap: linkLimits.perDay, photoBytes: photos.bytes(), ratings: said.hostRatings() }));
-  });
-
   /** How this server is doing (see system.ts). */
   function health(): ServerHealth {
     const rooms = io?.sockets.adapter.rooms;
@@ -1052,76 +997,8 @@ export function createServer({
     };
   }
 
-  /**
-   * The System page: every server's health, with what's wrong in words. Just this server for now; with more, this
-   * is where the first would ask each of the others for theirs (docs/scale-plan.md, "Watching the servers").
-   */
-  app.get("/api/admin/system", (c) => {
-    c.header("Cache-Control", "no-store");
-    const at = now();
-    const servers = [health()].map((s) => ({ ...s, warnings: healthWarnings(s, at) }));
-    return c.json({ checkedAt: at.toISOString(), servers });
-  });
-
-  /** What Hosts and guests said, newest first, with the averages. */
-  app.get("/api/admin/feedback", (c) => c.json(said.summary()));
-
-  /** Puts a testimonial on the front page, or takes it down: only one its writer said may be quoted. */
-  app.post("/api/admin/feedback/:id/published", async (c) => {
-    const body = await parseBody(c, publishBody);
-    if (!body.ok) return body.res;
-    if (!said.setPublished(c.req.param("id"), body.data.published)) return c.json({ error: "Not something that may be quoted" }, 409);
-    return c.body(null, 204);
-  });
-
-  /** Leaves a Game out of the statistics (Jim's trial runs), or puts it back. */
-  app.post("/api/admin/stats/games/:id", async (c) => {
-    const body = await parseBody(c, excludeBody);
-    if (!body.ok) return body.res;
-    if (!stats.setExcluded(c.req.param("id"), body.data.excluded)) return c.json({ error: "No such Game" }, 404);
-    return c.body(null, 204);
-  });
-
-  /** Removes a Game and everything kept for it (games.ts). */
-  const deleteGame = (id: string) => lifecycle.remove(id);
-
-  app.delete("/api/admin/games/:id", (c) => {
-    const id = c.req.param("id");
-    if (!db.select({ id: games.id }).from(games).where(eq(games.id, id)).get()) return c.json({ error: "No such Game" }, 404);
-    deleteGame(id);
-    return c.body(null, 204);
-  });
-
-  /**
-   * Clears out what the smoke test leaves behind: everyone with an @example.com address (a domain nobody can
-   * really have), the Games they host and the Organizations they run. Games of anyone else are kept.
-   */
-  app.post("/api/admin/test-data/delete", (c) => {
-    const testers = like(sql`lower(${users.email})`, "%@example.com");
-    const people = db.select({ id: users.id, email: users.email }).from(users).where(testers).all();
-    const emails = people.map((p) => p.email);
-    const testGames = emails.length
-      ? db.selectDistinct({ id: gameHosts.gameId }).from(gameHosts).where(and(eq(gameHosts.role, "host"), inArray(gameHosts.email, emails))).all()
-      : [];
-    for (const { id } of testGames) deleteGame(id);
-    const testOrgs = emails.length ? db.select({ id: organizations.id }).from(organizations).where(inArray(organizations.organizerEmail, emails)).all() : [];
-    for (const { id } of testOrgs) stats.orgDeleted(id);
-    db.transaction((tx) => {
-      for (const { id } of testOrgs) {
-        tx.update(games).set({ orgId: null }).where(eq(games.orgId, id)).run();
-        tx.delete(organizations).where(eq(organizations.id, id)).run();
-      }
-      if (people.length) {
-        tx.delete(sessions).where(inArray(sessions.userId, people.map((p) => p.id))).run();
-        tx.delete(signInLinks).where(inArray(signInLinks.email, emails)).run();
-        tx.delete(users).where(inArray(users.id, people.map((p) => p.id))).run();
-      }
-    });
-    for (const { id } of testOrgs) for (const kind of ["logo", "background"] as const) themeImages.remove(`org-${id}`, kind);
-    // Games that showed a removed Organization's Theme are rebuilt without it.
-    store.clear();
-    return c.json({ people: people.length, games: testGames.length, organizations: testOrgs.length });
-  });
+  // The admin pages' routes (admin-routes.ts); only for ADMIN_EMAILS, checked just above.
+  app.route("/", adminRoutes({ db, now, load: (id) => load(id)!, stats, said, health, signInEmailCap: linkLimits.perDay, photoBytes: () => photos.bytes(), deleteGame, store, themeImages }));
 
   // Anything else under /api is a mistake, never a page of the app.
   app.all("/api/*", (c) => c.json({ error: "Not found" }, 404));
