@@ -25,6 +25,7 @@ import { Server as SocketServer } from "socket.io";
 import { diskOf, healthWarnings, lastBackupAt, memoryLimit, type ServerHealth } from "./system.js";
 import type { z } from "zod";
 import { createAccess, DEMO_ACTOR, SESSION_COOKIE } from "./access.js";
+import { createFeed } from "./feed.js";
 import { createGameStore, type LoadedGame, type OrgTheme } from "./game-store.js";
 import { createAuth, DEFAULT_LIMITS, logMailer, SESSION_LIFETIME_MS, type LinkLimits, type Mailer } from "./auth.js";
 import { cleanRef, createStats, isVisitor, VISITOR_DAYS, VISITOR_DOMAIN } from "./stats.js";
@@ -69,7 +70,6 @@ import {
   postStatusBody,
   personBody,
   reactionBody,
-  REACTIONS,
   timerBody,
   voteBody,
   voteDisplayBody,
@@ -401,60 +401,10 @@ export function createServer({
     return "code" in result ? result : view(id, result, now());
   }
 
-  /**
-   * Each Game's Feed as last read from the database: every Post, newest (or most recently pitched again) first, and
-   * every Reaction. Read once and shared by every screen asking, until the Feed changes; each request then picks
-   * out what its viewer may see.
-   */
-  const feeds = new Map<string, { rows: (typeof posts.$inferSelect)[]; reactions: (typeof postReactions.$inferSelect)[] }>();
-  function feedOf(id: string) {
-    let feed = feeds.get(id);
-    if (!feed) {
-      feed = {
-        rows: db
-          .select()
-          .from(posts)
-          .where(eq(posts.gameId, id))
-          // A Pitch sent again goes back to the top.
-          .orderBy(desc(sql`coalesce(${posts.bumpedAt}, ${posts.createdAt})`), desc(sql`${posts}.rowid`))
-          .all(),
-        reactions: db.select().from(postReactions).where(eq(postReactions.gameId, id)).all(),
-      };
-      feeds.set(id, feed);
-    }
-    return feed;
-  }
-
-  /** Games whose Feed signal waits out feedSignalMs, and whether it changed again meanwhile. */
-  const feedSignals = new Map<string, { again: boolean; timer: ReturnType<typeof setTimeout> }>();
-
-  /**
-   * Tells every screen watching that the Feed changed; each asks for it again, since each may see different Posts.
-   * At most one signal every feedSignalMs per Game: the first at once, the rest gathered into one at the end.
-   */
-  function postsChanged(id: string) {
-    feeds.delete(id);
-    if (feedSignalMs <= 0) {
-      io?.to(id).emit("posts");
-      return;
-    }
-    const waiting = feedSignals.get(id);
-    if (waiting) {
-      waiting.again = true;
-      return;
-    }
-    io?.to(id).emit("posts");
-    const signal = { again: false, timer: setTimeout(function endOfWait() {
-      if (!signal.again) {
-        feedSignals.delete(id);
-        return;
-      }
-      signal.again = false;
-      io?.to(id).emit("posts");
-      signal.timer = setTimeout(endOfWait, feedSignalMs);
-    }, feedSignalMs) };
-    feedSignals.set(id, signal);
-  }
+  /** Each Game's Feed: its Posts and Reactions, as each viewer may see them (feed.ts). */
+  const feed = createFeed({ db, signal: (id) => io?.to(id).emit("posts"), signalMs: feedSignalMs });
+  /** After any change to a Game's Posts or Reactions: every screen watching asks for the Feed again. */
+  const postsChanged = (id: string) => feed.changed(id);
 
   /** Every change to a Game goes to every screen watching it. */
   store.onChange((id, game) => io?.to(id).emit("game", view(id, game, now())));
@@ -1053,67 +1003,7 @@ export function createServer({
   // The Feed, as this viewer may see it: every visible Post, plus their own and, for a Host, all the others.
   app.get("/api/games/:id/posts", access.need("anyone"), (c) => {
     const { id, email, role } = c.var.access;
-    const hosting = role !== undefined;
-    const feed = feedOf(id);
-    const rows = hosting ? feed.rows : feed.rows.filter((p) => p.status === "visible" || (email !== undefined && p.email === email));
-    // Every Reaction in the Game, tallied per Post in the order they're offered, with the viewer's own marked.
-    const tallies = new Map<string, Map<string, { count: number; mine: boolean }>>();
-    for (const r of feed.reactions) {
-      const tally = tallies.get(r.postId) ?? new Map<string, { count: number; mine: boolean }>();
-      const t = tally.get(r.emoji) ?? { count: 0, mine: false };
-      tally.set(r.emoji, { count: t.count + 1, mine: t.mine || r.email === email });
-      tallies.set(r.postId, tally);
-    }
-    const reactionsOf = (postId: string) =>
-      REACTIONS.flatMap((emoji) => {
-        const t = tallies.get(postId)?.get(emoji);
-        return t ? [{ emoji, ...t }] : [];
-      });
-    // A reply quotes the Post it answers, if this viewer may see that Post; otherwise it's shown as removed.
-    // Each Post counts its replies that everyone can see.
-    const seenById = new Map(rows.map((p) => [p.id, p]));
-    const replies = new Map<string, number>();
-    for (const p of rows) if (p.replyTo && p.status === "visible") replies.set(p.replyTo, (replies.get(p.replyTo) ?? 0) + 1);
-    const photoOf = (p: (typeof rows)[number]) =>
-      p.photoWidth && p.photoHeight
-        ? { url: `/api/games/${id}/posts/${p.id}/photo.jpg`, smallUrl: `/api/games/${id}/posts/${p.id}/photo-small.jpg`, width: p.photoWidth, height: p.photoHeight }
-        : null;
-    const mutedPeople = new Set(
-      hosting
-        ? db
-            .select({ email: gameNames.email })
-            .from(gameNames)
-            .where(and(eq(gameNames.gameId, id), eq(gameNames.muted, true)))
-            .all()
-            .map((r) => r.email)
-        : [],
-    );
-    const quote = (replyTo: string | null) => {
-      if (!replyTo) return null;
-      const o = seenById.get(replyTo);
-      return o ? { id: o.id, author: o.author, text: o.text, photo: photoOf(o) } : { id: replyTo, removed: true as const };
-    };
-    return c.json(
-      rows.map((p) => ({
-        id: p.id,
-        author: p.author,
-        giftId: p.giftId,
-        text: p.text,
-        photo: photoOf(p),
-        status: p.status,
-        createdAt: p.createdAt.getTime(),
-        mine: p.email === email,
-        reactions: reactionsOf(p.id),
-        replyTo: quote(p.replyTo),
-        replies: replies.get(p.id) ?? 0,
-        // A part of its Gift's Pitch: whose part it is, its headline, and when it was last sent again.
-        pitchFor: p.pitchFor,
-        tagline: p.tagline,
-        bumpedAt: p.bumpedAt?.getTime() ?? null,
-        // For the Host and Co-hosts: whether its poster is muted, so they can unmute from here.
-        ...(hosting ? { authorMuted: mutedPeople.has(p.email) } : {}),
-      })),
-    );
+    return c.json(feed.list(id, { email, staff: role !== undefined }));
   });
 
   // Words come as JSON; a Post with a Photo comes as a multipart form, its file in `photo`.
@@ -1947,7 +1837,7 @@ export function createServer({
       tx.delete(games).where(eq(games.id, id)).run();
     });
     store.forget(id);
-    feeds.delete(id);
+    feed.forget(id);
     photos.removeGame(id);
     for (const kind of ["logo", "background"] as const) themeImages.remove(`game-${id}`, kind);
   }
@@ -2052,8 +1942,8 @@ export function createServer({
   function forgetIdleGames(): number {
     const before = now().getTime() - IDLE_GAME_HOURS * 60 * 60_000;
     const watched = (id: string) => (io?.sockets.adapter.rooms.get(id)?.size ?? 0) > 0;
-    const gone = store.forgetIdle(before, watched, feeds.keys());
-    for (const id of gone) feeds.delete(id);
+    const gone = store.forgetIdle(before, watched, feed.held());
+    for (const id of gone) feed.forget(id);
     return gone.length;
   }
 
@@ -2111,8 +2001,7 @@ export function createServer({
             clearInterval(watchingLag);
             delay.disable();
             delay.disable();
-            for (const { timer } of feedSignals.values()) clearTimeout(timer);
-            feedSignals.clear();
+            feed.stop();
             await new Promise<void>((done) => sockets.close(() => done()));
             db.$client.close();
           },
