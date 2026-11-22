@@ -1,0 +1,35 @@
+/**
+ * What the server sends, as the browser receives it: the server's own types (its wire.ts), never copied here.
+ * The only file in src/ that imports from the server, and only types, so no server code reaches the browser.
+ */
+export type {
+  AdminGame,
+  AdminPerson,
+  Emoji,
+  FeedbackAsk,
+  FeedbackSummary,
+  GameRecord,
+  GameView,
+  Moderation,
+  MyGame,
+  MyOrg,
+  PendingName,
+  Person,
+  Post,
+  Quote,
+  RecordKind,
+  RosterMode,
+  ScreenMode,
+  ServerHealth,
+  Session,
+  SharedGame,
+  StaffMember,
+  StatsInsights,
+  StatsSummary,
+  SystemReport,
+  Testimonial,
+  Theme,
+  Viewer,
+  VoteDisplay,
+  VoteStatus,
+} from "@elephant/server";

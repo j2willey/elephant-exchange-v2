@@ -1,78 +1,29 @@
 import type { Command, GameOptions, GameSettings, Phase, RuleErrorCode } from "@elephant/rules";
 import { io } from "socket.io-client";
+import type { GameView, Moderation, MyGame, MyOrg, PendingName, Person, Post, RosterMode, ScreenMode, Session, SharedGame, StaffMember, Theme, VoteDisplay } from "./wire";
 
-/** A Game as the server shows it (see view() in the server). */
-export interface GameView {
-  id: string;
-  /** What the Host calls it. */
-  name: string;
-  /** A line under the name on the big screen and the Host's banner, such as "It's going to be a gas!"; "" for none. */
-  tagline: string;
-  /** Made with "Try a demo game": its Host console links to the demo view. */
-  demo: boolean;
-  /** Who adds Players: only the Host and Co-hosts, or people themselves from their phones too. */
-  rosterMode: RosterMode;
-  /** The Game's rule for Posts; the Host or a Co-host can switch it at any moment. */
-  moderation: Moderation;
-  /** For a tough crowd: names people pick for themselves wait for the Host or a Co-host to approve them. */
-  approveNames: boolean;
-  /** Against flooding the Feed: the most Posts a guest makes in a minute, and minutes between pitching a Gift again (0: no limit). */
-  postsPerMinute: number;
-  repitchMinutes: number;
-  /** The turn timer: the server's time when sent, the countdown's length (0: no timer), and when each Player up was called. */
-  clock: { now: number; turnSeconds: number; startedAt: Record<string, number> };
-  /** Rises with every change; the newest copy wins. */
-  version: number;
-  phase: Phase;
-  settings: GameSettings;
-  players: { id: string; name: string }[];
-  active: string[];
-  onDeck: string[];
-  /** In the order opened. One opened without a name is called "Ann's gift" (by who opened it), with `named` false, until named. */
-  gifts: { id: string; name: string; named: boolean; description: string; holderId: string | null; steals: number; frozen: boolean }[];
-  /** Unopened Gifts still on the table in the Final Round. */
-  leftoverGifts: number;
-  /** What the big screen shows, as the Host switches it: the Gift board, the rules, the join code, or the catalog. */
-  screen: ScreenMode;
-  /** How the Game looks: its Organization's Theme with the Game's own overrides; null parts use the app's look. */
-  theme: Theme;
-  /** The Worst Gift Vote. `counts` is null while they're kept from everyone (Hidden or Parade, before the reveal). */
-  vote: { status: VoteStatus; display: VoteDisplay; cast: number; counts: Record<string, number> | null; winner: string | null };
-  /** Whether the person looking runs this Game. */
-  role: "host" | "cohost" | null;
-  /** The Player the person looking signed up as, if they did. */
-  me: { playerId: string } | null;
-  /**
-   * The name the person looking goes by here (a Player's, or the one a Guest posts as; null until they give one), and
-   * whether the Host or a Co-host has locked it. Null when nobody is signed in.
-   */
-  myName: { name: string | null; locked: boolean; pending: string | null } | null;
-  /** Whether the Host or a Co-host has muted the person looking: they can't post or reply here. */
-  muted: boolean;
-  /** The Gift the person looking voted the worst, if they have. */
-  myVote: string | null;
-}
+export type {
+  GameView,
+  Moderation,
+  MyGame,
+  MyOrg,
+  PendingName,
+  Person,
+  Post,
+  Quote,
+  RosterMode,
+  ScreenMode,
+  Session,
+  SharedGame,
+  StaffMember,
+  Theme,
+  Viewer,
+  VoteDisplay,
+  VoteStatus,
+} from "./wire";
 
-export interface Theme {
-  organization: { id: string; name: string } | null;
-  /** Colors as "#rrggbb". */
-  color: string | null;
-  page: string | null;
-  logoUrl: string | null;
-  backgroundUrl: string | null;
-  /** Which parts are the Game's own, overriding its Organization's. */
-  overrides: Record<"color" | "page" | "logo" | "background", boolean>;
-}
 
-/** An Organization the signed-in person is the Organizer of, with its Theme. */
-export interface MyOrg {
-  id: string;
-  name: string;
-  color: string | null;
-  page: string | null;
-  logoUrl: string | null;
-  backgroundUrl: string | null;
-}
+
 
 export type ThemeImage = "logo" | "background";
 /** A change to Theme colors: a color sets that part, null hands it back (to the Organization, or the app). */
@@ -89,29 +40,8 @@ export const BUSY_MESSAGE =
 
 export type ColorChange = { color?: string | null; page?: string | null };
 
-export type VoteStatus = "none" | "open" | "closed";
-export type VoteDisplay = "live" | "hidden" | "parade";
-export type ScreenMode = "gifts" | "rules" | "qr" | "catalog" | "highlights";
 
-export type RosterMode = "host" | "self";
-export type Moderation = "open" | "approval" | "paused";
 
-/**
- * Who's signed in: whether a feedback email is OK, whether they've read and considered Jim's tip note (New Game
- * shows it until then), and whether they may use the admin pages.
- */
-export interface Session {
-  email: string;
-  feedbackOk: boolean;
-  tipNoteRead: boolean;
-  admin: boolean;
-  /** Their own Game options, saved with "Always start with these settings" (null if never saved). */
-  myOptions: GameOptions | null;
-  /** New Game uses `myOptions` straight away. */
-  alwaysMyOptions: boolean;
-  /** Trying the demo without signing in: demo Games only, until they sign in with their email. */
-  visitor?: boolean;
-}
 
 /** How a Host chose a new Game's options, for the statistics. */
 export type StartChoice = "recommended" | "customized" | "saved";
@@ -327,77 +257,14 @@ export const REACTIONS = [
 ] as const;
 export type Emoji = (typeof REACTIONS)[number]["emoji"];
 
-/** Someone the Game knows, as the Host's Co-hosts panel shows them: by name where there is one, never by email. */
-export interface Person {
-  /** Names them to the server when switching them on or off. */
-  key: string;
-  /** Their Player's name, or what they post as; null when they've only opened the Game. */
-  name: string | null;
-  /** Enough of their email to tell two of the same name apart: "te…@example.com". */
-  hint: string;
-  /** The Player they play as, if any. */
-  playerId: string | null;
-  role: "host" | "cohost" | null;
-  /** Whether this is the Host looking. */
-  you: boolean;
-}
 
-/** A Player who is also the Host or a Co-host, marked on their consoles. */
-export interface StaffMember {
-  playerId: string;
-  role: "host" | "cohost";
-}
 
-/** A Post in the Feed, as this viewer may see it. */
-export interface Post {
-  id: string;
-  /** The name it was posted as. */
-  author: string;
-  /** The Gift it's about, if the poster said. */
-  giftId: string | null;
-  /** Empty when the Post is just a Photo. */
-  text: string;
-  /** Its Photo, if it has one: where to load it, and its size (so the page can make room before it loads). */
-  /** The Photo full size (url) and as a small copy for lists and thumbnails (smallUrl). */
-  photo: { url: string; smallUrl: string; width: number; height: number } | null;
-  /** Pending and Hidden Posts reach only their poster and the Hosts. */
-  status: "visible" | "pending" | "hidden";
-  createdAt: number;
-  /** Whether the viewer posted it. */
-  mine: boolean;
-  /** The Reactions it has, in the order they're offered (none with no count), and whether the viewer put each on. */
-  reactions: { emoji: Emoji; count: number; mine: boolean }[];
-  /** For a reply, the Post it answers, quoted; or just `removed` once the viewer can no longer see that Post. */
-  replyTo: Quote | null;
-  /** How many replies to it everyone can see. */
-  replies: number;
-  /** For the Host and Co-hosts only: whether its poster is muted. */
-  authorMuted?: boolean;
-  /** Set when it's a part of its Gift's Pitch: the Player whose part it is. */
-  pitchFor: string | null;
-  /** A Pitch part's bold headline. */
-  tagline?: string | null;
-  /** When a Pitch part was last sent to the top of the Feed again. */
-  bumpedAt?: number | null;
-}
 
 /** Whose name the Host or a Co-host is changing: a Player, whoever wrote a Post, or someone whose name is waiting. */
 export type RenameWho = { playerId: string } | { postId: string } | { key: string };
 
-/** A name someone asked for under Approve names: `shown` is what everyone sees meanwhile. */
-export interface PendingName {
-  key: string;
-  shown: string;
-  wants: string;
-  playerId: string | null;
-}
 
-/** The Post a reply answers, as shown above the reply. */
-export type Quote = Pick<Post, "id" | "author" | "text" | "photo"> | { id: string; removed: true };
 
-/** What only the person looking is told about a Game; live updates go to everyone, so they never carry it. */
-export type Viewer = Pick<GameView, "role" | "me" | "myName" | "muted" | "myVote">;
-export type SharedGame = Omit<GameView, keyof Viewer>;
 
 /**
  * A page of this app to come back to after signing in. Paths only: "//host" and "/\\host" would take a
@@ -405,14 +272,6 @@ export type SharedGame = Omit<GameView, keyof Viewer>;
  */
 export const isReturnPath = (path: string) => /^\/(?![/\\])[\x21-\x7e]*$/.test(path) && path.length <= 200;
 
-/** One of the Games a person runs, as listed on their home screen. */
-export interface MyGame {
-  id: string;
-  name: string;
-  phase: Phase;
-  players: number;
-  role: "host" | "cohost";
-}
 
 export type CommandResult = { ok: true; game: SharedGame } | { ok: false; code: RuleErrorCode | "Forbidden" | "Failed"; message: string };
 
@@ -546,7 +405,7 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
 
     /** Who is signed in on this browser, if anyone. */
     async session(): Promise<Session | undefined> {
-      if (demoPlayer !== undefined) return { email: "", feedbackOk: false, tipNoteRead: false, admin: false, myOptions: null, alwaysMyOptions: false };
+      if (demoPlayer !== undefined) return { email: "", feedbackOk: false, tipNoteRead: false, admin: false, visitor: false, myOptions: null, alwaysMyOptions: false };
       const res = await fetchFn("/api/session");
       if (res.status === 401) return undefined;
       if (!res.ok) throw new Error(`session check failed: ${res.status}`);
