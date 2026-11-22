@@ -699,7 +699,7 @@ export function createServer({
     const result = run(id, cmd, (tx) => {
       if (standIn && cmd.type === "AddPlayer") people.linkPlayer(tx, id, cmd.playerId, standIn);
     });
-    people.changed(id); // in case the Pick was refused after the link was written
+    if (standIn) people.changed(id); // in case the Pick was refused after the link was written
     if (!("code" in result) && cmd.type === "ChangeSettings")
       for (const [option, value] of Object.entries(cmd.settings))
         if (value !== game.state.settings[option as keyof typeof game.state.settings]) stats.optionChanged(id, option);
