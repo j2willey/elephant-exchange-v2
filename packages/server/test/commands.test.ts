@@ -13,6 +13,22 @@ async function setup(draw?: DrawFn) {
 }
 
 describe("Commands over HTTP", () => {
+  it("applies commands sent at the same moment one after the other, losing none", async () => {
+    const { app, id, cookie, send } = await setup();
+
+    const answers = await Promise.all([
+      send({ type: "AddPlayer", playerId: "ann", name: "Ann" }),
+      send({ type: "AddPlayer", playerId: "bob", name: "Bob" }),
+      app.request(`/api/games/${id}/options`, { ...post({ tagline: "It's a gas!" }, cookie), method: "PATCH" }),
+      send({ type: "AddPlayer", playerId: "cat", name: "Cat" }),
+    ]);
+
+    expect(answers.map((r) => r.status)).toEqual([200, 200, 200, 200]);
+    const game = (await (await app.request(`/api/games/${id}`)).json()) as { players: { id: string }[]; tagline: string };
+    expect(game.players.map((p) => p.id).sort()).toEqual(["ann", "bob", "cat"]);
+    expect(game.tagline).toBe("It's a gas!");
+  });
+
   it("applies a command and answers with the Game as it now stands", async () => {
     const { app, id, send } = await setup(scriptedDraw(["ann", "bob"]));
 

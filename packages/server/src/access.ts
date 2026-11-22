@@ -25,6 +25,11 @@ export type Need = "anyone" | "signedIn" | "staff" | "host";
 /** What a Game route knows once its Need is met. `email` is set for every Need but `anyone`. */
 export interface GameAccess<G> {
   id: string;
+  /**
+   * The Game as it stood when the route was entered. A route that reads its body (or anything else) with `await`
+   * and then changes the Game must load it again after that `await`: another request may have changed it meanwhile,
+   * and building on this copy would lose that change.
+   */
   game: G;
   email: string | undefined;
   role: Role | undefined;

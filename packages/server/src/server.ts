@@ -645,15 +645,13 @@ export function createServer({
    * A feature only the browser sees, used in a Game: pasting the roster (by its Host or a Co-host), or sharing a Post
    * outside the party (by anyone following it, signed in or not; it only marks that the Game had a share).
    */
-  app.post("/api/games/:id/features", async (c) => {
-    const id = c.req.param("id");
-    const email = signedInAs(c);
+  app.post("/api/games/:id/features", access.need("anyone"), async (c) => {
+    const { id, email, role } = c.var.access;
     const body = await parseBody(c, featureBody);
     if (!body.ok) return body.res;
-    if (!load(id)) return c.json({ error: "Game not found" }, 404);
     if (body.data.feature !== "share") {
       if (!email) return c.json({ error: "Sign in first" }, 401);
-      if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts" }, 403);
+      if (!role) return c.json({ error: "Only the Host and Co-hosts" }, 403);
     }
     stats.noteFeature(id, body.data.feature);
     return c.body(null, 204);
@@ -671,11 +669,9 @@ export function createServer({
     return { asked, as, given: said.mine(id, email, as) };
   }
 
-  app.get("/api/games/:id/feedback", (c) => {
-    const id = c.req.param("id");
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
-    if (!load(id)) return c.json({ error: "Game not found" }, 404);
+  app.get("/api/games/:id/feedback", access.need("signedIn"), (c) => {
+    const { id } = c.var.access;
+    const email = c.var.access.email!;
     const { asked, as, given } = feedbackFor(id, email);
     return c.json({
       asked,
@@ -684,13 +680,11 @@ export function createServer({
     });
   });
 
-  app.post("/api/games/:id/feedback", async (c) => {
-    const id = c.req.param("id");
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
+  app.post("/api/games/:id/feedback", access.need("signedIn"), async (c) => {
+    const { id } = c.var.access;
+    const email = c.var.access.email!;
     const body = await parseBody(c, answerBody);
     if (!body.ok) return body.res;
-    if (!load(id)) return c.json({ error: "Game not found" }, 404);
     const { asked, as } = feedbackFor(id, email);
     if (!asked) return c.json({ error: "Not until the Game is over" }, 409);
     const { rating, again, thumbs, comment, quoteOk, quoteName } = body.data;
@@ -976,10 +970,11 @@ export function createServer({
 
   /** The Host switches someone's Co-host role on or off, or says which Player a Host or Co-host plays as. */
   app.post("/api/games/:id/people/:key", access.need("host", "Only the Host can appoint Co-hosts"), async (c) => {
-    const { id, game } = c.var.access;
+    const { id } = c.var.access;
     const key = c.req.param("key");
     const body = await parseBody(c, personBody);
     if (!body.ok) return body.res;
+    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
     const who = [...knownPeople(id)].find((e) => personKey(id, e) === key);
     if (!who) return c.json({ error: "Nobody like that in this Game" }, 404);
     const { cohost, playsAs } = body.data;
@@ -1016,9 +1011,10 @@ export function createServer({
   });
 
   app.post("/api/games/:id/names/approve", access.need("staff", "Only the Host and Co-hosts approve names"), async (c) => {
-    const { id, game } = c.var.access;
+    const { id } = c.var.access;
     const body = await parseBody(c, approveNameBody);
     if (!body.ok) return body.res;
+    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
     const row = db
       .select()
       .from(gameNames)
@@ -1032,10 +1028,11 @@ export function createServer({
 
   /** Someone changes their own name in a Game (a Player's or a Guest's), unless the Host or a Co-host locked it. */
   app.post("/api/games/:id/me/name", access.need("signedIn"), async (c) => {
-    const { id, game } = c.var.access;
+    const { id } = c.var.access;
     const email = c.var.access.email!;
     const body = await parseBody(c, joinBody);
     if (!body.ok) return body.res;
+    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
     if (nameRow(id, email)?.locked) return c.json({ code: "NameLocked", message: "Your Host set this name" }, 409);
     if (needsApproval(id, email, game)) {
       holdName(id, email, body.data.name);
@@ -1047,9 +1044,10 @@ export function createServer({
 
   /** The Host or a Co-host renames someone, found by their Player or one of their Posts, and locks the name or not. */
   app.post("/api/games/:id/names", access.need("staff", "Only the Host and Co-hosts can rename people"), async (c) => {
-    const { id, game } = c.var.access;
+    const { id } = c.var.access;
     const body = await parseBody(c, renameBody);
     if (!body.ok) return body.res;
+    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
     const { playerId, postId, key, name, locked } = body.data;
     if (key !== undefined) {
       const who = [...knownPeople(id)].find((e) => personKey(id, e) === key);
@@ -1076,9 +1074,10 @@ export function createServer({
   });
 
   app.post("/api/games/:id/cohosts", access.need("host", "Only the Host can appoint Co-hosts"), async (c) => {
-    const { id, game } = c.var.access;
+    const { id } = c.var.access;
     const body = await parseBody(c, cohostBody);
     if (!body.ok) return body.res;
+    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
     const { email: who, playsAs } = body.data;
     if (playsAs !== undefined && !roster(game.state).some((p) => p.id === playsAs)) return c.json({ error: "No such Player in this Game" }, 400);
     const row = { gameId: id, email: who, role: "cohost" as const, ...(playsAs ? { playerId: playsAs } : {}) };
@@ -1126,16 +1125,14 @@ export function createServer({
   });
 
   app.get("/api/games/:id", access.need("anyone"), (c) => {
-    const { id, game } = c.var.access;
     // Only this answer says who is asking: live updates go to everyone watching, so they never carry a role.
-    const { email } = c.var.access;
+    const { id, game, email, role, playerId } = c.var.access;
     // Remembered so the Host can find them by name in the Co-hosts panel (not the demo's stand-ins).
     if (email && !email.startsWith(DEMO_ACTOR))
       db.insert(gameVisitors).values({ gameId: id, email, firstSeenAt: now() }).onConflictDoNothing().run();
-    const playerId = email ? playerOf(id, email, game) : undefined;
     return c.json({
       ...view(id, game, now()),
-      role: (email && roleIn(id, email)) ?? null,
+      role: role ?? null,
       me: playerId ? { playerId } : null,
       myName: email ? nameIn(id, email, game) : null,
       muted: (email && nameRow(id, email)?.muted) ?? false,
@@ -1144,9 +1141,10 @@ export function createServer({
   });
 
   app.post("/api/games/:id/commands", access.need("staff", "Only the Host and Co-hosts can run this Game"), async (c) => {
-    const { id, game } = c.var.access;
+    const { id } = c.var.access;
     const body = await parseBody(c, command);
     if (!body.ok) return body.res;
+    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
 
     // A demo Game's made-up Players each get a stand-in email, so the Host can find them in the Co-hosts panel and
     // make one a Co-host, as with real people. At example.com, which takes no mail: nobody can ever sign in as one.
@@ -1163,9 +1161,10 @@ export function createServer({
 
   // The Host restarts a Player's countdown, say after explaining the rules. Not a Pick: it isn't logged or undone.
   app.post("/api/games/:id/timer", access.need("staff", "Only the Host and Co-hosts can run this Game"), async (c) => {
-    const { id, game } = c.var.access;
+    const { id } = c.var.access;
     const body = await parseBody(c, timerBody);
     if (!body.ok) return body.res;
+    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
     const { playerId } = body.data;
     if (!game.clocks.has(playerId)) return c.json({ code: "NotActive", message: "That Player isn't up" }, 409);
 
@@ -1251,7 +1250,7 @@ export function createServer({
   });
 
   app.post("/api/games/:id/posts", access.need("signedIn", "Sign in to post"), photoSizeLimit, async (c) => {
-    const { id } = c.var.access;
+    const { id, role } = c.var.access;
     const email = c.var.access.email!;
     let upload: File | undefined;
     let body: Awaited<ReturnType<typeof parseBody<z.infer<typeof postBody>>>>;
@@ -1267,9 +1266,8 @@ export function createServer({
       body = await parseBody(c, postBody);
     }
     if (!body.ok) return body.res;
+    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
     if (!body.data.text && !upload) return c.json({ error: "Write something or add a Photo" }, 400);
-    const game = load(id);
-    if (!game) return c.json({ error: "Game not found" }, 404);
     if (game.moderation === "paused") return c.json({ code: "Paused", message: "The Host has paused posting" }, 409);
     if (nameRow(id, email)?.muted) return c.json({ code: "Muted", message: "The Host has paused your posting" }, 409);
     const wait = tooSoon(id, email, game);
@@ -1308,7 +1306,7 @@ export function createServer({
     } else if (!playerId && author !== saved?.name && author !== WAITING_GUEST) renamePerson(id, game, { email }, author);
 
     // Under Approval the Host and Co-hosts are the approvers: their own Posts go up at once.
-    const status = game.moderation === "approval" && !roleIn(id, email) ? "pending" : "visible";
+    const status = game.moderation === "approval" && !role ? "pending" : "visible";
     const postId = randomBytes(12).toString("base64url");
     if (photo) photos.save(id, postId, photo.data, await smallPhoto(photo.data));
     try {
@@ -1675,15 +1673,13 @@ export function createServer({
 
   // The Host or a Co-host sets or removes the Game's own logo or background, overriding the Organization's.
   for (const method of ["put", "delete"] as const) {
-    app.on(method.toUpperCase(), "/api/games/:id/theme/:kind", photoSizeLimit, async (c) => {
-      const { id, kind } = c.req.param();
-      const email = signedInAs(c);
-      if (!email) return c.json({ error: "Sign in first" }, 401);
-      const game = load(id);
-      if (!isThemeImage(kind) || !game) return c.json({ error: "Not found" }, 404);
-      if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can change the Game's look" }, 403);
+    app.on(method.toUpperCase(), "/api/games/:id/theme/:kind", access.need("staff", "Only the Host and Co-hosts can change the Game's look"), photoSizeLimit, async (c) => {
+      const { id } = c.var.access;
+      const kind = c.req.param("kind");
+      if (!isThemeImage(kind)) return c.json({ error: "Not found" }, 404);
       const changed = await changeThemeImage(c, method, `game-${id}`, kind);
       if (changed instanceof Response) return changed;
+      const game = load(id)!; // the latest copy, read after the upload: see GameAccess.game
       db.update(games)
         .set(kind === "logo" ? { themeLogo: changed.version } : { themeBackground: changed.version })
         .where(eq(games.id, id))
@@ -1694,15 +1690,12 @@ export function createServer({
   }
 
   // Which Organization's Theme a Game shows: the Host or a Co-host picks one they're the Organizer of, or none.
-  app.post("/api/games/:id/org", async (c) => {
-    const id = c.req.param("id");
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
+  app.post("/api/games/:id/org", access.need("staff", "Only the Host and Co-hosts can change the Game's look"), async (c) => {
+    const { id } = c.var.access;
+    const email = c.var.access.email!;
     const body = await parseBody(c, gameOrgBody);
     if (!body.ok) return body.res;
-    const game = load(id);
-    if (!game) return c.json({ error: "Game not found" }, 404);
-    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can change the Game's look" }, 403);
+    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
     const { orgId } = body.data;
     if (orgId !== null && !organizes(orgId, email)) return c.json({ error: "Only an Organization's Organizer can use its Theme" }, 403);
     db.update(games).set({ orgId }).where(eq(games.id, id)).run();
@@ -1712,15 +1705,11 @@ export function createServer({
 
   // The Game's own Theme, overriding its Organization's part by part (null hands a part back to it).
   /** The Host or a Co-host changes the Game's name, turn timer or who adds the Players; every screen updates. */
-  app.patch("/api/games/:id/options", async (c) => {
-    const id = c.req.param("id");
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
+  app.patch("/api/games/:id/options", access.need("staff", "Only the Host and Co-hosts can change this Game"), async (c) => {
+    const { id } = c.var.access;
     const body = await parseBody(c, gameOptionsEdit);
     if (!body.ok) return body.res;
-    const game = load(id);
-    if (!game) return c.json({ error: "Game not found" }, 404);
-    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can change this Game" }, 403);
+    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
     const { name, tagline, turnSeconds, rosterMode, approveNames, postsPerMinute, repitchMinutes } = body.data;
     const set = {
       ...(tagline !== undefined ? { tagline } : {}),
@@ -1744,15 +1733,11 @@ export function createServer({
     return c.json(publish(id, { ...game, ...set }));
   });
 
-  app.patch("/api/games/:id/theme", async (c) => {
-    const id = c.req.param("id");
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
+  app.patch("/api/games/:id/theme", access.need("staff", "Only the Host and Co-hosts can change the Game's look"), async (c) => {
+    const { id } = c.var.access;
     const body = await parseBody(c, gameThemeEdit);
     if (!body.ok) return body.res;
-    const game = load(id);
-    if (!game) return c.json({ error: "Game not found" }, 404);
-    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can change the Game's look" }, 403);
+    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
     const { color, page } = body.data;
     const set = { ...(color !== undefined ? { themeColor: color } : {}), ...(page !== undefined ? { themePage: page } : {}) };
     if (Object.keys(set).length > 0) db.update(games).set(set).where(eq(games.id, id)).run();
@@ -1762,15 +1747,11 @@ export function createServer({
   });
 
   // The Host or a Co-host opens the Worst Gift Vote once the Game has ended, and closes it to reveal the results.
-  app.post("/api/games/:id/vote/status", async (c) => {
-    const id = c.req.param("id");
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
+  app.post("/api/games/:id/vote/status", access.need("staff", "Only the Host and Co-hosts can run the vote"), async (c) => {
+    const { id } = c.var.access;
     const body = await parseBody(c, voteStatusBody);
     if (!body.ok) return body.res;
-    const game = load(id);
-    if (!game) return c.json({ error: "Game not found" }, 404);
-    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can run the vote" }, 403);
+    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
 
     if (body.data.status === "open") {
       if (phase(game.state) !== "ended") return c.json({ code: "GameNotOver", message: "End the Game before the vote" }, 409);
@@ -1796,44 +1777,34 @@ export function createServer({
   });
 
   // The Host switches the big screen between the Gift board, the rules, the join code and the catalog.
-  app.post("/api/games/:id/screen", async (c) => {
-    const id = c.req.param("id");
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
+  app.post("/api/games/:id/screen", access.need("staff", "Only the Host and Co-hosts can switch the big screen"), async (c) => {
+    const { id } = c.var.access;
     const body = await parseBody(c, screenModeBody);
     if (!body.ok) return body.res;
-    const game = load(id);
-    if (!game) return c.json({ error: "Game not found" }, 404);
-    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can switch the big screen" }, 403);
+    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
     db.update(games).set({ screenMode: body.data.mode }).where(eq(games.id, id)).run();
     stats.noteFeature(id, `screen:${body.data.mode}`);
     publish(id, { ...game, screen: body.data.mode });
     return c.body(null, 204);
   });
 
-  app.post("/api/games/:id/vote/display", async (c) => {
-    const id = c.req.param("id");
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
+  app.post("/api/games/:id/vote/display", access.need("staff", "Only the Host and Co-hosts can run the vote"), async (c) => {
+    const { id } = c.var.access;
     const body = await parseBody(c, voteDisplayBody);
     if (!body.ok) return body.res;
-    const game = load(id);
-    if (!game) return c.json({ error: "Game not found" }, 404);
-    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can run the vote" }, 403);
+    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
     db.update(games).set({ voteDisplay: body.data.display }).where(eq(games.id, id)).run();
     publish(id, { ...game, vote: { ...game.vote, display: body.data.display } });
     return c.body(null, 204);
   });
 
   // Casting or moving this person's one vote.
-  app.post("/api/games/:id/vote", async (c) => {
-    const id = c.req.param("id");
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in to vote" }, 401);
+  app.post("/api/games/:id/vote", access.need("signedIn", "Sign in to vote"), async (c) => {
+    const { id } = c.var.access;
+    const email = c.var.access.email!;
     const body = await parseBody(c, voteBody);
     if (!body.ok) return body.res;
-    const game = load(id);
-    if (!game) return c.json({ error: "Game not found" }, 404);
+    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
     if (game.vote.status !== "open") return c.json({ code: "VoteNotOpen", message: "The vote isn't open" }, 409);
     const { giftId } = body.data;
     if (!gifts(game.state).some((g) => g.id === giftId)) return c.json({ error: "No such Gift in this Game" }, 400);
@@ -1847,9 +1818,10 @@ export function createServer({
   });
 
   app.post("/api/games/:id/moderation", access.need("staff", "Only the Host and Co-hosts can moderate this Game"), async (c) => {
-    const { id, game } = c.var.access;
+    const { id } = c.var.access;
     const body = await parseBody(c, moderationBody);
     if (!body.ok) return body.res;
+    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
     db.update(games).set({ moderation: body.data.mode }).where(eq(games.id, id)).run();
     if (body.data.mode !== game.moderation) stats.optionChanged(id, "moderation");
     publish(id, { ...game, moderation: body.data.mode });
@@ -1924,11 +1896,12 @@ export function createServer({
    * For its poster, and the Host and Co-hosts.
    */
   app.post("/api/games/:id/posts/:postId/gift", access.need("signedIn"), async (c) => {
-    const { id, game, role } = c.var.access;
+    const { id, role } = c.var.access;
     const email = c.var.access.email!;
     const postId = c.req.param("postId");
     const body = await parseBody(c, postGiftBody);
     if (!body.ok) return body.res;
+    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
     const row = db
       .select({ email: posts.email, pitchFor: posts.pitchFor })
       .from(posts)
@@ -1983,14 +1956,12 @@ export function createServer({
 
   // A person adds themselves as a Player, in a Self sign-up Game. The server picks the Player's id and
   // sends the same AddPlayer command the Host's button does, so the rules are untouched.
-  app.post("/api/games/:id/join", async (c) => {
-    const id = c.req.param("id");
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
+  app.post("/api/games/:id/join", access.need("signedIn"), async (c) => {
+    const { id } = c.var.access;
+    const email = c.var.access.email!;
     const body = await parseBody(c, joinBody);
     if (!body.ok) return body.res;
-    const game = load(id);
-    if (!game) return c.json({ error: "Game not found" }, 404);
+    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
     if (game.rosterMode !== "self") return c.json({ error: "The Host adds the Players in this Game" }, 403);
     if (playerOf(id, email, game)) return c.json({ code: "AlreadyJoined", message: "You're already playing in this Game" }, 409);
 
