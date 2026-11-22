@@ -1,15 +1,23 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { GameView } from "./api.js";
 import { useApi } from "./ApiContext.js";
 
 /**
- * How far this device's clock is from the server's, worked out from the newest copy of the Game: a phone set a few
- * minutes wrong still counts down with everyone else. (The copy's time in transit is too small to matter for a guide.)
+ * How far this device's clock is from the server's, so a phone set a few minutes wrong still counts down with
+ * everyone else. Each copy of the Game says the server's time when it was sent; it arrives a little later, so it
+ * always makes this device seem a little fast, by its time in transit. The copy that seems to make it least fast
+ * came the quickest, so that's the guide kept: a copy that took its time (a slow connection, a busy phone) never
+ * pulls the countdown back.
  */
 export function useServerTime(serverNowWhenSent: number): () => number {
   const api = useApi();
+  const best = useRef<number | undefined>(undefined);
   // Worked out when a new copy arrives (its server time changes), not on every redraw.
-  const skew = useMemo(() => serverNowWhenSent - api.now(), [serverNowWhenSent, api]);
+  const skew = useMemo(() => {
+    const seen = serverNowWhenSent - api.now();
+    best.current = best.current === undefined ? seen : Math.max(best.current, seen);
+    return best.current;
+  }, [serverNowWhenSent, api]);
   return () => api.now() + skew;
 }
 
