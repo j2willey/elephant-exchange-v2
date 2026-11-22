@@ -658,7 +658,10 @@ function Turn({
         </p>
       )}
       {final && held && (
-        <button onClick={() => send({ type: "KeepGift", playerId })}>Keep {held.name}</button>
+        <>
+          <button onClick={() => send({ type: "KeepGift", playerId })}>Keep {held.name}</button>
+          <p className="muted">Or put {held.name} back on the table, then open, take or steal a Gift:</p>
+        </>
       )}
       {canOpen && (
         <form className="inline" onSubmit={open}>

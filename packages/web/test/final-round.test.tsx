@@ -68,6 +68,20 @@ describe("The Final Round", () => {
     await upNowIs("Bob");
   });
 
+  it("tells a Final Round Player that anything but Keep puts their Gift back, and opening one does", async () => {
+    const { user } = await everyoneHasAGift();
+    await startFinalRound(user, "2", "1");
+
+    const ann = await turnOf("Ann");
+    expect(ann).toHaveTextContent(/or put socks back on the table, then/i);
+    await user.type(within(ann).getByPlaceholderText(/what's in ann's gift/i), "Snow Globe");
+    await user.click(within(ann).getByRole("button", { name: /open gift/i }));
+
+    await upNowIs("Bob");
+    expect(giftRow("Socks")).toHaveTextContent(/on the table/i);
+    expect(giftRow("Snow Globe")).toHaveTextContent(/ann/i);
+  });
+
   it("puts a stealer's old Gift on the table, where it can be taken", async () => {
     const { user } = await everyoneHasAGift();
     await startFinalRound(user, "2", "0");

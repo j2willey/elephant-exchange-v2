@@ -337,7 +337,11 @@ function ParticipantRow({
           ) : (
             <>
               {final && held && (
-                <button className="lc-act lc-wide" onClick={() => void send({ type: "KeepGift", playerId: player.id })}>
+                <button
+                  className="lc-act lc-wide"
+                  title={`Or open, take or steal: ${held.name} goes back on the table`}
+                  onClick={() => void send({ type: "KeepGift", playerId: player.id })}
+                >
                   Keep {held.name}
                 </button>
               )}

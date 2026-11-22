@@ -46,7 +46,7 @@ export type Event =
   | { type: "GiftDescribed"; giftId: GiftId; name: string; description: string }
   | { type: "PlayerRenamed"; playerId: PlayerId; name: string };
 
-export type RuleErrorCode = "NotActive" | "AlreadyPlayed" | "GiftOnTable" | "NotReturned" | "NoLeftoverGifts" | "TurnsInProgress" | "NothingToKeep" | "GameOver" | "NothingToUndo" | "GiftNotOpened" | "GiftFrozen" | "NoTakeBacks" | "NoSuchPlayer" | "WrongPhase";
+export type RuleErrorCode = "NotActive" | "AlreadyPlayed" | "GiftOnTable" | "NotReturned" | "NoLeftoverGifts" | "TurnsInProgress" | "NothingToKeep" | "GameOver" | "NothingToUndo" | "GiftNotOpened" | "GiftFrozen" | "NoTakeBacks" | "NoSuchPlayer" | "WrongPhase" | "OwnGift";
 
 export interface RuleError {
   code: RuleErrorCode;
@@ -145,6 +145,9 @@ export function decide(state: GameState, command: Command, draw: DrawFn): Event[
     case "Steal": {
       const gift = state.gifts.find((g) => g.id === command.giftId);
       if (!gift) return { code: "GiftNotOpened", message: `No opened Gift ${command.giftId}` };
+      if (gift.holderId === command.playerId) {
+        return { code: "OwnGift", message: "That's your own Gift: keep it, or put it back and take another" };
+      }
       if (gift.holderId === null) {
         return { code: "GiftOnTable", message: `${giftLabel(state, gift.id)} is on the table: take it, don't steal it` };
       }
@@ -218,6 +221,14 @@ export function evolve(state: GameState, event: Event): GameState {
   return keepsUndo ? next : { ...next, beforeLastPick: null };
 }
 
+/**
+ * A Final Round Player who doesn't keep their Gift puts it back on the table first, then steals, opens a wrapped
+ * one, or takes one from the table: they never hold two. Anyone else taking a Gift holds none, so nothing moves.
+ */
+function putBack(gifts: Gift[], playerId: PlayerId): Gift[] {
+  return gifts.map((g) => (g.holderId === playerId ? { ...g, holderId: null } : g));
+}
+
 function apply(state: GameState, event: Event): GameState {
   switch (event.type) {
     case "PlayerAdded":
@@ -244,7 +255,7 @@ function apply(state: GameState, event: Event): GameState {
         beforeLastPick: { ...state, beforeLastPick: null },
         active: state.active.filter((id) => id !== event.playerId),
         takenFrom: without(state.takenFrom, event.playerId),
-        gifts: [...state.gifts, { id: event.giftId, name: event.name, description: event.description ?? "", holderId: event.playerId, openedBy: event.playerId, steals: 0 }],
+        gifts: [...putBack(state.gifts, event.playerId), { id: event.giftId, name: event.name, description: event.description ?? "", holderId: event.playerId, openedBy: event.playerId, steals: 0 }],
         leftoverGifts: state.phase === "finalRound" ? state.leftoverGifts - 1 : state.leftoverGifts,
         picks: state.picks + 1,
       });
@@ -272,7 +283,7 @@ function apply(state: GameState, event: Event): GameState {
         beforeLastPick: { ...state, beforeLastPick: null },
         active: state.active.filter((id) => id !== event.playerId),
         takenFrom: without(state.takenFrom, event.playerId),
-        gifts: state.gifts.map((g) => (g.id === event.giftId ? { ...g, holderId: event.playerId } : g)),
+        gifts: putBack(state.gifts, event.playerId).map((g) => (g.id === event.giftId ? { ...g, holderId: event.playerId } : g)),
         picks: state.picks + 1,
       });
     case "GiftDescribed": {

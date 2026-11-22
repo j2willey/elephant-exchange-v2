@@ -584,6 +584,55 @@ describe("Final Round", () => {
     });
   });
 
+  it("puts a Final Round Player's own Gift back on the table when they open a wrapped one instead", () => {
+    const state = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [
+        ...allOpened,
+        { type: "StartFinalRound", finalists: 2, leftoverGifts: 1 },
+        { type: "OpenGift", playerId: "ann", giftId: "g4", name: "Snow Globe" },
+      ],
+      callOrder(),
+    );
+
+    expect(holderOf(state, "g4")).toBe("ann");
+    expect(holderOf(state, "g1")).toBeUndefined(); // on the table
+    expect(gifts(state).filter((g) => g.holderId === "ann")).toHaveLength(1);
+    expect(returnedGifts(state)).toEqual(["g1"]);
+    expect(leftoverGiftCount(state)).toBe(0);
+    expect(activePlayers(state)).toEqual(["bob"]); // her chance is used; the next Final Round Player's turn
+  });
+
+  it("lets the next Final Round Player trade their Gift for one left on the table", () => {
+    const state = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [
+        ...allOpened,
+        { type: "StartFinalRound", finalists: 2, leftoverGifts: 1 },
+        { type: "OpenGift", playerId: "ann", giftId: "g4", name: "Snow Globe" }, // Ann leaves g1 on the table
+        { type: "TakeReturnedGift", playerId: "bob", giftId: "g1" },
+      ],
+      callOrder(),
+    );
+
+    expect(holderOf(state, "g1")).toBe("bob");
+    expect(holderOf(state, "g2")).toBeUndefined(); // Bob's Lava Lamp takes its place on the table
+    expect(gifts(state).filter((g) => g.holderId === "bob")).toHaveLength(1);
+    expect(returnedGifts(state)).toEqual(["g2"]);
+    expect(activePlayers(state)).toEqual([]);
+  });
+
+  it("won't let a Final Round Player steal the Gift they already hold", () => {
+    const draw = callOrder();
+    const state = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [...allOpened, { type: "StartFinalRound", finalists: 2, leftoverGifts: 0 }],
+      draw,
+    );
+
+    expect(decide(state, { type: "Steal", playerId: "ann", giftId: "g1" }, draw)).toMatchObject({ code: "OwnGift" });
+  });
+
   it("lets a Final Round Player steal back the Gift taken from them earlier in the Game", () => {
     const state = play(
       { activeSlots: 1, maxSteals: 3 },

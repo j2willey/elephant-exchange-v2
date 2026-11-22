@@ -109,10 +109,10 @@ A Gift that has been stolen the maximum number of times and can no longer be sto
 _Avoid_: Locked, dead
 
 **Final Round**:
-After every Player holds a Gift, the first few Players called (how many is the Host's choice) each get one chance to steal, since they had little or nothing to steal when they went.
+After every Player holds a Gift, the first few Players called (how many is the Host's choice) each get one more chance, since they had little or nothing to steal when they went. Each either keeps their Gift, or puts it back on the table and then steals, takes a Gift from the table, or opens a Leftover Gift; they never hold two. A Player can't steal the Gift they hold.
 
 **Returned Gift**:
-The Gift a Final Round Player puts back on the table after stealing; taking it is not a Steal.
+The Gift a Final Round Player puts back on the table when they don't keep it; taking it is not a Steal.
 
 **Skip**:
 Returning a called Player who isn't present to the pool of Players not yet called, and drawing another.
