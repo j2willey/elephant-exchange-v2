@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomInt } from "node:crypto";
+import { randomBytes, randomInt } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import { serve } from "@hono/node-server";
 import { getConnInfo } from "@hono/node-server/conninfo";
@@ -24,7 +24,7 @@ import { Server as SocketServer } from "socket.io";
 import { diskOf, healthWarnings, lastBackupAt, memoryLimit, type ServerHealth } from "./system.js";
 import { createAccess, DEMO_ACTOR, SESSION_COOKIE } from "./access.js";
 import { createFeed } from "./feed.js";
-import { createPeople, WAITING_GUEST, WAITING_PLAYER } from "./people.js";
+import { createPeople, WAITING_PLAYER } from "./people.js";
 import type * as Wire from "./wire.js";
 import { feedRoutes } from "./feed-routes.js";
 import { parseBody, photoSizeLimit } from "./http.js";
@@ -668,22 +668,6 @@ export function createServer({
     io?.to(id).emit("staff");
   }
 
-  /** A stable, opaque name for a person in a Game, so the Co-hosts panel never needs their email. */
-  const personKey = (gameId: string, email: string) => createHash("sha256").update(`${gameId}\n${email}`).digest("base64url").slice(0, 16);
-  /** Enough of an email to tell two people of the same name apart: "te…@example.com". */
-  const emailHint = (email: string) => {
-    const at = email.lastIndexOf("@");
-    return `${email.slice(0, Math.min(2, at))}…${email.slice(at)}`;
-  };
-
-  /** Everyone signed in whom the Game knows: its Hosts, those who joined, posted, reacted or voted, or just opened it. */
-  function knownPeople(id: string): Set<string> {
-    const emails = new Set<string>();
-    for (const table of [gameHosts, gameVisitors, gameNames, gamePlayers, posts, postReactions, votes] as const)
-      for (const r of db.selectDistinct({ email: table.email }).from(table).where(eq(table.gameId, id)).all()) emails.add(r.email);
-    for (const e of emails) if (e.startsWith(DEMO_ACTOR)) emails.delete(e);
-    return emails;
-  }
 
   /** The Host and Co-hosts who play in the Game, and as which Player: the one the Host named, or the one they joined as. */
   const staffOf = (id: string, game: LoadedGame) => people.staffOf(id, game);
@@ -691,29 +675,7 @@ export function createServer({
   /** Everyone the Game knows, for the Host's Co-hosts panel: by name where there is one, never by email. */
   app.get("/api/games/:id/people", access.need("host", "Only the Host can appoint Co-hosts"), (c) => {
     const { id, game } = c.var.access;
-    const email = c.var.access.email!;
-    const roles = people.staff(id);
-    const names = new Map(roster(game.state).map((p) => [p.id, p.name]));
-    const list = [...knownPeople(id)].map((who) => {
-      const playerId = roles.get(who)?.playerId ?? playerOf(id, who, game) ?? null;
-      const posted = db
-        .select({ author: posts.author })
-        .from(posts)
-        .where(and(eq(posts.gameId, id), eq(posts.email, who)))
-        .orderBy(desc(posts.createdAt))
-        .get()?.author;
-      return {
-        key: personKey(id, who),
-        name: (playerId && names.get(playerId)) || nameRow(id, who)?.name || posted || null,
-        hint: emailHint(who),
-        playerId,
-        role: roles.get(who)?.role ?? null,
-        you: who === email,
-      } satisfies Wire.Person;
-    });
-    // By name; those with none yet go last, by their email hint.
-    list.sort((a, b) => (a.name === null ? 1 : 0) - (b.name === null ? 1 : 0) || (a.name ?? a.hint).localeCompare(b.name ?? b.hint));
-    return c.json({ people: list });
+    return c.json({ people: people.panel(id, game, c.var.access.email!) });
   });
 
   /** The Host switches someone's Co-host role on or off, or says which Player a Host or Co-host plays as. */
@@ -722,51 +684,23 @@ export function createServer({
     const key = c.req.param("key");
     const body = await parseBody(c, personBody);
     if (!body.ok) return body.res;
-    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
-    const who = [...knownPeople(id)].find((e) => personKey(id, e) === key);
-    if (!who) return c.json({ error: "Nobody like that in this Game" }, 404);
-    const { cohost, playsAs } = body.data;
-    const role = roleIn(id, who);
-    if (role === "host" && cohost === false) return c.json({ error: "The Host is always the Host" }, 400);
-    if (playsAs && !roster(game.state).some((p) => p.id === playsAs)) return c.json({ error: "No such Player in this Game" }, 400);
-    const staffAfter = cohost ?? role !== undefined;
-    if (playsAs !== undefined && !staffAfter) return c.json({ error: "Only a Host or Co-host plays as someone here" }, 400);
-
-    people.setStaff(id, who, { cohost, playsAs });
-    staffChanged(id);
-    return c.body(null, 204);
+    const no = people.appoint(id, key, body.data);
+    return no ? c.json({ error: no.message }, no.refused === "NotFound" ? 404 : 400) : c.body(null, 204);
   });
 
   /** Which Players are the Host or a Co-host, for their consoles to mark: they may need to step in on those turns. */
   /** Under Approve names: the names people asked for, waiting for the Host or a Co-host, with what's shown meanwhile. */
   app.get("/api/games/:id/names/pending", access.need("staff", "Only the Host and Co-hosts approve names"), (c) => {
     const { id, game } = c.var.access;
-    const rows = db
-      .select()
-      .from(gameNames)
-      .where(and(eq(gameNames.gameId, id), isNotNull(gameNames.pending)))
-      .all();
-    const pending = rows.map((r) => {
-      const playerId = playerOf(id, r.email, game) ?? null;
-      const shown = playerId ? (roster(game.state).find((p) => p.id === playerId)?.name ?? WAITING_PLAYER) : (r.name ?? WAITING_GUEST);
-      return { key: personKey(id, r.email), shown, wants: r.pending!, playerId } satisfies Wire.PendingName;
-    });
-    return c.json({ pending });
+    return c.json({ pending: people.pending(id, game) });
   });
 
   app.post("/api/games/:id/names/approve", access.need("staff", "Only the Host and Co-hosts approve names"), async (c) => {
     const { id } = c.var.access;
     const body = await parseBody(c, approveNameBody);
     if (!body.ok) return body.res;
-    const row = db
-      .select()
-      .from(gameNames)
-      .where(and(eq(gameNames.gameId, id), isNotNull(gameNames.pending)))
-      .all()
-      .find((r) => personKey(id, r.email) === body.data.key);
-    if (!row?.pending) return c.json({ error: "That name isn't waiting any more" }, 404);
-    people.rename(id, { email: row.email }, row.pending);
-    return c.body(null, 204);
+    const no = people.approve(id, body.data.key);
+    return no ? c.json({ error: no.message }, 404) : c.body(null, 204);
   });
 
   /** Someone changes their own name in a Game (a Player's or a Guest's), unless the Host or a Co-host locked it. */
@@ -788,9 +722,8 @@ export function createServer({
     const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
     const { playerId, postId, key, name, locked } = body.data;
     if (key !== undefined) {
-      const who = [...knownPeople(id)].find((e) => personKey(id, e) === key);
-      if (!who) return c.json({ error: "No such person in this Game" }, 404);
-      people.rename(id, { email: who }, name, locked);
+      const no = people.renameByKey(id, key, name, locked);
+      if (no) return c.json({ error: no.message }, 404);
     } else if (playerId !== undefined) {
       if (!roster(game.state).some((p) => p.id === playerId)) return c.json({ error: "No such Player in this Game" }, 404);
       people.rename(id, { playerId }, name, locked);

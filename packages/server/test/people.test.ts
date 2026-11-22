@@ -123,6 +123,50 @@ describe("People in a Game", () => {
     expect(people.roleIn("g", "sly@x")).toBe("cohost");
   });
 
+  describe("the Co-hosts panel", () => {
+    const keyOf = (people: ReturnType<typeof setup>["people"], game: LoadedGame, email: string) =>
+      people.panel("g", game, "host@x").find((p) => p.hint.endsWith(email.slice(email.lastIndexOf("@"))) && p.you === (email === "host@x"))!.key;
+
+    it("lists everyone the Game knows by name, never by email, the Host marked as you", () => {
+      const { people, game, joinAs } = setup();
+      joinAs("ann", "ann@x");
+      const panel = people.panel("g", game(), "host@x");
+      expect(panel.map((p) => [p.name, p.role, p.you])).toEqual([
+        ["Ann", null, false],
+        [null, "host", true],
+      ]);
+      expect(JSON.stringify(panel)).not.toContain("ann@x");
+    });
+
+    it("lets the Host play as a Player, keeps the Host the Host, and lets only the Staff play as someone", () => {
+      const { people, game, joinAs } = setup();
+      joinAs("ann", "ann@x");
+      const host = keyOf(people, game(), "host@x");
+      const ann = people.panel("g", game(), "host@x").find((p) => p.name === "Ann")!.key;
+
+      expect(people.appoint("g", host, { playsAs: "hal" })).toBeNull();
+      expect(people.staffOf("g", game())).toEqual([{ email: "host@x", playerId: "hal", role: "host" }]);
+      expect(people.appoint("g", host, { cohost: false })).toMatchObject({ refused: "Invalid", message: "The Host is always the Host" });
+      expect(people.appoint("g", ann, { playsAs: "bob" })).toMatchObject({ refused: "Invalid" });
+      expect(people.appoint("g", ann, { playsAs: "zed", cohost: true })).toMatchObject({ refused: "Invalid" });
+      expect(people.appoint("g", "nobody", { cohost: true })).toMatchObject({ refused: "NotFound" });
+      expect(people.appoint("g", ann, { cohost: true })).toBeNull();
+      expect(people.roleIn("g", "ann@x")).toBe("cohost");
+    });
+
+    it("approves a waiting name by its key, once", () => {
+      const { people, store } = setup();
+      store.change("g", () => ({ approveNames: true }));
+      people.changeMyName("g", "gus@x", "Gus");
+      const [waiting] = people.pending("g", store.get("g")!);
+      expect(waiting).toMatchObject({ shown: "Guest", wants: "Gus", playerId: null });
+
+      expect(people.approve("g", waiting!.key)).toBeNull();
+      expect(people.approve("g", waiting!.key)).toMatchObject({ refused: "NotFound" });
+      expect(people.pending("g", store.get("g")!)).toEqual([]);
+    });
+  });
+
   describe("Names", () => {
     it("posts a Player under their Roster name, and a Guest under the name they give, theirs from then on", () => {
       const { people, joinAs } = setup();

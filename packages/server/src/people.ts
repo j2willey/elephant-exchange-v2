@@ -1,7 +1,21 @@
+import { createHash } from "node:crypto";
 import type { Command } from "@elephant/rules";
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { DEMO_ACTOR, type Role } from "./access.js";
-import { gameHosts, gameNames, gamePlayers, type Db, type Tx } from "./db.js";
+import { gameHosts, gameNames, gamePlayers, gameVisitors, postReactions, posts, votes, type Db, type Tx } from "./db.js";
+import type { PendingName, Person } from "./wire.js";
+
+/** Why People said no: no such person (or Player) here, or a change that can't be made. */
+export type PeopleRefusal = { refused: "NotFound" | "Invalid"; message: string };
+const refuse = (refused: PeopleRefusal["refused"], message: string): PeopleRefusal => ({ refused, message });
+
+/** A stable, opaque name for a person in a Game, so the Co-hosts panel never needs their email. */
+const personKey = (gameId: string, email: string) => createHash("sha256").update(`${gameId}\n${email}`).digest("base64url").slice(0, 16);
+/** Enough of an email to tell two people of the same name apart: "te…@example.com". */
+const emailHint = (email: string) => {
+  const at = email.lastIndexOf("@");
+  return `${email.slice(0, Math.min(2, at))}…${email.slice(at)}`;
+};
 
 /** What others see in place of a name that's waiting for approval. */
 export const WAITING_PLAYER = "New player";
@@ -113,6 +127,21 @@ export function createPeople<G>(deps: {
   /** Emails of everyone who joined as (or stands in for) a Player. */
   const playerEmails = (gameId: string): string[] => [...of(gameId).players.keys()];
 
+  /**
+   * Makes someone a Co-host (switching it off again for a Co-host, never for the Host), and says which Player a
+   * Host or Co-host plays as. Both or either.
+   */
+  const setStaff = (gameId: string, email: string, change: { cohost?: boolean | undefined; playsAs?: string | null | undefined }) =>
+    writing(gameId, () =>
+      db.transaction((tx) => {
+        const role = of(gameId).staff.get(email)?.role;
+        const at = and(eq(gameHosts.gameId, gameId), eq(gameHosts.email, email));
+        if (change.cohost === true && !role) tx.insert(gameHosts).values({ gameId, email, role: "cohost" }).run();
+        if (change.cohost === false && role === "cohost") tx.delete(gameHosts).where(at).run();
+        if (change.playsAs !== undefined) tx.update(gameHosts).set({ playerId: change.playsAs }).where(at).run();
+      }),
+    );
+
   const nameQuery = db
     .select()
     .from(gameNames)
@@ -209,7 +238,101 @@ export function createPeople<G>(deps: {
     return "renamed";
   }
 
+  /** Everyone signed in whom the Game knows: its Hosts, those who joined, posted, reacted or voted, or just opened it. */
+  function knownPeople(gameId: string): Set<string> {
+    const emails = new Set<string>();
+    for (const table of [gameHosts, gameVisitors, gameNames, gamePlayers, posts, postReactions, votes] as const)
+      for (const r of db.selectDistinct({ email: table.email }).from(table).where(eq(table.gameId, gameId)).all()) emails.add(r.email);
+    for (const e of emails) if (e.startsWith(DEMO_ACTOR)) emails.delete(e);
+    return emails;
+  }
+
+  /** The email behind a person's key in the Game's Co-hosts panel, if there's such a person. */
+  const byKey = (gameId: string, key: string): string | undefined => [...knownPeople(gameId)].find((e) => personKey(gameId, e) === key);
+
+  /** Everyone the Game knows, for the Host's Co-hosts panel: by name where there is one, never by email. */
+  function panel(gameId: string, game: G, viewerEmail: string): Person[] {
+    const roles = staff(gameId);
+    const list = [...knownPeople(gameId)].map((who): Person => {
+      const playerId = roles.get(who)?.playerId ?? playerOf(gameId, who, game) ?? null;
+      const posted = db
+        .select({ author: posts.author })
+        .from(posts)
+        .where(and(eq(posts.gameId, gameId), eq(posts.email, who)))
+        .orderBy(desc(posts.createdAt))
+        .get()?.author;
+      return {
+        key: personKey(gameId, who),
+        name: (playerId && playerName(game, playerId)) || nameRow(gameId, who)?.name || posted || null,
+        hint: emailHint(who),
+        playerId,
+        role: roles.get(who)?.role ?? null,
+        you: who === viewerEmail,
+      };
+    });
+    // By name; those with none yet go last, by their email hint.
+    return list.sort((a, b) => (a.name === null ? 1 : 0) - (b.name === null ? 1 : 0) || (a.name ?? a.hint).localeCompare(b.name ?? b.hint));
+  }
+
+  /**
+   * The Host switches someone's Co-host role on or off, or says which Player a Host or Co-host plays as (the Host
+   * plays too, most often). The Host is always the Host, and only the Staff play as someone here.
+   */
+  function appoint(gameId: string, key: string, change: { cohost?: boolean | undefined; playsAs?: string | null | undefined }): PeopleRefusal | null {
+    const who = byKey(gameId, key);
+    if (!who) return refuse("NotFound", "Nobody like that in this Game");
+    const { cohost, playsAs } = change;
+    const role = roleIn(gameId, who);
+    if (role === "host" && cohost === false) return refuse("Invalid", "The Host is always the Host");
+    if (playsAs && !rosterIds(latest(gameId)).includes(playsAs)) return refuse("Invalid", "No such Player in this Game");
+    const staffAfter = cohost ?? role !== undefined;
+    if (playsAs !== undefined && !staffAfter) return refuse("Invalid", "Only a Host or Co-host plays as someone here");
+    setStaff(gameId, who, { cohost, playsAs });
+    staffChanged(gameId);
+    return null;
+  }
+
+  /** Under Approve names: the names people asked for, waiting for the Staff, with what's shown meanwhile. */
+  function pending(gameId: string, game: G): PendingName[] {
+    return db
+      .select()
+      .from(gameNames)
+      .where(and(eq(gameNames.gameId, gameId), isNotNull(gameNames.pending)))
+      .all()
+      .map((r) => {
+        const playerId = playerOf(gameId, r.email, game) ?? null;
+        const shown = playerId ? (playerName(game, playerId) ?? WAITING_PLAYER) : (r.name ?? WAITING_GUEST);
+        return { key: personKey(gameId, r.email), shown, wants: r.pending!, playerId };
+      });
+  }
+
+  /** The Staff approve the name someone asked for: it's theirs, everywhere. */
+  function approve(gameId: string, key: string): PeopleRefusal | null {
+    const row = db
+      .select()
+      .from(gameNames)
+      .where(and(eq(gameNames.gameId, gameId), isNotNull(gameNames.pending)))
+      .all()
+      .find((r) => personKey(gameId, r.email) === key);
+    if (!row?.pending) return refuse("NotFound", "That name isn't waiting any more");
+    rename(gameId, { email: row.email }, row.pending);
+    return null;
+  }
+
+  /** The Staff rename someone found by their key in the Co-hosts panel, and lock the name or not. */
+  function renameByKey(gameId: string, key: string, name: string, locked?: boolean): PeopleRefusal | null {
+    const who = byKey(gameId, key);
+    if (!who) return refuse("NotFound", "No such person in this Game");
+    rename(gameId, { email: who }, name, locked);
+    return null;
+  }
+
   return {
+    panel,
+    appoint,
+    pending,
+    approve,
+    renameByKey,
     nameRow,
     nameIn,
     needsApproval,
@@ -228,20 +351,7 @@ export function createPeople<G>(deps: {
     addHost: (tx: Tx, gameId: string, email: string) =>
       writing(gameId, () => tx.insert(gameHosts).values({ gameId, email, role: "host" }).run()),
 
-    /**
-     * Makes someone a Co-host (switching it off again for a Co-host, never for the Host), and says which Player a
-     * Host or Co-host plays as. Both or either.
-     */
-    setStaff: (gameId: string, email: string, change: { cohost?: boolean | undefined; playsAs?: string | null | undefined }) =>
-      writing(gameId, () =>
-        db.transaction((tx) => {
-          const role = of(gameId).staff.get(email)?.role;
-          const at = and(eq(gameHosts.gameId, gameId), eq(gameHosts.email, email));
-          if (change.cohost === true && !role) tx.insert(gameHosts).values({ gameId, email, role: "cohost" }).run();
-          if (change.cohost === false && role === "cohost") tx.delete(gameHosts).where(at).run();
-          if (change.playsAs !== undefined) tx.update(gameHosts).set({ playerId: change.playsAs }).where(at).run();
-        }),
-      ),
+    setStaff,
 
     /** The Host appoints a Co-host by email (who may not have opened the Game yet), playing as a Player or not. */
     addCohost: (gameId: string, email: string, playsAs: string | undefined) =>
