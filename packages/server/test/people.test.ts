@@ -1,32 +1,57 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { DEMO_ACTOR } from "../src/access.js";
-import { gameHosts, games, openDb } from "../src/db.js";
+import { gameHosts, games, openDb, posts } from "../src/db.js";
+import { createFeed } from "../src/feed.js";
+import { createGameStore, type LoadedGame } from "../src/game-store.js";
 import { createPeople } from "../src/people.js";
+import { photoStore } from "../src/photos.js";
+import { roster } from "@elephant/rules";
 
-type FakeGame = { roster: string[] };
-
-/** People on a fresh database with one Game, "g", hosted by host@x; Ann, Bob and the Host's own Player "hal" on its Roster. */
+/**
+ * People on a fresh database with one Game, "g", hosted by host@x, with Ann, Bob and the Host's own Player Hal on
+ * its Roster. Signals are recorded; `fresh()` is People on the same database read afresh, as after a restart.
+ */
 function setup() {
   const db = openDb(":memory:");
-  const game: FakeGame = { roster: ["ann", "bob", "hal"] };
-  const people = createPeople<FakeGame>({ db, rosterOf: (g) => g.roster });
+  const now = () => new Date();
+  const store = createGameStore({ db, now, draw: (c) => c[0]!, orgTheme: () => null });
+  const feed = createFeed({ db, now, store, photos: photoStore(mkdtempSync(join(tmpdir(), "people-test-"))), signal: () => undefined, signalMs: 0 });
+  const signals: string[] = [];
+  const make = () =>
+    createPeople<LoadedGame>({
+      db,
+      rosterOf: (game) => roster(game.state),
+      latest: (id) => store.get(id)!,
+      approveNames: (game) => game.approveNames,
+      command: (id, cmd, alsoWrite) => store.command(id, cmd, alsoWrite),
+      renameAuthor: feed.renameAuthor,
+      postsChanged: (id) => (feed.changed(id), signals.push("posts")),
+      staffChanged: () => void signals.push("staff"),
+    });
+  const people = make();
   db.transaction((tx) => {
-    tx.insert(games).values({ id: "g", settings: "{}", createdAt: new Date() }).run();
+    tx.insert(games).values({ id: "g", settings: JSON.stringify({ activeSlots: 1, maxSteals: 3 }), createdAt: new Date() }).run();
     people.addHost(tx, "g", "host@x");
   });
-  /** The same database, read afresh: what a restarted server would know. */
-  const fresh = () => createPeople<FakeGame>({ db, rosterOf: (g) => g.roster });
-  return { db, game, people, fresh };
+  for (const [id, name] of [["ann", "Ann"], ["bob", "Bob"], ["hal", "Hal"]]) store.command("g", { type: "AddPlayer", playerId: id!, name: name! });
+  const game = () => store.get("g")!;
+  const joinAs = (playerId: string, email: string) => db.transaction((tx) => people.linkPlayer(tx, "g", playerId, email));
+  return { db, store, feed, people, signals, game, joinAs, fresh: make };
 }
 
 describe("People in a Game", () => {
   it("knows the Host, and lets them play as a Player with a turn like anyone's", () => {
-    const { game, people, fresh } = setup();
+    const { people, game, fresh, store } = setup();
     people.setStaff("g", "host@x", { playsAs: "hal" });
 
     expect(people.roleIn("g", "host@x")).toBe("host");
-    expect(people.staffOf("g", game)).toEqual([{ email: "host@x", playerId: "hal", role: "host" }]);
-    expect(fresh().staffOf("g", game)).toEqual(people.staffOf("g", game));
+    expect(people.staffOf("g", game())).toEqual([{ email: "host@x", playerId: "hal", role: "host" }]);
+    expect(fresh().staffOf("g", game())).toEqual(people.staffOf("g", game()));
+    store.command("g", { type: "StartGame" });
+    expect(game().state.active).toEqual(["ann"]); // the Host's Hal waits for their turn like Ann and Bob
   });
 
   it("makes someone a Co-host and takes it away again, but the Host stays the Host", () => {
@@ -44,48 +69,49 @@ describe("People in a Game", () => {
   });
 
   it("appoints a Co-host by email who plays as a Player, and marks them with the Player", () => {
-    const { game, people, fresh } = setup();
+    const { people, game, fresh } = setup();
     people.addCohost("g", "pat@x", "bob");
-    expect(people.staffOf("g", game)).toContainEqual({ email: "pat@x", playerId: "bob", role: "cohost" });
+    expect(people.staffOf("g", game())).toContainEqual({ email: "pat@x", playerId: "bob", role: "cohost" });
     expect(fresh().roleIn("g", "pat@x")).toBe("cohost");
   });
 
   it("knows who joined as which Player, only while that Player is on the Roster", () => {
-    const { db, game, people, fresh } = setup();
-    db.transaction((tx) => people.linkPlayer(tx, "g", "ann", "ann@x"));
-
-    expect(people.playerOf("g", "ann@x", game)).toBe("ann");
+    const { people, game, fresh, joinAs, store } = setup();
+    joinAs("ann", "ann@x");
+    expect(people.playerOf("g", "ann@x", game())).toBe("ann");
     expect(people.emailOfPlayer("g", "ann")).toBe("ann@x");
-    expect(fresh().playerOf("g", "ann@x", game)).toBe("ann");
-    expect(people.playerOf("g", "ann@x", { roster: ["bob"] })).toBeUndefined();
+    expect(fresh().playerOf("g", "ann@x", game())).toBe("ann");
+
+    store.command("g", { type: "RemovePlayer", playerId: "ann" });
+    expect(people.playerOf("g", "ann@x", game())).toBeUndefined();
   });
 
   it("moves someone who joins again to their new Player", () => {
-    const { db, game, people } = setup();
-    db.transaction((tx) => people.linkPlayer(tx, "g", "ann", "ann@x"));
-    db.transaction((tx) => people.linkPlayer(tx, "g", "bob", "ann@x"));
-    expect(people.playerOf("g", "ann@x", game)).toBe("bob");
+    const { people, game, joinAs } = setup();
+    joinAs("ann", "ann@x");
+    joinAs("bob", "ann@x");
+    expect(people.playerOf("g", "ann@x", game())).toBe("bob");
     expect(people.emailOfPlayer("g", "ann")).toBeUndefined();
   });
 
   it("knows a demo stand-in identity as its Player", () => {
-    const { game, people } = setup();
-    expect(people.playerOf("g", `${DEMO_ACTOR}bob`, game)).toBe("bob");
-    expect(people.playerOf("g", `${DEMO_ACTOR}zed`, game)).toBeUndefined();
+    const { people, game } = setup();
+    expect(people.playerOf("g", `${DEMO_ACTOR}bob`, game())).toBe("bob");
+    expect(people.playerOf("g", `${DEMO_ACTOR}zed`, game())).toBeUndefined();
   });
 
   it("isn't left believing a write that was rolled back", () => {
-    const { db, game, people } = setup();
+    const { db, people, game } = setup();
     people.roleIn("g", "host@x"); // the Game's people are now in memory
     expect(() =>
       db.transaction((tx) => {
         people.linkPlayer(tx, "g", "ann", "ann@x");
-        expect(people.playerOf("g", "ann@x", game)).toBe("ann"); // seen inside the transaction
+        expect(people.playerOf("g", "ann@x", game())).toBe("ann"); // seen inside the transaction
         throw new Error("the Pick was refused");
       }),
     ).toThrow();
     people.changed("g");
-    expect(people.playerOf("g", "ann@x", game)).toBeUndefined();
+    expect(people.playerOf("g", "ann@x", game())).toBeUndefined();
   });
 
   it("reads a Game's people once, until they change", () => {
@@ -95,5 +121,52 @@ describe("People in a Game", () => {
     expect(people.roleIn("g", "sly@x")).toBeUndefined(); // still the copy in memory
     people.changed("g");
     expect(people.roleIn("g", "sly@x")).toBe("cohost");
+  });
+
+  describe("Names", () => {
+    it("posts a Player under their Roster name, and a Guest under the name they give, theirs from then on", () => {
+      const { people, joinAs } = setup();
+      joinAs("ann", "ann@x");
+      expect(people.nameToPostAs("g", "ann@x", "Queen Ann")?.author).toBe("Ann");
+      expect(people.nameToPostAs("g", "gus@x", undefined)).toBeUndefined();
+
+      const gus = people.nameToPostAs("g", "gus@x", "Gus")!;
+      expect(gus.author).toBe("Gus");
+      gus.settle();
+      expect(people.nameToPostAs("g", "gus@x", undefined)?.author).toBe("Gus");
+    });
+
+    it("under Approve names, holds a Guest's new name and posts them as Guest until the Staff approve it", () => {
+      const { people, store, signals } = setup();
+      store.change("g", () => ({ approveNames: true }));
+      const gus = people.nameToPostAs("g", "gus@x", "Gus")!;
+      expect(gus.author).toBe("Guest");
+      gus.settle();
+      expect(people.nameIn("g", "gus@x", store.get("g")!)).toEqual({ name: null, locked: false, pending: "Gus" });
+      expect(signals).toContain("staff");
+
+      people.rename("g", { email: "gus@x" }, "Gus");
+      expect(people.nameIn("g", "gus@x", store.get("g")!)).toEqual({ name: "Gus", locked: false, pending: null });
+      expect(people.needsApproval("g", "host@x", store.get("g")!)).toBe(false); // the Staff's never wait
+    });
+
+    it("renames a Player on the Roster and on every Post they made, and a locked name can't be changed back", () => {
+      const { db, people, game, joinAs } = setup();
+      joinAs("ann", "ann@x");
+      db.insert(posts).values({ id: "p1", gameId: "g", email: "ann@x", author: "Ann", text: "Hi", status: "visible", createdAt: new Date() }).run();
+
+      people.rename("g", { playerId: "ann" }, "Annie", true);
+      expect(roster(game().state).find((p) => p.id === "ann")?.name).toBe("Annie");
+      expect(db.select({ author: posts.author }).from(posts).all()).toEqual([{ author: "Annie" }]);
+      expect(people.changeMyName("g", "ann@x", "Ann")).toBe("locked");
+    });
+
+    it("lets someone change their own name, or holds it under Approve names", () => {
+      const { people, store } = setup();
+      expect(people.changeMyName("g", "gus@x", "Gus")).toBe("renamed");
+      store.change("g", () => ({ approveNames: true }));
+      expect(people.changeMyName("g", "gus@x", "Gussie")).toBe("held");
+      expect(people.nameIn("g", "gus@x", store.get("g")!)).toEqual({ name: "Gus", locked: false, pending: "Gussie" });
+    });
   });
 });

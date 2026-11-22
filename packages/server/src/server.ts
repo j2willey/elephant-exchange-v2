@@ -24,7 +24,7 @@ import { Server as SocketServer } from "socket.io";
 import { diskOf, healthWarnings, lastBackupAt, memoryLimit, type ServerHealth } from "./system.js";
 import { createAccess, DEMO_ACTOR, SESSION_COOKIE } from "./access.js";
 import { createFeed } from "./feed.js";
-import { createPeople } from "./people.js";
+import { createPeople, WAITING_GUEST, WAITING_PLAYER } from "./people.js";
 import type * as Wire from "./wire.js";
 import { feedRoutes } from "./feed-routes.js";
 import { parseBody, photoSizeLimit } from "./http.js";
@@ -267,7 +267,16 @@ export function createServer({
     }
   }
   /** People in a Game: who someone is there, and their role (people.ts). */
-  const people = createPeople<LoadedGame>({ db, rosterOf: (game) => roster(game.state).map((p) => p.id) });
+  const people = createPeople<LoadedGame>({
+    db,
+    rosterOf: (game) => roster(game.state),
+    latest: (id) => load(id)!,
+    approveNames: (game) => game.approveNames,
+    command: (id, cmd, alsoWrite) => run(id, cmd, alsoWrite),
+    renameAuthor: (tx, id, email, name) => feed.renameAuthor(tx, id, email, name),
+    postsChanged: (id) => postsChanged(id),
+    staffChanged: (id) => staffChanged(id),
+  });
   /** Game access (access.ts): who is asking about a Game, and whether they may. */
   const access = createAccess<LoadedGame>({
     sessionEmail: (token) => auth.sessionEmail(token),
@@ -277,7 +286,7 @@ export function createServer({
   });
   /** Who is asking: the signed-in person, or the made-up Player a demo page's sample phone is. */
   const signedInAs = access.emailOf;
-  const { roleIn, playerOf, emailOfPlayer } = people;
+  const { roleIn, playerOf, nameRow, nameIn, needsApproval } = people;
   /** Every Game a request asks for, and every change to one (game-store.ts). */
   const store = createGameStore({ db, now, draw, orgTheme: (orgId) => orgTheme(orgId) });
   const load = (id: string) => store.get(id);
@@ -306,91 +315,11 @@ export function createServer({
     }
   }
 
-  const nameQuery = db
-    .select()
-    .from(gameNames)
-    .where(and(eq(gameNames.gameId, sql.placeholder("gameId")), eq(gameNames.email, sql.placeholder("email"))))
-    .prepare();
-  function nameRow(gameId: string, email: string) {
-    return nameQuery.get({ gameId, email });
-  }
 
-  /** The name someone goes by in a Game (a Player's roster name, or a Guest's), and whether it's locked. */
-  function nameIn(gameId: string, email: string, game: LoadedGame): { name: string | null; locked: boolean; pending: string | null } {
-    const playerId = playerOf(gameId, email, game);
-    const row = nameRow(gameId, email);
-    const name = playerId ? (roster(game.state).find((p) => p.id === playerId)?.name ?? null) : (row?.name ?? null);
-    return { name, locked: row?.locked ?? false, pending: row?.pending ?? null };
-  }
 
-  /** What others see in place of a name that's waiting for approval. */
-  const WAITING_PLAYER = "New player";
-  const WAITING_GUEST = "Guest";
 
-  /** Under Approve names, whether a name this person picks for themselves waits for a Host or Co-host. */
-  function needsApproval(gameId: string, email: string, game: LoadedGame): boolean {
-    return game.approveNames && !roleIn(gameId, email);
-  }
 
-  /** Puts the name someone asked for aside until a Host or Co-host approves it, and tells their screens. */
-  function holdName(gameId: string, email: string, wants: string) {
-    db.insert(gameNames)
-      .values({ gameId, email, pending: wants })
-      .onConflictDoUpdate({ target: [gameNames.gameId, gameNames.email], set: { pending: wants } })
-      .run();
-    staffChanged(gameId);
-  }
 
-  /**
-   * Gives someone a new name everywhere: on the roster if they're a Player, and on every Post they've made, so an
-   * unkind name doesn't linger in the Feed. `locked` (set by the Host or a Co-host) says whether its owner may change
-   * it again; left out, it stays as it was.
-   */
-  function renamePerson(id: string, game: LoadedGame, who: { email?: string; playerId?: string }, name: string, locked?: boolean) {
-    const playerId = who.playerId ?? (who.email ? playerOf(id, who.email, game) : undefined);
-    const email = who.email ?? (playerId ? emailOfPlayer(id, playerId) : undefined);
-    const write = (tx: Tx) => {
-      if (!email) return;
-      const guestName = playerId ? null : name;
-      tx.insert(gameNames)
-        .values({ gameId: id, email, name: guestName, locked: locked ?? false })
-        .onConflictDoUpdate({ target: [gameNames.gameId, gameNames.email], set: { name: guestName, pending: null, ...(locked === undefined ? {} : { locked }) } })
-        .run();
-      tx.update(posts).set({ author: name }).where(and(eq(posts.gameId, id), eq(posts.email, email))).run();
-    };
-    if (playerId) run(id, { type: "RenamePlayer", playerId, name }, write);
-    else db.transaction(write);
-    if (email) {
-      postsChanged(id);
-      staffChanged(id); // it may have settled a name that was waiting
-    }
-  }
-
-  /**
-   * The name someone's Post goes up under: a Player's own; a Guest's name in this Game, which they give (or change)
-   * by posting unless the Staff locked it. Under Approve names a new name waits, and they post as the old one (or
-   * as "Guest") until it's approved. `settle` makes a new or changed name theirs (on earlier Posts too), once the
-   * Post is going ahead. Undefined if a Guest gives no name and has none.
-   */
-  function nameToPostAs(id: string, email: string, asked: string | undefined): { author: string; settle: () => void } | undefined {
-    const game = load(id)!;
-    const playerId = playerOf(id, email, game);
-    const saved = playerId ? undefined : nameRow(id, email);
-    const fixed = saved?.locked && saved.name ? saved.name : undefined;
-    const wants = playerId || fixed ? undefined : asked;
-    const held = wants !== undefined && wants !== saved?.name && needsApproval(id, email, game);
-    const waiting = saved?.name ?? WAITING_GUEST;
-    const author = playerId
-      ? roster(game.state).find((p) => p.id === playerId)!.name
-      : (fixed ?? (held ? waiting : (wants ?? saved?.name ?? (saved?.pending ? waiting : undefined))));
-    if (!author) return undefined;
-    const settle = () => {
-      if (held) {
-        if (wants !== saved?.pending) holdName(id, email, wants);
-      } else if (!playerId && author !== saved?.name && author !== WAITING_GUEST) renamePerson(id, load(id)!, { email }, author);
-    };
-    return { author, settle };
-  }
 
   /**
    * Decides a command against the latest copy of the Game, logs its events and tells every screen (see the Game
@@ -829,7 +758,6 @@ export function createServer({
     const { id } = c.var.access;
     const body = await parseBody(c, approveNameBody);
     if (!body.ok) return body.res;
-    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
     const row = db
       .select()
       .from(gameNames)
@@ -837,7 +765,7 @@ export function createServer({
       .all()
       .find((r) => personKey(id, r.email) === body.data.key);
     if (!row?.pending) return c.json({ error: "That name isn't waiting any more" }, 404);
-    renamePerson(id, game, { email: row.email }, row.pending);
+    people.rename(id, { email: row.email }, row.pending);
     return c.body(null, 204);
   });
 
@@ -847,14 +775,9 @@ export function createServer({
     const email = c.var.access.email!;
     const body = await parseBody(c, joinBody);
     if (!body.ok) return body.res;
-    const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
-    if (nameRow(id, email)?.locked) return c.json({ code: "NameLocked", message: "Your Host set this name" }, 409);
-    if (needsApproval(id, email, game)) {
-      holdName(id, email, body.data.name);
-      return c.body(null, 202); // accepted, waiting for approval
-    }
-    renamePerson(id, game, { email }, body.data.name);
-    return c.body(null, 204);
+    const changed = people.changeMyName(id, email, body.data.name);
+    if (changed === "locked") return c.json({ code: "NameLocked", message: "Your Host set this name" }, 409);
+    return c.body(null, changed === "held" ? 202 : 204); // 202: accepted, waiting for approval
   });
 
   /** The Host or a Co-host renames someone, found by their Player or one of their Posts, and locks the name or not. */
@@ -867,10 +790,10 @@ export function createServer({
     if (key !== undefined) {
       const who = [...knownPeople(id)].find((e) => personKey(id, e) === key);
       if (!who) return c.json({ error: "No such person in this Game" }, 404);
-      renamePerson(id, game, { email: who }, name, locked);
+      people.rename(id, { email: who }, name, locked);
     } else if (playerId !== undefined) {
       if (!roster(game.state).some((p) => p.id === playerId)) return c.json({ error: "No such Player in this Game" }, 404);
-      renamePerson(id, game, { playerId }, name, locked);
+      people.rename(id, { playerId }, name, locked);
     } else {
       const by = db
         .select({ email: posts.email })
@@ -878,7 +801,7 @@ export function createServer({
         .where(and(eq(posts.gameId, id), eq(posts.id, postId!)))
         .get();
       if (!by) return c.json({ error: "No such Post in this Game" }, 404);
-      renamePerson(id, game, { email: by.email }, name, locked);
+      people.rename(id, { email: by.email }, name, locked);
     }
     return c.body(null, 204);
   });
@@ -974,7 +897,7 @@ export function createServer({
   });
 
   // The Feed: its Posts, Pitches, Reactions, Photos and their moderation (feed-routes.ts).
-  app.route("/", feedRoutes({ access, feed, photos, now, nameToPostAs, noteFeature: (id, feature) => stats.noteFeature(id, feature) }));
+  app.route("/", feedRoutes({ access, feed, photos, now, nameToPostAs: people.nameToPostAs, noteFeature: (id, feature) => stats.noteFeature(id, feature) }));
 
   // Organizations: anyone signed in may create one, and is then its Organizer, the only one who can change it.
   const orgView = (o: OrgTheme): Wire.MyOrg => ({

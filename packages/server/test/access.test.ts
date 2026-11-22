@@ -22,7 +22,16 @@ function setup() {
     db.insert(gameHosts).values([{ gameId: id, email: "host@x", role: "host" }, { gameId: id, email: "co@x", role: "cohost" }]).run();
     db.insert(gamePlayers).values({ gameId: id, playerId: "pam", email: "pam@x" }).run();
   }
-  const people = createPeople<FakeGame>({ db, rosterOf: (game) => game.roster });
+  const people = createPeople<FakeGame>({
+    db,
+    rosterOf: (game) => game.roster.map((id) => ({ id, name: id })),
+    latest: (id) => fakeGames[id]!,
+    approveNames: () => false,
+    command: () => undefined,
+    renameAuthor: () => undefined,
+    postsChanged: () => undefined,
+    staffChanged: () => undefined,
+  });
   const access = createAccess<FakeGame>({
     sessionEmail: (token) => token,
     load: (id) => fakeGames[id],

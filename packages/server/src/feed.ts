@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { gifts, phase, roster } from "@elephant/rules";
 import { and, asc, desc, eq, gt, inArray, isNotNull, sql } from "drizzle-orm";
-import { gameNames, postReactions, posts, type Db } from "./db.js";
+import { gameNames, postReactions, posts, type Db, type Tx } from "./db.js";
 import type { GameStore } from "./game-store.js";
 import type { photoStore } from "./photos.js";
 import { REACTIONS } from "./schemas.js";
@@ -506,6 +506,10 @@ export function createFeed(deps: {
       .orderBy(asc(posts.createdAt), asc(sql`${posts}.rowid`))
       .all();
 
+  /** Puts a person's new name on everything they posted, in the caller's transaction; the caller then says it `changed`. */
+  const renameAuthor = (tx: Tx, id: string, email: string, name: string) =>
+    void tx.update(posts).set({ author: name }).where(and(eq(posts.gameId, id), eq(posts.email, email))).run();
+
   /** Lets go of a Game's shared copy (the database keeps it). */
   const forget = (id: string) => void feeds.delete(id);
 
@@ -522,6 +526,7 @@ export function createFeed(deps: {
     mute,
     photoFor,
     album,
+    renameAuthor,
     changed,
     forget,
     /** The Games with a shared copy in memory. */

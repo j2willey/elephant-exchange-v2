@@ -1,6 +1,18 @@
+import type { Command } from "@elephant/rules";
 import { and, eq, sql } from "drizzle-orm";
 import { DEMO_ACTOR, type Role } from "./access.js";
-import { gameHosts, gamePlayers, type Db, type Tx } from "./db.js";
+import { gameHosts, gameNames, gamePlayers, type Db, type Tx } from "./db.js";
+
+/** What others see in place of a name that's waiting for approval. */
+export const WAITING_PLAYER = "New player";
+export const WAITING_GUEST = "Guest";
+
+/** The name someone goes by in a Game (null until a Guest gives one), whether the Staff locked it, and one waiting. */
+export interface MyName {
+  name: string | null;
+  locked: boolean;
+  pending: string | null;
+}
 
 /** Who someone is in one Game, as kept in memory: the Staff with the Player each plays as, and who joined as which Player. */
 interface GamePeople {
@@ -19,10 +31,22 @@ interface GamePeople {
  */
 export function createPeople<G>(deps: {
   db: Db;
-  /** The ids of the Players on a Game's Roster. */
-  rosterOf: (game: G) => readonly string[];
+  /** The Players on a Game's Roster. */
+  rosterOf: (game: G) => readonly { id: string; name: string }[];
+  /** The Game as it stands now (it must exist). */
+  latest: (gameId: string) => G;
+  /** Whether the Host has switched on Approve names. */
+  approveNames: (game: G) => boolean;
+  /** Logs a command for the Game, with `alsoWrite` in the same transaction (the Game store). */
+  command: (gameId: string, cmd: Command, alsoWrite: (tx: Tx) => void) => unknown;
+  /** Puts a new name on everything this person posted (the Feed). */
+  renameAuthor: (tx: Tx, gameId: string, email: string, name: string) => void;
+  /** Tell the screens watching: the Feed changed; the Staff (or a waiting name) changed. */
+  postsChanged: (gameId: string) => void;
+  staffChanged: (gameId: string) => void;
 }) {
-  const { db, rosterOf } = deps;
+  const { db, latest, approveNames, command, renameAuthor, postsChanged, staffChanged } = deps;
+  const rosterIds = (game: G) => deps.rosterOf(game).map((p) => p.id);
   const known = new Map<string, GamePeople>();
 
   const staffQuery = db
@@ -66,7 +90,7 @@ export function createPeople<G>(deps: {
   /** The Player this person signed up as (or a demo stand-in is), if they did and are still on the Roster. */
   function playerOf(gameId: string, email: string, game: G): string | undefined {
     const playerId = email.startsWith(DEMO_ACTOR) ? email.slice(DEMO_ACTOR.length) : of(gameId).players.get(email);
-    return playerId !== undefined && rosterOf(game).includes(playerId) ? playerId : undefined;
+    return playerId !== undefined && rosterIds(game).includes(playerId) ? playerId : undefined;
   }
 
   /** The person behind a Player who signed up themselves (or a demo stand-in); none for a Player the Host typed in. */
@@ -77,7 +101,7 @@ export function createPeople<G>(deps: {
 
   /** The Host and Co-hosts who play in the Game, and as which Player: the one the Host named, or the one they joined as. */
   function staffOf(gameId: string, game: G): { email: string; playerId: string; role: Role }[] {
-    const inRoster = new Set(rosterOf(game));
+    const inRoster = new Set(rosterIds(game));
     return [...of(gameId).staff].flatMap(([email, h]) => {
       const playerId = h.playerId ?? playerOf(gameId, email, game);
       return playerId && inRoster.has(playerId) ? [{ email, playerId, role: h.role }] : [];
@@ -89,7 +113,110 @@ export function createPeople<G>(deps: {
   /** Emails of everyone who joined as (or stands in for) a Player. */
   const playerEmails = (gameId: string): string[] => [...of(gameId).players.keys()];
 
+  const nameQuery = db
+    .select()
+    .from(gameNames)
+    .where(and(eq(gameNames.gameId, sql.placeholder("gameId")), eq(gameNames.email, sql.placeholder("email"))))
+    .prepare();
+  /** What's kept about this person's name in the Game: a Guest's name, one waiting, locked, Muted. */
+  const nameRow = (gameId: string, email: string) => nameQuery.get({ gameId, email });
+
+  const playerName = (game: G, playerId: string) => deps.rosterOf(game).find((p) => p.id === playerId)?.name;
+
+  /** The name someone goes by in a Game (a Player's Roster name, or a Guest's), and whether it's locked. */
+  function nameIn(gameId: string, email: string, game: G): MyName {
+    const playerId = playerOf(gameId, email, game);
+    const row = nameRow(gameId, email);
+    const name = playerId ? (playerName(game, playerId) ?? null) : (row?.name ?? null);
+    return { name, locked: row?.locked ?? false, pending: row?.pending ?? null };
+  }
+
+  /** Under Approve names, whether a name this person picks for themselves waits for the Staff (theirs never do). */
+  const needsApproval = (gameId: string, email: string, game: G): boolean => approveNames(game) && !roleIn(gameId, email);
+
+  /** Puts the name someone asked for aside until the Staff approve it, and tells their screens. */
+  function holdName(gameId: string, email: string, wants: string) {
+    db.insert(gameNames)
+      .values({ gameId, email, pending: wants })
+      .onConflictDoUpdate({ target: [gameNames.gameId, gameNames.email], set: { pending: wants } })
+      .run();
+    staffChanged(gameId);
+  }
+
+  /**
+   * Gives someone a new name everywhere: on the Roster if they're a Player, and on every Post they've made, so an
+   * unkind name doesn't linger in the Feed. `locked` (set by the Staff) says whether its owner may change it again;
+   * left out, it stays as it was. Any name they were waiting for is settled.
+   */
+  function rename(gameId: string, who: { email?: string; playerId?: string }, name: string, locked?: boolean) {
+    const game = latest(gameId);
+    const playerId = who.playerId ?? (who.email ? playerOf(gameId, who.email, game) : undefined);
+    const email = who.email ?? (playerId ? emailOfPlayer(gameId, playerId) : undefined);
+    const write = (tx: Tx) => {
+      if (!email) return;
+      const guestName = playerId ? null : name;
+      tx.insert(gameNames)
+        .values({ gameId, email, name: guestName, locked: locked ?? false })
+        .onConflictDoUpdate({ target: [gameNames.gameId, gameNames.email], set: { name: guestName, pending: null, ...(locked === undefined ? {} : { locked }) } })
+        .run();
+      renameAuthor(tx, gameId, email, name);
+    };
+    if (playerId) command(gameId, { type: "RenamePlayer", playerId, name }, write);
+    else db.transaction(write);
+    if (email) {
+      postsChanged(gameId);
+      staffChanged(gameId); // it may have settled a name that was waiting
+    }
+  }
+
+  /**
+   * The name someone's Post goes up under: a Player's own; a Guest's name in this Game, which they give (or change)
+   * by posting unless the Staff locked it. Under Approve names a new name waits, and they post as the old one (or
+   * as "Guest") until it's approved. `settle` makes a new or changed name theirs (on earlier Posts too), once the
+   * Post is going ahead. Undefined if a Guest gives no name and has none.
+   */
+  function nameToPostAs(gameId: string, email: string, asked: string | undefined): { author: string; settle: () => void } | undefined {
+    const game = latest(gameId);
+    const playerId = playerOf(gameId, email, game);
+    const saved = playerId ? undefined : nameRow(gameId, email);
+    const fixed = saved?.locked && saved.name ? saved.name : undefined;
+    const wants = playerId || fixed ? undefined : asked;
+    const held = wants !== undefined && wants !== saved?.name && needsApproval(gameId, email, game);
+    const waiting = saved?.name ?? WAITING_GUEST;
+    const author = playerId
+      ? playerName(game, playerId)!
+      : (fixed ?? (held ? waiting : (wants ?? saved?.name ?? (saved?.pending ? waiting : undefined))));
+    if (!author) return undefined;
+    const settle = () => {
+      if (held) {
+        if (wants !== saved?.pending) holdName(gameId, email, wants);
+      } else if (!playerId && author !== saved?.name && author !== WAITING_GUEST) rename(gameId, { email }, author);
+    };
+    return { author, settle };
+  }
+
+  /**
+   * Someone changes their own name in the Game (a Player's or a Guest's): refused if the Staff locked it; under
+   * Approve names it waits ("held"), otherwise it's theirs at once ("renamed").
+   */
+  function changeMyName(gameId: string, email: string, name: string): "locked" | "held" | "renamed" {
+    if (nameRow(gameId, email)?.locked) return "locked";
+    if (needsApproval(gameId, email, latest(gameId))) {
+      holdName(gameId, email, name);
+      return "held";
+    }
+    rename(gameId, { email }, name);
+    return "renamed";
+  }
+
   return {
+    nameRow,
+    nameIn,
+    needsApproval,
+    holdName,
+    rename,
+    nameToPostAs,
+    changeMyName,
     roleIn,
     playerOf,
     emailOfPlayer,
