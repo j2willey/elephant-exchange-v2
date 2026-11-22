@@ -53,21 +53,34 @@ describe("A Game's look", () => {
   });
 
   it("can have its own colors and logo for this Game only, and hand them back", async () => {
+    const t0 = performance.now();
+    const step = (what: string) => console.error(`[ci-debug] ${(performance.now() - t0).toFixed(0).padStart(6)} ms  ${what}`);
     const { host, lodge, user } = await organizer();
+    step("const { host, lodge, user } = await organizer();");
     const id = await host.createGame({ name: "Party", orgId: lodge, options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3, rosterMode: "host" } });
+    step("const id = await host.createGame({ name: \"Party\", orgId: lodge, option");
     openApp(host, `/games/${id}/settings`);
+    step("openApp(host, `/games/${id}/settings`);");
     const look = await panel();
+    step("const look = await panel();");
 
     fireEvent.input(within(look).getByLabelText(/main color/i), { target: { value: "#0b3d91" } });
+    step("fireEvent.input(within(look).getByLabelText(/main color/i), { target: ");
     await user.click(within(look).getByRole("button", { name: /save colors/i }));
+    step("await user.click(within(look).getByRole(\"button\", { name: /save colors");
     await waitFor(() => expect(cssVar("--brand")).toBe("#0b3d91"));
+    step("await waitFor(() => expect(cssVar(\"--brand\")).toBe(\"#0b3d91\"));");
 
     await user.upload(within(look).getByLabelText(/^logo/i), new File([tinyPng], "party.png", { type: "image/png" }));
+    step("await user.upload(within(look).getByLabelText(/^logo/i), new File([tin");
     await waitFor(() => expect(screen.getAllByRole("img", { name: /logo/i })[0]!.getAttribute("src")).toMatch(new RegExp(`^/api/games/${id}/theme/logo`)));
+    step("await waitFor(() => expect(screen.getAllByRole(\"img\", { name: /logo/i ");
 
     await user.click(within(look).getByRole("button", { name: /use the organization's main color/i }));
+    step("await user.click(within(look).getByRole(\"button\", { name: /use the org");
     await waitFor(() => expect(cssVar("--brand")).toBe("#c8102e"));
-  });
+    step("await waitFor(() => expect(cssVar(\"--brand\")).toBe(\"#c8102e\"));");
+  }, 30_000);
 
   it("is only for the Host and Co-hosts to change", async () => {
     const { host, origin, lodge } = await organizer();

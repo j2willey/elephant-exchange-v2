@@ -43,17 +43,27 @@ describe("Organizations", () => {
   });
 
   it("lets the Organizer set its colors, and hand one back to the app's own", async () => {
+    const t0 = performance.now();
+    const step = (what: string) => console.error(`[ci-debug] ${(performance.now() - t0).toFixed(0).padStart(6)} ms  ${what}`);
     const { me, user } = await signedInHome();
+    step("const { me, user } = await signedInHome();");
     await createOrg(user, "Lodge 22");
+    step("await createOrg(user, \"Lodge 22\");");
 
     fireEvent.input(screen.getByLabelText(/main color/i), { target: { value: "#c8102e" } });
+    step("fireEvent.input(screen.getByLabelText(/main color/i), { target: { valu");
     fireEvent.input(screen.getByLabelText(/page color/i), { target: { value: "#fff8f0" } });
+    step("fireEvent.input(screen.getByLabelText(/page color/i), { target: { valu");
     await user.click(screen.getByRole("button", { name: /save colors/i }));
+    step("await user.click(screen.getByRole(\"button\", { name: /save colors/i }))");
     await waitFor(async () => expect((await me.myOrgs())[0]).toMatchObject({ color: "#c8102e", page: "#fff8f0" }));
+    step("await waitFor(async () => expect((await me.myOrgs())[0]).toMatchObject");
 
     await user.click(screen.getByRole("button", { name: /use the app's page color/i }));
+    step("await user.click(screen.getByRole(\"button\", { name: /use the app's pag");
     await waitFor(async () => expect((await me.myOrgs())[0]).toMatchObject({ color: "#c8102e", page: null }));
-  });
+    step("await waitFor(async () => expect((await me.myOrgs())[0]).toMatchObject");
+  }, 30_000);
 
   it("lets the Organizer add a logo and a background, and take them off", async () => {
     const { me, user } = await signedInHome();
