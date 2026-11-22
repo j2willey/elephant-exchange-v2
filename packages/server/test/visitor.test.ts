@@ -41,7 +41,7 @@ describe("Trying the demo without signing in", () => {
   });
 
   it("can't join, post, react or vote in a real Game, even with its link", async () => {
-    const { app, sent, visit, createGame } = setup();
+    const { app, sent, visit } = setup();
     const host = await signIn(app, sent, "host@example.com");
     const made = await app.request("/api/games", post({ rosterMode: "self", settings: { activeSlots: 1, maxSteals: 3 } }, host));
     const { id } = (await made.json()) as { id: string };

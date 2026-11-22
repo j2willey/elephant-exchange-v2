@@ -133,3 +133,5 @@ export function createAccess<G extends { demo: boolean }>(deps: {
 
   return { identify, need, emailOf, roleIn, playerOf, emailOfPlayer };
 }
+
+export type Access<G extends { demo: boolean }> = ReturnType<typeof createAccess<G>>;
