@@ -1,6 +1,6 @@
 import type { Command, GameOptions, GameSettings, Phase, RuleErrorCode } from "@elephant/rules";
 import { io } from "socket.io-client";
-import type { AdminGame, AdminPerson, FeedbackAsk, FeedbackSummary, StatsSummary, SystemReport, Testimonial, GameView, Moderation, MyGame, MyOrg, PendingName, Person, Post, RosterMode, ScreenMode, Session, SharedGame, StaffMember, Theme, VoteDisplay } from "./wire";
+import type { AdminGame, AdminPerson, Emoji, FeedbackAsk, FeedbackSummary, StatsSummary, SystemReport, Testimonial, GameView, Moderation, MyGame, MyOrg, PendingName, Person, Post, RosterMode, ScreenMode, Session, SharedGame, StaffMember, Theme, VoteDisplay } from "./wire";
 
 export type {
   AdminGame,
@@ -89,21 +89,24 @@ export type FeedbackAnswer = {
 
 
 /**
- * The Reactions anyone can put on a Post, in the order they're shown, each with the name a screen reader says.
- * `emoji` is what the server knows it by: the emoji itself, or for the leg lamp (which has none) a name the app
- * draws an icon for.
+ * The name a screen reader says for each Reaction anyone can put on a Post, keyed by what the server knows it by
+ * (the server's list): the emoji itself, or for the leg lamp (which has none) a name the app draws an icon for.
+ * Every Reaction the server offers needs one here, or this won't compile; they're in the server's order (a test
+ * checks), which is the order they're shown.
  */
-export const REACTIONS = [
-  { emoji: "👍", name: "Like" },
-  { emoji: "❤️", name: "Love" },
-  { emoji: "😂", name: "Funny" },
-  { emoji: "🎉", name: "Hooray" },
-  { emoji: "🔥", name: "Fire" },
-  { emoji: "😮", name: "Wow" },
-  { emoji: "⛄", name: "Snowman" },
-  { emoji: "leg-lamp", name: "Leg lamp" },
-] as const;
-export type Emoji = (typeof REACTIONS)[number]["emoji"];
+const REACTION_NAMES: Record<Emoji, string> = {
+  "👍": "Like",
+  "❤️": "Love",
+  "😂": "Funny",
+  "🎉": "Hooray",
+  "🔥": "Fire",
+  "😮": "Wow",
+  "⛄": "Snowman",
+  "leg-lamp": "Leg lamp",
+};
+/** The Reactions, in the order they're shown, each with the name a screen reader says. */
+export const REACTIONS = (Object.keys(REACTION_NAMES) as Emoji[]).map((emoji) => ({ emoji, name: REACTION_NAMES[emoji] }));
+export type { Emoji };
 
 
 
