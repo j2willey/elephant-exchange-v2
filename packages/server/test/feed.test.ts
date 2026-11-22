@@ -1,22 +1,30 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createFeed, type Viewer } from "../src/feed.js";
-import { games, openDb, posts } from "../src/db.js";
+import { gameNames, games, openDb, posts } from "../src/db.js";
+import { createGameStore } from "../src/game-store.js";
+import { photoStore } from "../src/photos.js";
 
 type Row = typeof posts.$inferInsert;
 
 /** A Feed on a fresh database with one Game, "g"; every signal recorded. */
 function setup(signalMs = 0) {
   const db = openDb(":memory:");
-  db.insert(games).values({ id: "g", settings: "{}", createdAt: new Date() }).run();
+  db.insert(games).values({ id: "g", settings: JSON.stringify({ activeSlots: 1, maxSteals: 3 }), createdAt: new Date() }).run();
   const signals: string[] = [];
-  const feed = createFeed({ db, signal: (id) => signals.push(id), signalMs });
+  const now = () => new Date();
+  const store = createGameStore({ db, now, draw: (c) => c[0]!, orgTheme: () => null });
+  const photos = photoStore(mkdtempSync(join(tmpdir(), "feed-test-")));
+  const feed = createFeed({ db, now, store, photos, signal: (id) => void signals.push(id), signalMs });
   let n = 0;
   const add = (row: Partial<Row> & { id: string }) =>
     db
       .insert(posts)
       .values({ gameId: "g", email: "ann@x", author: "Ann", text: row.id, status: "visible", createdAt: new Date(1000 + n++), ...row })
       .run();
-  return { db, feed, signals, add };
+  return { db, feed, store, signals, add };
 }
 
 const STAFF: Viewer = { email: "host@x", staff: true };
@@ -50,6 +58,46 @@ describe("The Feed", () => {
     expect(reply(BOB)).toEqual({ id: "first", removed: true });
     expect(reply(ANN)).toMatchObject({ id: "first", author: "Ann", text: "first" });
     expect(feed.list("g", STAFF).find((p) => p.id === "first")!.replies).toBe(1);
+  });
+
+  describe("says why it won't take a Post", () => {
+    const ann = { email: "ann@x", staff: false };
+    const host = { email: "host@x", staff: true };
+
+    it("while posting is Paused, or for someone Muted", () => {
+      const { db, feed, store } = setup();
+      db.insert(gameNames).values({ gameId: "g", email: "ann@x", name: "Ann", muted: true }).run();
+      expect(feed.post("g", ann, { author: "Ann", text: "Hi" })).toMatchObject({ refused: "Muted" });
+      store.change("g", () => ({ moderation: "paused" }));
+      expect(feed.post("g", host, { author: "Host", text: "Hi" })).toMatchObject({ refused: "Paused" });
+    });
+
+    it("past the Feed limit, saying how long to wait, but never for the Staff", () => {
+      const { feed, store } = setup();
+      store.change("g", () => ({ postsPerMinute: 2 }));
+      for (const text of ["one", "two"]) expect(feed.post("g", ann, { author: "Ann", text })).toHaveProperty("id");
+      expect(feed.post("g", ann, { author: "Ann", text: "three" })).toMatchObject({ refused: "TooSoon", wait: expect.any(Number) });
+      for (const text of ["one", "two", "three"]) expect(feed.post("g", host, { author: "Host", text })).toHaveProperty("id");
+    });
+
+    it("about a Gift not in the Game, or in reply to a Post that isn't visible", () => {
+      const { feed, add } = setup();
+      add({ id: "hidden", status: "hidden" });
+      expect(feed.post("g", ann, { author: "Ann", text: "Hi", giftId: "nope" })).toMatchObject({ refused: "Invalid" });
+      expect(feed.post("g", ann, { author: "Ann", text: "Hi", replyTo: "hidden" })).toMatchObject({ refused: "Invalid" });
+      expect(feed.react("g", "ann@x", "hidden", "👍", true)).toMatchObject({ refused: "NotFound" });
+    });
+
+    it("and holds a Post for approval under Approval, unless the Staff wrote it", () => {
+      const { feed, store } = setup();
+      store.change("g", () => ({ moderation: "approval" }));
+      feed.post("g", ann, { author: "Ann", text: "mine" });
+      feed.post("g", host, { author: "Host", text: "staff" });
+      expect(feed.list("g", host).map((p) => [p.text, p.status])).toEqual([
+        ["staff", "visible"],
+        ["mine", "pending"],
+      ]);
+    });
   });
 
   it("keeps one shared copy until it changes", () => {

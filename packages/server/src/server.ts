@@ -7,7 +7,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { and, asc, count, desc, eq, gt, inArray, isNotNull, like, lte, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNotNull, like, lte, or, sql } from "drizzle-orm";
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
@@ -25,7 +25,7 @@ import { Server as SocketServer } from "socket.io";
 import { diskOf, healthWarnings, lastBackupAt, memoryLimit, type ServerHealth } from "./system.js";
 import type { z } from "zod";
 import { createAccess, DEMO_ACTOR, SESSION_COOKIE } from "./access.js";
-import { createFeed } from "./feed.js";
+import { createFeed, isRefusal, type Refusal } from "./feed.js";
 import { createGameStore, type LoadedGame, type OrgTheme } from "./game-store.js";
 import { createAuth, DEFAULT_LIMITS, logMailer, SESSION_LIFETIME_MS, type LinkLimits, type Mailer } from "./auth.js";
 import { cleanRef, createStats, isVisitor, VISITOR_DAYS, VISITOR_DOMAIN } from "./stats.js";
@@ -402,7 +402,24 @@ export function createServer({
   }
 
   /** Each Game's Feed: its Posts and Reactions, as each viewer may see them (feed.ts). */
-  const feed = createFeed({ db, signal: (id) => io?.to(id).emit("posts"), signalMs: feedSignalMs });
+  const feed = createFeed({ db, now, store, photos, signal: (id) => io?.to(id).emit("posts"), signalMs: feedSignalMs });
+  /** The HTTP answer for each way the Feed says no. */
+  function refused(c: Context, r: Refusal) {
+    switch (r.refused) {
+      case "Paused":
+      case "Muted":
+        return c.json({ code: r.refused, message: r.message }, 409);
+      case "TooSoon":
+        return c.json({ code: r.refused, message: r.message, wait: r.wait }, 429);
+      case "Invalid":
+        return c.json({ error: r.message }, 400);
+      case "NotFound":
+        return c.json({ error: r.message }, 404);
+      case "NotYours":
+      case "NotHolder":
+        return c.json({ error: r.message }, 403);
+    }
+  }
   /** After any change to a Game's Posts or Reactions: every screen watching asks for the Feed again. */
   const postsChanged = (id: string) => feed.changed(id);
 
@@ -1031,21 +1048,10 @@ export function createServer({
     if (!body.ok) return body.res;
     const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
     if (!body.data.text && !upload) return c.json({ error: "Write something or add a Photo" }, 400);
-    if (game.moderation === "paused") return c.json({ code: "Paused", message: "The Host has paused posting" }, 409);
-    if (nameRow(id, email)?.muted) return c.json({ code: "Muted", message: "The Host has paused your posting" }, 409);
-    const wait = tooSoon(id, email, game);
-    if (wait > 0) return c.json({ code: "TooSoon", message: `Wait ${wait} seconds before posting again`, wait }, 429);
+    const viewer = { email, staff: role !== undefined };
     const { text, giftId, replyTo } = body.data;
-    if (giftId !== undefined && !gifts(game.state).some((g) => g.id === giftId)) return c.json({ error: "No such Gift in this Game" }, 400);
-    if (
-      replyTo !== undefined &&
-      !db
-        .select({ id: posts.id })
-        .from(posts)
-        .where(and(eq(posts.gameId, id), eq(posts.id, replyTo), eq(posts.status, "visible")))
-        .get()
-    )
-      return c.json({ error: "That Post can't be replied to" }, 400);
+    const no = feed.mayPost(id, viewer, { giftId, replyTo });
+    if (no) return refused(c, no);
     // A Player posts as their Player; a Guest as their name in this Game, which they give (or change) here unless
     // the Host or a Co-host has locked it.
     const playerId = playerOf(id, email, game);
@@ -1068,32 +1074,9 @@ export function createServer({
       if (wants !== saved?.pending) holdName(id, email, wants);
     } else if (!playerId && author !== saved?.name && author !== WAITING_GUEST) renamePerson(id, game, { email }, author);
 
-    // Under Approval the Host and Co-hosts are the approvers: their own Posts go up at once.
-    const status = game.moderation === "approval" && !role ? "pending" : "visible";
-    const postId = randomBytes(12).toString("base64url");
-    if (photo) photos.save(id, postId, photo.data, await smallPhoto(photo.data));
-    try {
-      db.insert(posts)
-        .values({
-          id: postId,
-          gameId: id,
-          email,
-          author,
-          giftId: giftId ?? null,
-          replyTo: replyTo ?? null,
-          text,
-          photoWidth: photo?.width ?? null,
-          photoHeight: photo?.height ?? null,
-          status,
-          createdAt: now(),
-        })
-        .run();
-    } catch (err) {
-      if (photo) photos.remove(id, postId);
-      throw err;
-    }
-    postsChanged(id);
-    return c.body(null, 201);
+    const ready = photo && { ...photo, small: await smallPhoto(photo.data) };
+    const put = feed.post(id, viewer, { author, text, giftId, replyTo, photo: ready });
+    return isRefusal(put) ? refused(c, put) : c.body(null, 201);
   });
 
   /**
@@ -1102,24 +1085,6 @@ export function createServer({
    * they hold the Gift and change or remove it later; the Host and Co-hosts may write any holder's part (for a
    * guest without a phone) and change any part. It's a Post, so the Feed's rules apply: Approval, Paused, Mute, Hide.
    */
-  /**
-   * Seconds this person must still wait before posting again (0: they may post now): at most the Game's Posts a
-   * minute, so a few quick replies are fine but nobody floods the Feed. The Host and Co-hosts are never held back.
-   */
-  function tooSoon(gameId: string, email: string, game: LoadedGame): number {
-    if (game.postsPerMinute === 0 || roleIn(gameId, email)) return 0;
-    const minuteAgo = new Date(now().getTime() - 60_000);
-    const recent = db
-      .select({ at: posts.createdAt })
-      .from(posts)
-      .where(and(eq(posts.gameId, gameId), eq(posts.email, email), gt(posts.createdAt, minuteAgo)))
-      .orderBy(desc(posts.createdAt))
-      .all();
-    if (recent.length < game.postsPerMinute) return 0;
-    // Once the oldest of the last allowed few is a minute old, there's room again.
-    const oldest = recent[game.postsPerMinute - 1]!.at.getTime();
-    return Math.max(1, Math.ceil((oldest + 60_000 - now().getTime()) / 1000));
-  }
 
   /** The part of a Gift's Pitch that a request is about, with what's needed to decide whether it's allowed. */
   function pitchPart(id: string, giftId: string, email: string, playerIdAsked: string | undefined) {
@@ -1560,21 +1525,8 @@ export function createServer({
     const postId = c.req.param("postId");
     const body = await parseBody(c, reactionBody);
     if (!body.ok) return body.res;
-    const target = db
-      .select({ id: posts.id })
-      .from(posts)
-      .where(and(eq(posts.gameId, id), eq(posts.id, postId), eq(posts.status, "visible")))
-      .get();
-    if (!target) return c.json({ error: "Post not found" }, 404);
-    const { emoji, on } = body.data;
-    const changed = on
-      ? db.insert(postReactions).values({ gameId: id, postId, email, emoji }).onConflictDoNothing().run()
-      : db
-          .delete(postReactions)
-          .where(and(eq(postReactions.postId, postId), eq(postReactions.email, email), eq(postReactions.emoji, emoji)))
-          .run();
-    if (changed.changes > 0) postsChanged(id);
-    return c.body(null, 204);
+    const no = feed.react(id, email, postId, body.data.emoji, body.data.on);
+    return no ? refused(c, no) : c.body(null, 204);
   });
 
   // Approving a Pending Post and showing a Hidden one again are the same: it becomes visible.

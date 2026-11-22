@@ -1,6 +1,35 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { randomBytes } from "node:crypto";
+import { gifts } from "@elephant/rules";
+import { and, desc, eq, gt, sql } from "drizzle-orm";
 import { gameNames, postReactions, posts, type Db } from "./db.js";
+import type { GameStore } from "./game-store.js";
+import type { photoStore } from "./photos.js";
 import { REACTIONS } from "./schemas.js";
+
+/**
+ * Why the Feed said no. The routes turn the code into an HTTP status; `message` is said to the person as is.
+ * - Paused, Muted: posting is switched off for the Game, or for this person.
+ * - TooSoon: past the Feed limit; `wait` seconds until they may.
+ * - Invalid: something asked for doesn't fit (no such Gift, a Post that can't be replied to).
+ * - NotFound: no such Post, or not one this person may see.
+ * - NotYours: only its poster or the Staff may.
+ * - NotHolder: only the Gift's holder may.
+ */
+export type Refusal = {
+  refused: "Paused" | "Muted" | "TooSoon" | "Invalid" | "NotFound" | "NotYours" | "NotHolder";
+  message: string;
+  wait?: number;
+};
+const refuse = (refused: Refusal["refused"], message: string, more: { wait?: number } = {}): Refusal => ({ refused, message, ...more });
+export const isRefusal = (r: unknown): r is Refusal => typeof r === "object" && r !== null && "refused" in r;
+
+/** A Photo ready to keep: the full and the small version, and its size. */
+export interface ReadyPhoto {
+  data: Buffer;
+  small?: Buffer | undefined;
+  width: number;
+  height: number;
+}
 
 /** Who is looking at, or acting on, a Game's Feed. `staff` is the Host or a Co-host. */
 export interface Viewer {
@@ -30,8 +59,16 @@ export function canSee(viewer: Viewer, p: Pick<PostRow, "status" | "email">): bo
  * per Game, the first at once and the rest gathered into one at the end. Each screen then asks again, since each may
  * see different Posts.
  */
-export function createFeed(deps: { db: Db; signal: (gameId: string) => void; signalMs: number }) {
-  const { db, signal, signalMs } = deps;
+export function createFeed(deps: {
+  db: Db;
+  now: () => Date;
+  /** Where Game facts come from: Moderation, the Feed limits, the Gifts. */
+  store: GameStore;
+  photos: ReturnType<typeof photoStore>;
+  signal: (gameId: string) => void;
+  signalMs: number;
+}) {
+  const { db, now, store, photos, signal, signalMs } = deps;
   const feeds = new Map<string, { rows: PostRow[]; reactions: (typeof postReactions.$inferSelect)[] }>();
   /** Games whose signal waits out signalMs, and whether the Feed changed again meanwhile. */
   const waits = new Map<string, { again: boolean; timer: ReturnType<typeof setTimeout> }>();
@@ -138,11 +175,121 @@ export function createFeed(deps: { db: Db; signal: (gameId: string) => void; sig
     }));
   }
 
+  const isMuted = (id: string, email: string) =>
+    db.select({ muted: gameNames.muted }).from(gameNames).where(and(eq(gameNames.gameId, id), eq(gameNames.email, email))).get()?.muted ?? false;
+
+  /**
+   * Seconds this person must still wait before posting again (0: they may post now): at most the Game's Posts a
+   * minute, so a few quick replies are fine but nobody floods the Feed. The Staff are never held back.
+   */
+  function tooSoon(id: string, viewer: Viewer, postsPerMinute: number): number {
+    if (postsPerMinute === 0 || viewer.staff || !viewer.email) return 0;
+    const minuteAgo = new Date(now().getTime() - 60_000);
+    const recent = db
+      .select({ at: posts.createdAt })
+      .from(posts)
+      .where(and(eq(posts.gameId, id), eq(posts.email, viewer.email), gt(posts.createdAt, minuteAgo)))
+      .orderBy(desc(posts.createdAt))
+      .all();
+    if (recent.length < postsPerMinute) return 0;
+    // Once the oldest of the last allowed few is a minute old, there's room again.
+    const oldest = recent[postsPerMinute - 1]!.at.getTime();
+    return Math.max(1, Math.ceil((oldest + 60_000 - now().getTime()) / 1000));
+  }
+
+  /**
+   * Whether this person may post now (not while the Game's posting is Paused, nor when they're Muted, nor past the
+   * Feed limit), about this Gift, in reply to this Post. Checked before any work on a Post (its name, its Photo);
+   * `post` checks again.
+   */
+  function mayPost(id: string, viewer: Viewer & { email: string }, about: { giftId?: string | undefined; replyTo?: string | undefined } = {}): Refusal | null {
+    const game = store.get(id)!;
+    if (game.moderation === "paused") return refuse("Paused", "The Host has paused posting");
+    if (isMuted(id, viewer.email)) return refuse("Muted", "The Host has paused your posting");
+    const wait = tooSoon(id, viewer, game.postsPerMinute);
+    if (wait > 0) return refuse("TooSoon", `Wait ${wait} seconds before posting again`, { wait });
+    const { giftId, replyTo } = about;
+    if (giftId !== undefined && !gifts(game.state).some((g) => g.id === giftId)) return refuse("Invalid", "No such Gift in this Game");
+    if (
+      replyTo !== undefined &&
+      !db
+        .select({ id: posts.id })
+        .from(posts)
+        .where(and(eq(posts.gameId, id), eq(posts.id, replyTo), eq(posts.status, "visible")))
+        .get()
+    )
+      return refuse("Invalid", "That Post can't be replied to");
+    return null;
+  }
+
+  /**
+   * Puts a Post up, under `author` (the name the person goes by in this Game), about a Gift or as a reply if asked.
+   * Under Approval it waits for the Staff, unless they wrote it. Returns its id.
+   */
+  function post(
+    id: string,
+    viewer: Viewer & { email: string },
+    input: { author: string; text: string; giftId?: string | undefined; replyTo?: string | undefined; photo?: ReadyPhoto | undefined },
+  ): Refusal | { id: string } {
+    const { author, text, giftId, replyTo, photo } = input;
+    const no = mayPost(id, viewer, { giftId, replyTo });
+    if (no) return no;
+    const game = store.get(id)!;
+    // Under Approval the Host and Co-hosts are the approvers: their own Posts go up at once.
+    const status = game.moderation === "approval" && !viewer.staff ? "pending" : "visible";
+    const postId = randomBytes(12).toString("base64url");
+    if (photo) photos.save(id, postId, photo.data, photo.small);
+    try {
+      db.insert(posts)
+        .values({
+          id: postId,
+          gameId: id,
+          email: viewer.email,
+          author,
+          giftId: giftId ?? null,
+          replyTo: replyTo ?? null,
+          text,
+          photoWidth: photo?.width ?? null,
+          photoHeight: photo?.height ?? null,
+          status,
+          createdAt: now(),
+        })
+        .run();
+    } catch (err) {
+      if (photo) photos.remove(id, postId);
+      throw err;
+    }
+    changed(id);
+    return { id: postId };
+  }
+
+  /** Adds or takes back this person's Reaction to a visible Post. */
+  function react(id: string, email: string, postId: string, emoji: (typeof REACTIONS)[number], on: boolean): Refusal | null {
+    const target = db
+      .select({ id: posts.id })
+      .from(posts)
+      .where(and(eq(posts.gameId, id), eq(posts.id, postId), eq(posts.status, "visible")))
+      .get();
+    if (!target) return refuse("NotFound", "Post not found");
+    const done = on
+      ? db.insert(postReactions).values({ gameId: id, postId, email, emoji }).onConflictDoNothing().run()
+      : db
+          .delete(postReactions)
+          .where(and(eq(postReactions.postId, postId), eq(postReactions.email, email), eq(postReactions.emoji, emoji)))
+          .run();
+    if (done.changes > 0) changed(id);
+    return null;
+  }
+
   /** Lets go of a Game's shared copy (the database keeps it). */
   const forget = (id: string) => void feeds.delete(id);
 
   return {
     list,
+    mayPost,
+    post,
+    react,
+    tooSoon,
     changed,
     forget,
     /** The Games with a shared copy in memory. */
