@@ -24,6 +24,7 @@ import { Server as SocketServer } from "socket.io";
 import { diskOf, healthWarnings, lastBackupAt, memoryLimit, type ServerHealth } from "./system.js";
 import { createAccess, DEMO_ACTOR, SESSION_COOKIE } from "./access.js";
 import { createFeed } from "./feed.js";
+import { createGameLifecycle } from "./games.js";
 import { createPeople } from "./people.js";
 import { peopleRoutes } from "./people-routes.js";
 import type * as Wire from "./wire.js";
@@ -41,7 +42,7 @@ import {
   themeStore,
   type ThemeImage,
 } from "./photos.js";
-import { gameEvents, gameHosts, gameNames, gamePlayers, games, gameVisitors, openDb, organizations, postReactions, posts, sessions, signInLinks, turnClocks, users, votes, type Tx } from "./db.js";
+import { gameEvents, gameHosts, games, gameVisitors, openDb, organizations, postReactions, posts, sessions, signInLinks, users, type Tx } from "./db.js";
 import {
   command,
   createGameBody,
@@ -319,6 +320,8 @@ export function createServer({
 
   /** Each Game's Feed: its Posts and Reactions, as each viewer may see them (feed.ts). */
   const feed = createFeed({ db, now, store, photos, muted: people, signal: (id) => io?.to(id).emit("posts"), signalMs: feedSignalMs });
+  /** Creating, forgetting and deleting Games: the one place that knows every part of one (games.ts). */
+  const lifecycle = createGameLifecycle({ db, store, feed, people, photos, themeImages, lastWord: (id) => stats.snapshotGame(id, true) });
   /** After any change to a Game's Posts or Reactions: every screen watching asks for the Feed again. */
   const postsChanged = (id: string) => feed.changed(id);
 
@@ -605,24 +608,21 @@ export function createServer({
     const id = `${serverTag}.${randomBytes(16).toString("base64url")}`;
     const { rosterMode, turnSeconds, approveNames, moderation, settings, start, looked, remember } = body.data;
     const options = { ...settings, turnSeconds, rosterMode, approveNames, moderation };
-    db.transaction((tx) => {
-      tx.insert(games)
-        .values({
-          id,
-          name: body.data.name,
-          rosterMode,
-          turnSeconds,
-          approveNames,
-          moderation,
-          orgId: orgId ?? null,
-          demo: body.data.demo,
-          settings: JSON.stringify(settings),
-          // While people arrive, the big screen shows how to join; it turns to the Gifts at the start (see run).
-          screenMode: "qr",
-          createdAt: now(),
-        })
-        .run();
-      people.addHost(tx, id, email);
+    const row = {
+      id,
+      name: body.data.name,
+      rosterMode,
+      turnSeconds,
+      approveNames,
+      moderation,
+      orgId: orgId ?? null,
+      demo: body.data.demo,
+      settings: JSON.stringify(settings),
+      // While people arrive, the big screen shows how to join; it turns to the Gifts at the start (see run).
+      screenMode: "qr" as const,
+      createdAt: now(),
+    };
+    lifecycle.create(row, email, (tx) => {
       // The whole set is saved, so the Host's Games never change behind their back.
       if (remember === true) tx.update(users).set({ myOptions: JSON.stringify(options), alwaysMyOptions: true }).where(eq(users.email, email)).run();
       if (remember === false) tx.update(users).set({ alwaysMyOptions: false }).where(eq(users.email, email)).run();
@@ -1082,19 +1082,8 @@ export function createServer({
     return c.body(null, 204);
   });
 
-  /** Removes a Game and everything kept for it: its log, Hosts, Players, Posts and their Photos, votes, Theme images. */
-  function deleteGame(id: string) {
-    stats.snapshotGame(id, true); // its last word in the statistics, which outlive it
-    db.transaction((tx) => {
-      for (const table of [votes, postReactions, posts, gameNames, gameVisitors, turnClocks, gamePlayers, gameHosts, gameEvents]) tx.delete(table).where(eq(table.gameId, id)).run();
-      tx.delete(games).where(eq(games.id, id)).run();
-    });
-    store.forget(id);
-    feed.forget(id);
-    people.forget(id);
-    photos.removeGame(id);
-    for (const kind of ["logo", "background"] as const) themeImages.remove(`game-${id}`, kind);
-  }
+  /** Removes a Game and everything kept for it (games.ts). */
+  const deleteGame = (id: string) => lifecycle.remove(id);
 
   app.delete("/api/admin/games/:id", (c) => {
     const id = c.req.param("id");
@@ -1195,10 +1184,7 @@ export function createServer({
    */
   function forgetIdleGames(): number {
     const before = now().getTime() - IDLE_GAME_HOURS * 60 * 60_000;
-    const watched = (id: string) => (io?.sockets.adapter.rooms.get(id)?.size ?? 0) > 0;
-    const gone = store.forgetIdle(before, watched, feed.held());
-    for (const id of gone) (feed.forget(id), people.forget(id));
-    return gone.length;
+    return lifecycle.forgetIdle(before, (id) => (io?.sockets.adapter.rooms.get(id)?.size ?? 0) > 0);
   }
 
   /** Lets go of demo visitors (and their demo Games) after VISITOR_DAYS. Returns how many visitors went. */
