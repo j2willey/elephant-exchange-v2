@@ -1160,13 +1160,8 @@ export function createServer({
   });
 
   /** The Host deletes their own Game, with everything in it (not a Co-host: it's the Host's Game). */
-  app.delete("/api/games/:id", (c) => {
-    const id = c.req.param("id");
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
-    const game = load(id);
-    if (!game) return c.json({ error: "Game not found" }, 404);
-    if (roleIn(id, email) !== "host") return c.json({ error: "Only the Host can delete a Game" }, 403);
+  app.delete("/api/games/:id", access.need("host", "Only the Host can delete a Game"), (c) => {
+    const { id, game } = c.var.access;
     // A party may be under way: it's ended on purpose first, never deleted out from under the room.
     const now = phase(game.state);
     if (now === "playing" || now === "finalRound") return c.json({ error: "End the Game before deleting it" }, 409);
@@ -1174,12 +1169,10 @@ export function createServer({
     return c.body(null, 204);
   });
 
-  app.get("/api/games/:id", (c) => {
-    const id = c.req.param("id");
-    const game = load(id);
-    if (!game) return c.json({ error: "Game not found" }, 404);
+  app.get("/api/games/:id", access.need("anyone"), (c) => {
+    const { id, game } = c.var.access;
     // Only this answer says who is asking: live updates go to everyone watching, so they never carry a role.
-    const email = signedInAs(c);
+    const { email } = c.var.access;
     // Remembered so the Host can find them by name in the Co-hosts panel (not the demo's stand-ins).
     if (email && !email.startsWith(DEMO_ACTOR))
       db.insert(gameVisitors).values({ gameId: id, email, firstSeenAt: now() }).onConflictDoNothing().run();
@@ -1194,15 +1187,11 @@ export function createServer({
     });
   });
 
-  app.post("/api/games/:id/commands", async (c) => {
-    const id = c.req.param("id");
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
+  app.post("/api/games/:id/commands", access.need("staff", "Only the Host and Co-hosts can run this Game"), async (c) => {
+    const { id, game } = c.var.access;
+    const email = c.var.access.email!;
     const body = await parseBody(c, command);
     if (!body.ok) return body.res;
-    const game = load(id);
-    if (!game) return c.json({ error: "Game not found" }, 404);
-    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can run this Game" }, 403);
 
     // A demo Game's made-up Players each get a stand-in email, so the Host can find them in the Co-hosts panel and
     // make one a Co-host, as with real people. At example.com, which takes no mail: nobody can ever sign in as one.
@@ -1218,15 +1207,10 @@ export function createServer({
   });
 
   // The Host restarts a Player's countdown, say after explaining the rules. Not a Pick: it isn't logged or undone.
-  app.post("/api/games/:id/timer", async (c) => {
-    const id = c.req.param("id");
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
+  app.post("/api/games/:id/timer", access.need("staff", "Only the Host and Co-hosts can run this Game"), async (c) => {
+    const { id, game } = c.var.access;
     const body = await parseBody(c, timerBody);
     if (!body.ok) return body.res;
-    const game = load(id);
-    if (!game) return c.json({ error: "Game not found" }, 404);
-    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can run this Game" }, 403);
     const { playerId } = body.data;
     if (!game.clocks.has(playerId)) return c.json({ code: "NotActive", message: "That Player isn't up" }, 409);
 
