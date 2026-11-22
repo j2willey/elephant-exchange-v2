@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { gifts, phase, roster } from "@elephant/rules";
 import { and, asc, desc, eq, gt, inArray, isNotNull, sql } from "drizzle-orm";
-import { gameNames, postReactions, posts, type Db, type Tx } from "./db.js";
+import { postReactions, posts, type Db, type Tx } from "./db.js";
 import type { GameStore } from "./game-store.js";
 import type { photoStore } from "./photos.js";
 import { REACTIONS } from "./schemas.js";
@@ -70,6 +70,8 @@ export function createFeed(deps: {
   /** Where Game facts come from: Moderation, the Feed limits, the Gifts. */
   store: GameStore;
   photos: ReturnType<typeof photoStore>;
+  /** Who the Staff have muted (People's). */
+  muted: { isMuted: (gameId: string, email: string) => boolean; mutedIn: (gameId: string) => ReadonlySet<string> };
   signal: (gameId: string) => void;
   signalMs: number;
 }) {
@@ -144,16 +146,7 @@ export function createFeed(deps: {
     const seenById = new Map(rows.map((p) => [p.id, p]));
     const replies = new Map<string, number>();
     for (const p of rows) if (p.replyTo && p.status === "visible") replies.set(p.replyTo, (replies.get(p.replyTo) ?? 0) + 1);
-    const mutedPeople = new Set(
-      staff
-        ? db
-            .select({ email: gameNames.email })
-            .from(gameNames)
-            .where(and(eq(gameNames.gameId, id), eq(gameNames.muted, true)))
-            .all()
-            .map((r) => r.email)
-        : [],
-    );
+    const mutedPeople = staff ? deps.muted.mutedIn(id) : new Set<string>();
     const quote = (replyTo: string | null) => {
       if (!replyTo) return null;
       const o = seenById.get(replyTo);
@@ -180,8 +173,7 @@ export function createFeed(deps: {
     }));
   }
 
-  const isMuted = (id: string, email: string) =>
-    db.select({ muted: gameNames.muted }).from(gameNames).where(and(eq(gameNames.gameId, id), eq(gameNames.email, email))).get()?.muted ?? false;
+  const isMuted = (id: string, email: string) => deps.muted.isMuted(id, email);
 
   /**
    * Seconds this person must still wait before posting again (0: they may post now): at most the Game's Posts a
@@ -461,9 +453,9 @@ export function createFeed(deps: {
   /**
    * The Staff mute whoever wrote a Post (they can't post or reply), hiding everything they posted if `hidePosts`,
    * or unmute them, which brings back what the mute hid and nothing hidden for another reason. The Muted flag is
-   * on the person's Name in the Game, written here in the same step as the hiding.
+   * People's: `setMuted` writes it, in the same transaction as the hiding.
    */
-  function mute(id: string, postId: string, muted: boolean, hidePosts = false): Refusal | null {
+  function mute(id: string, postId: string, muted: boolean, hidePosts: boolean, setMuted: (email: string, muted: boolean) => void): Refusal | null {
     const by = db
       .select({ email: posts.email })
       .from(posts)
@@ -472,10 +464,7 @@ export function createFeed(deps: {
     if (!by) return refuse("NotFound", "Post not found");
     const theirs = and(eq(posts.gameId, id), eq(posts.email, by.email));
     db.transaction((tx) => {
-      tx.insert(gameNames)
-        .values({ gameId: id, email: by.email, muted })
-        .onConflictDoUpdate({ target: [gameNames.gameId, gameNames.email], set: { muted } })
-        .run();
+      setMuted(by.email, muted);
       if (muted && hidePosts)
         tx.update(posts)
           .set({ status: "hidden", hiddenWith: "mute" })

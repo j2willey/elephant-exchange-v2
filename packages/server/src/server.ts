@@ -24,7 +24,7 @@ import { Server as SocketServer } from "socket.io";
 import { diskOf, healthWarnings, lastBackupAt, memoryLimit, type ServerHealth } from "./system.js";
 import { createAccess, DEMO_ACTOR, SESSION_COOKIE } from "./access.js";
 import { createFeed } from "./feed.js";
-import { createPeople, WAITING_PLAYER } from "./people.js";
+import { createPeople } from "./people.js";
 import type * as Wire from "./wire.js";
 import { feedRoutes } from "./feed-routes.js";
 import { parseBody, photoSizeLimit } from "./http.js";
@@ -267,7 +267,7 @@ export function createServer({
     }
   }
   /** People in a Game: who someone is there, and their role (people.ts). */
-  const people = createPeople<LoadedGame>({
+  const people = createPeople<LoadedGame, ReturnType<typeof run>>({
     db,
     rosterOf: (game) => roster(game.state),
     latest: (id) => load(id)!,
@@ -286,7 +286,7 @@ export function createServer({
   });
   /** Who is asking: the signed-in person, or the made-up Player a demo page's sample phone is. */
   const signedInAs = access.emailOf;
-  const { roleIn, playerOf, nameRow, nameIn, needsApproval } = people;
+  const { roleIn, nameRow, nameIn } = people;
   /** Every Game a request asks for, and every change to one (game-store.ts). */
   const store = createGameStore({ db, now, draw, orgTheme: (orgId) => orgTheme(orgId) });
   const load = (id: string) => store.get(id);
@@ -305,15 +305,6 @@ export function createServer({
   const orgChanged = (orgId: string) => store.orgChanged(orgId);
 
   /** The Player this person signed up as, if they did and are still on the Roster. */
-  /** A demo Player's stand-in email: "fay@example.com", or "fay2@example.com" when there's already a Fay. */
-  function demoEmail(gameId: string, name: string): string {
-    const base = name.toLowerCase().replace(/[^a-z0-9]/g, "") || "player";
-    const taken = new Set(people.playerEmails(gameId));
-    for (let n = 1; ; n++) {
-      const email = `${base}${n === 1 ? "" : n}@example.com`;
-      if (!taken.has(email)) return email;
-    }
-  }
 
 
 
@@ -331,7 +322,7 @@ export function createServer({
   }
 
   /** Each Game's Feed: its Posts and Reactions, as each viewer may see them (feed.ts). */
-  const feed = createFeed({ db, now, store, photos, signal: (id) => io?.to(id).emit("posts"), signalMs: feedSignalMs });
+  const feed = createFeed({ db, now, store, photos, muted: people, signal: (id) => io?.to(id).emit("posts"), signalMs: feedSignalMs });
   /** After any change to a Game's Posts or Reactions: every screen watching asks for the Feed again. */
   const postsChanged = (id: string) => feed.changed(id);
 
@@ -807,7 +798,7 @@ export function createServer({
     // A demo Game's made-up Players each get a stand-in email, so the Host can find them in the Co-hosts panel and
     // make one a Co-host, as with real people. At example.com, which takes no mail: nobody can ever sign in as one.
     const cmd = body.data;
-    const standIn = game.demo && cmd.type === "AddPlayer" ? demoEmail(id, cmd.name) : undefined;
+    const standIn = game.demo && cmd.type === "AddPlayer" ? people.standInEmail(id, cmd.name) : undefined;
     const result = run(id, cmd, (tx) => {
       if (standIn && cmd.type === "AddPlayer") people.linkPlayer(tx, id, cmd.playerId, standIn);
     });
@@ -830,7 +821,7 @@ export function createServer({
   });
 
   // The Feed: its Posts, Pitches, Reactions, Photos and their moderation (feed-routes.ts).
-  app.route("/", feedRoutes({ access, feed, photos, now, nameToPostAs: people.nameToPostAs, noteFeature: (id, feature) => stats.noteFeature(id, feature) }));
+  app.route("/", feedRoutes({ access, feed, photos, now, nameToPostAs: people.nameToPostAs, setMuted: people.setMuted, noteFeature: (id, feature) => stats.noteFeature(id, feature) }));
 
   // Organizations: anyone signed in may create one, and is then its Organizer, the only one who can change it.
   const orgView = (o: OrgTheme): Wire.MyOrg => ({
@@ -1081,22 +1072,9 @@ export function createServer({
     if (!body.ok) return body.res;
     const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
     if (game.rosterMode !== "self") return c.json({ error: "The Host adds the Players in this Game" }, 403);
-    if (playerOf(id, email, game)) return c.json({ code: "AlreadyJoined", message: "You're already playing in this Game" }, 409);
-
-    const playerId = randomBytes(12).toString("base64url");
-    // Under Approve names, they play as "New player" until the Host or a Co-host approves the name they gave.
-    const held = needsApproval(id, email, game);
-    const result = run(id, { type: "AddPlayer", playerId, name: held ? WAITING_PLAYER : body.data.name }, (tx) => {
-      if (held)
-        tx.insert(gameNames)
-          .values({ gameId: id, email, pending: body.data.name })
-          .onConflictDoUpdate({ target: [gameNames.gameId, gameNames.email], set: { pending: body.data.name } })
-          .run();
-      // A link left over from a Player the Host has since removed gives way to the new one.
-      people.linkPlayer(tx, id, playerId, email);
-    });
-    people.changed(id);
-    if (held && !("code" in result)) staffChanged(id);
+    const joined = people.join(id, email, body.data.name);
+    if ("refused" in joined) return c.json({ code: joined.refused, message: joined.message }, 409);
+    const { result, playerId } = joined;
     return "code" in result ? c.json(result, 409) : c.json({ ...result, me: { playerId } });
   });
 

@@ -18,7 +18,8 @@ function setup() {
   const db = openDb(":memory:");
   const now = () => new Date();
   const store = createGameStore({ db, now, draw: (c) => c[0]!, orgTheme: () => null });
-  const feed = createFeed({ db, now, store, photos: photoStore(mkdtempSync(join(tmpdir(), "people-test-"))), signal: () => undefined, signalMs: 0 });
+  const muted = { isMuted: (g: string, e: string) => people.isMuted(g, e), mutedIn: (g: string) => people.mutedIn(g) };
+  const feed = createFeed({ db, now, store, photos: photoStore(mkdtempSync(join(tmpdir(), "people-test-"))), muted, signal: () => undefined, signalMs: 0 });
   const signals: string[] = [];
   const make = () =>
     createPeople<LoadedGame>({
@@ -121,6 +122,39 @@ describe("People in a Game", () => {
     expect(people.roleIn("g", "sly@x")).toBeUndefined(); // still the copy in memory
     people.changed("g");
     expect(people.roleIn("g", "sly@x")).toBe("cohost");
+  });
+
+  it("lets someone join as a Player once, holding their name under Approve names", () => {
+    const { people, store, game } = setup();
+    store.change("g", () => ({ rosterMode: "self", approveNames: true }));
+    const joined = people.join("g", "gus@x", "Gus");
+    expect(joined).toMatchObject({ playerId: expect.any(String) });
+    const playerId = (joined as { playerId: string }).playerId;
+    expect(people.playerOf("g", "gus@x", game())).toBe(playerId);
+    expect(roster(game().state).find((p) => p.id === playerId)?.name).toBe("New player");
+    expect(people.pending("g", game())).toMatchObject([{ wants: "Gus", shown: "New player", playerId }]);
+    expect(people.join("g", "gus@x", "Gus")).toMatchObject({ refused: "AlreadyJoined" });
+  });
+
+  it("gives each demo Player a stand-in email of their own", () => {
+    const { db, people } = setup();
+    expect(people.standInEmail("g", "Fay")).toBe("fay@example.com");
+    db.transaction((tx) => people.linkPlayer(tx, "g", "ann", "fay@example.com"));
+    expect(people.standInEmail("g", "Fay")).toBe("fay2@example.com");
+  });
+
+  it("mutes and unmutes someone, and the Feed hides and brings back their Posts with it", () => {
+    const { db, people, feed } = setup();
+    db.insert(posts).values({ id: "p1", gameId: "g", email: "gus@x", author: "Gus", text: "Hi", status: "visible", createdAt: new Date() }).run();
+    const staff = { email: "host@x", staff: true };
+
+    expect(feed.mute("g", "p1", true, true, (email, on) => people.setMuted("g", email, on))).toBeNull();
+    expect(people.isMuted("g", "gus@x")).toBe(true);
+    expect(feed.list("g", staff).map((p) => [p.status, p.authorMuted])).toEqual([["hidden", true]]);
+
+    feed.mute("g", "p1", false, false, (email, on) => people.setMuted("g", email, on));
+    expect(people.mutedIn("g")).toEqual(new Set());
+    expect(feed.list("g", staff).map((p) => p.status)).toEqual(["visible"]);
   });
 
   describe("the Co-hosts panel", () => {

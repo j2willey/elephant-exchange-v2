@@ -49,8 +49,10 @@ export function feedRoutes(deps: {
   /** The name someone's Post goes up under (People's rules), and making a new name theirs once it's going ahead. */
   nameToPostAs: (id: string, email: string, asked: string | undefined) => { author: string; settle: () => void } | undefined;
   noteFeature: (gameId: string, feature: string) => void;
+  /** People's Muted flag. */
+  setMuted: (gameId: string, email: string, muted: boolean) => void;
 }) {
-  const { access, feed, photos, now, nameToPostAs, noteFeature } = deps;
+  const { access, feed, photos, now, nameToPostAs, noteFeature, setMuted } = deps;
   const routes = new Hono();
 
   // The Feed, as this viewer may see it: every visible Post, plus their own and, for a Host, all the others.
@@ -253,7 +255,7 @@ export function feedRoutes(deps: {
     const body = await parseBody(c, muteBody);
     if (!body.ok) return body.res;
     const { postId, muted, hidePosts } = body.data;
-    const no = feed.mute(id, postId, muted, hidePosts);
+    const no = feed.mute(id, postId, muted, hidePosts ?? false, (email, on) => setMuted(id, email, on));
     return no ? refused(c, no) : c.body(null, 204);
   });
 

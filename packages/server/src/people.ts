@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import type { Command } from "@elephant/rules";
 import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { DEMO_ACTOR, type Role } from "./access.js";
@@ -6,7 +6,7 @@ import { gameHosts, gameNames, gamePlayers, gameVisitors, postReactions, posts, 
 import type { PendingName, Person } from "./wire.js";
 
 /** Why People said no: no such person (or Player) here, or a change that can't be made. */
-export type PeopleRefusal = { refused: "NotFound" | "Invalid"; message: string };
+export type PeopleRefusal = { refused: "NotFound" | "Invalid" | "AlreadyJoined"; message: string };
 const refuse = (refused: PeopleRefusal["refused"], message: string): PeopleRefusal => ({ refused, message });
 
 /** A stable, opaque name for a person in a Game, so the Co-hosts panel never needs their email. */
@@ -43,7 +43,7 @@ interface GamePeople {
  * them goes through here and drops that Game's copy, which is read again on the next question: a write inside
  * someone else's transaction that's later rolled back can't leave the copy wrong.
  */
-export function createPeople<G>(deps: {
+export function createPeople<G, Result = unknown>(deps: {
   db: Db;
   /** The Players on a Game's Roster. */
   rosterOf: (game: G) => readonly { id: string; name: string }[];
@@ -52,7 +52,7 @@ export function createPeople<G>(deps: {
   /** Whether the Host has switched on Approve names. */
   approveNames: (game: G) => boolean;
   /** Logs a command for the Game, with `alsoWrite` in the same transaction (the Game store). */
-  command: (gameId: string, cmd: Command, alsoWrite: (tx: Tx) => void) => unknown;
+  command: (gameId: string, cmd: Command, alsoWrite: (tx: Tx) => void) => Result;
   /** Puts a new name on everything this person posted (the Feed). */
   renameAuthor: (tx: Tx, gameId: string, email: string, name: string) => void;
   /** Tell the screens watching: the Feed changed; the Staff (or a waiting name) changed. */
@@ -141,6 +141,13 @@ export function createPeople<G>(deps: {
         if (change.playsAs !== undefined) tx.update(gameHosts).set({ playerId: change.playsAs }).where(at).run();
       }),
     );
+
+  /** Says who is behind a Player (someone who joined, or a demo stand-in), in the transaction that adds the Player. */
+  const linkPlayer = (tx: Tx, gameId: string, playerId: string, email: string) =>
+    writing(gameId, () => {
+      tx.delete(gamePlayers).where(and(eq(gamePlayers.gameId, gameId), eq(gamePlayers.email, email))).run();
+      tx.insert(gamePlayers).values({ gameId, playerId, email }).run();
+    });
 
   const nameQuery = db
     .select()
@@ -327,7 +334,68 @@ export function createPeople<G>(deps: {
     return null;
   }
 
+  /**
+   * Someone adds themselves as a Player (in a Self sign-up Game): the same AddPlayer the Host's button sends, so the
+   * rules are untouched. Under Approve names they play as "New player" until the Staff approve the name they gave.
+   * A link left over from a Player the Host has since removed gives way to the new one.
+   */
+  function join(gameId: string, email: string, name: string): PeopleRefusal | { playerId: string; result: Result } {
+    const game = latest(gameId);
+    if (playerOf(gameId, email, game)) return refuse("AlreadyJoined", "You're already playing in this Game");
+    const playerId = randomBytes(12).toString("base64url");
+    const held = needsApproval(gameId, email, game);
+    try {
+      const result = command(gameId, { type: "AddPlayer", playerId, name: held ? WAITING_PLAYER : name }, (tx) => {
+        if (held)
+          tx.insert(gameNames)
+            .values({ gameId, email, pending: name })
+            .onConflictDoUpdate({ target: [gameNames.gameId, gameNames.email], set: { pending: name } })
+            .run();
+        linkPlayer(tx, gameId, playerId, email);
+      });
+      if (held) staffChanged(gameId);
+      return { playerId, result };
+    } finally {
+      changed(gameId); // in case the AddPlayer was refused after the link was written
+    }
+  }
+
+  /** A demo Player's stand-in email: "fay@example.com", or "fay2@example.com" when there's already a Fay. */
+  function standInEmail(gameId: string, name: string): string {
+    const base = name.toLowerCase().replace(/[^a-z0-9]/g, "") || "player";
+    const taken = new Set(playerEmails(gameId));
+    for (let n = 1; ; n++) {
+      const email = `${base}${n === 1 ? "" : n}@example.com`;
+      if (!taken.has(email)) return email;
+    }
+  }
+
+  /** Whether the Staff have muted this person: they can't post or reply in the Game. */
+  const isMuted = (gameId: string, email: string) => nameRow(gameId, email)?.muted ?? false;
+  /** Everyone muted in the Game. */
+  const mutedIn = (gameId: string): Set<string> =>
+    new Set(
+      db
+        .select({ email: gameNames.email })
+        .from(gameNames)
+        .where(and(eq(gameNames.gameId, gameId), eq(gameNames.muted, true)))
+        .all()
+        .map((r) => r.email),
+    );
+  /** The Staff mute someone, or unmute them (what it does to their Posts is the Feed's). */
+  const setMuted = (gameId: string, email: string, muted: boolean) =>
+    void db
+      .insert(gameNames)
+      .values({ gameId, email, muted })
+      .onConflictDoUpdate({ target: [gameNames.gameId, gameNames.email], set: { muted } })
+      .run();
+
   return {
+    join,
+    standInEmail,
+    isMuted,
+    mutedIn,
+    setMuted,
     panel,
     appoint,
     pending,
@@ -374,12 +442,7 @@ export function createPeople<G>(deps: {
           .run(),
       ),
 
-    /** Says who is behind a Player (someone who joined, or a demo stand-in), in the transaction that adds the Player. */
-    linkPlayer: (tx: Tx, gameId: string, playerId: string, email: string) =>
-      writing(gameId, () => {
-        tx.delete(gamePlayers).where(and(eq(gamePlayers.gameId, gameId), eq(gamePlayers.email, email))).run();
-        tx.insert(gamePlayers).values({ gameId, playerId, email }).run();
-      }),
+    linkPlayer,
 
     /** After a write elsewhere that may have touched a Game's Staff or Players (a transaction rolled back, a delete). */
     changed,

@@ -17,7 +17,11 @@ function setup(signalMs = 0) {
   const now = () => new Date();
   const store = createGameStore({ db, now, draw: (c) => c[0]!, orgTheme: () => null });
   const photos = photoStore(mkdtempSync(join(tmpdir(), "feed-test-")));
-  const feed = createFeed({ db, now, store, photos, signal: (id) => void signals.push(id), signalMs });
+  // Who's Muted is People's; here it's read straight from the Names table the tests write.
+  const mutedIn = (gameId: string) =>
+    new Set(db.select().from(gameNames).all().filter((r) => r.gameId === gameId && r.muted).map((r) => r.email));
+  const muted = { mutedIn, isMuted: (gameId: string, email: string) => mutedIn(gameId).has(email) };
+  const feed = createFeed({ db, now, store, photos, muted, signal: (id) => void signals.push(id), signalMs });
   let n = 0;
   const add = (row: Partial<Row> & { id: string }) =>
     db
