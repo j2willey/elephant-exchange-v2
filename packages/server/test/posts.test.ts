@@ -105,6 +105,21 @@ describe("Moderation", () => {
     expect((await read(eve)).map((p) => p.text)).toEqual(["Is this on?"]);
   });
 
+  it("under Approval, shows the Host's and a Co-host's own Posts at once", async () => {
+    const { app, id, as, write, read, moderate, host } = await setup();
+    await moderate(host, "approval");
+    const pat = await as("pat@example.com");
+    expect((await app.request(`/api/games/${id}/cohosts`, post({ email: "pat@example.com" }, host))).status).toBe(204);
+
+    await write(host, { text: "Welcome, everyone!", name: "The Host" });
+    await write(pat, { text: "Grab a cookie", name: "Pat" });
+
+    expect((await read()).map((p) => [p.text, p.status])).toEqual([
+      ["Grab a cookie", "visible"],
+      ["Welcome, everyone!", "visible"],
+    ]);
+  });
+
   it("lets the Host hide a Post from everyone but its poster", async () => {
     const { as, write, read, setStatus, host } = await setup();
     const gus = await as("gus@example.com");

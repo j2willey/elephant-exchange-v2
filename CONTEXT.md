@@ -49,7 +49,7 @@ What a person goes by in a Game, for everyone to see: a Player's name on the Ros
 _Avoid_: Nickname, handle, display name
 
 **Late Arrival**:
-A Player added after the Game has started; they simply join the Players not yet called.
+A Player added after the Game has started; they simply join the Players not yet called. Once the Final Round has started, a Late Arrival gets no Turn.
 
 **Victim**:
 A Player whose Gift was just stolen and who must act next, ahead of anyone newly drawn.
@@ -146,7 +146,7 @@ A friendly emoji anyone signed in puts on a visible Post: 👍 Like, ❤️ Love
 _Avoid_: Like (as the general name), vote, rating
 
 **Moderation**:
-The Game's rule for Posts, which the Host or a Co-host can switch at any moment: **Open** (Posts appear at once), **Approval** (each waits for the Host or a Co-host to approve it) or **Paused** (nobody can post). In any mode the Host or a Co-host can hide a single Post, or a Post with every reply under it (**Hide with replies**); showing it again brings back what was hidden with it. They can also **Mute** whoever wrote a Post: a Muted person can't post or reply in that Game (they can still react), and muting can hide all their Posts too, which unmuting brings back.
+The Game's rule for Posts, which the Host or a Co-host can switch at any moment: **Open** (Posts appear at once), **Approval** (each waits for the Host or a Co-host to approve it; the Host's and Co-hosts' own Posts never wait) or **Paused** (nobody can post). In any mode the Host or a Co-host can hide a single Post, or a Post with every reply under it (**Hide with replies**); showing it again brings back what was hidden with it. They can also **Mute** whoever wrote a Post: a Muted person can't post or reply in that Game (they can still react), and muting can hide all their Posts too, which unmuting brings back.
 
 **Feed Limits**:
 Against flooding the Feed: a guest may make at most 3 Posts in any minute (replies and Pitch parts count), and pitch a Gift again at most every 5 minutes. The Host sets both in Settings; 0 means no limit. The Host and Co-hosts are never limited.

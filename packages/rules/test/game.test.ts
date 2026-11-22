@@ -74,6 +74,26 @@ describe("Starting a Game", () => {
     expect(activePlayers(state)).toEqual(["bob"]);
     expect(onDeck(state)).toEqual(["cat"]);
   });
+
+  it("can't start again once it's under way, or put a Final Round back into play", () => {
+    const draw = scriptedDraw(["ann", "bob", "cat"]);
+    const playing = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [...addPlayers("ann", "bob", "cat"), { type: "StartGame" }],
+      draw,
+    );
+    expect(decide(playing, { type: "StartGame" }, draw)).toMatchObject({ code: "WrongPhase" });
+
+    const final = [
+      { type: "OpenGift", playerId: "ann", giftId: "g1", name: "Chia Pet" },
+      { type: "OpenGift", playerId: "bob", giftId: "g2", name: "Lava Lamp" },
+      { type: "OpenGift", playerId: "cat", giftId: "g3", name: "Fondue Set" },
+      { type: "StartFinalRound", finalists: 1, leftoverGifts: 0 },
+    ] as const;
+    const inFinal = final.reduce((s, c) => evolveAll(s, decide(s, c, draw)), playing);
+    expect(phase(inFinal)).toBe("finalRound");
+    expect(decide(inFinal, { type: "StartGame" }, draw)).toMatchObject({ code: "WrongPhase" });
+  });
 });
 
 describe("Opening a Gift", () => {
@@ -595,6 +615,24 @@ describe("Final Round", () => {
 
     expect(decide(state, { type: "StartFinalRound", finalists: 1, leftoverGifts: 0 }, draw)).toMatchObject({
       code: "TurnsInProgress",
+    });
+  });
+
+  it("can't start before the Game has, or a second time once every Finalist has had their chance", () => {
+    const draw = callOrder();
+    const inSetup = play({ activeSlots: 1, maxSteals: 3 }, addPlayers("ann", "bob", "cat"), draw);
+    expect(decide(inSetup, { type: "StartFinalRound", finalists: 1, leftoverGifts: 0 }, draw)).toMatchObject({
+      code: "WrongPhase",
+    });
+
+    const done = play(
+      { activeSlots: 1, maxSteals: 3 },
+      [...allOpened, { type: "StartFinalRound", finalists: 1, leftoverGifts: 0 }, { type: "KeepGift", playerId: "ann" }],
+      callOrder(),
+    );
+    expect(activePlayers(done)).toEqual([]);
+    expect(decide(done, { type: "StartFinalRound", finalists: 2, leftoverGifts: 0 }, draw)).toMatchObject({
+      code: "WrongPhase",
     });
   });
 

@@ -40,6 +40,39 @@ describe("Trying the demo without signing in", () => {
     expect((await app.request("/api/orgs", post({ name: "Lodge 22" }, cookie))).status).toBe(401);
   });
 
+  it("can't join, post, react or vote in a real Game, even with its link", async () => {
+    const { app, sent, visit, createGame } = setup();
+    const host = await signIn(app, sent, "host@example.com");
+    const made = await app.request("/api/games", post({ rosterMode: "self", settings: { activeSlots: 1, maxSteals: 3 } }, host));
+    const { id } = (await made.json()) as { id: string };
+    const command = (cmd: unknown) => app.request(`/api/games/${id}/commands`, post(cmd, host));
+    await command({ type: "AddPlayer", playerId: "ann", name: "Ann" });
+    await app.request(`/api/games/${id}/posts`, post({ text: "Welcome!", name: "Host" }, host));
+    const [{ id: postId }] = (await (await app.request(`/api/games/${id}/posts`)).json()) as [{ id: string }];
+    const { cookie } = await visit();
+
+    const tries = [
+      app.request(`/api/games/${id}/join`, post({ name: "Vic" }, cookie)),
+      app.request(`/api/games/${id}/posts`, post({ text: "Hi", name: "Vic" }, cookie)),
+      app.request(`/api/games/${id}/posts/${postId}/reactions`, post({ emoji: "😂", on: true }, cookie)),
+      app.request(`/api/games/${id}/vote`, post({ giftId: "g1" }, cookie)),
+      app.request(`/api/games/${id}/me/name`, post({ name: "Vic" }, cookie)),
+    ];
+    for (const r of await Promise.all(tries)) {
+      expect(r.status).toBe(401);
+    }
+    const seen = (await (await app.request(`/api/games/${id}`, { headers: { cookie: cookie! } })).json()) as { role: unknown; me: unknown };
+    expect(seen).toMatchObject({ role: null, me: null });
+  });
+
+  it("still plays in demo Games", async () => {
+    const { app, visit, createGame } = setup();
+    const { cookie } = await visit();
+    const { id } = (await (await createGame(cookie!, true)).json()) as { id: string };
+
+    expect((await app.request(`/api/games/${id}/posts`, post({ text: "Hi", name: "Vic" }, cookie))).status).toBe(201);
+  });
+
   it("leaves someone already signed in as they are", async () => {
     const { app, sent, visit } = setup();
     const ann = await signIn(app, sent, "ann@example.com");

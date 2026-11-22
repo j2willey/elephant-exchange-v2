@@ -343,7 +343,9 @@ export function createServer({
   /** Requests from a demo Game's sample phone, and the made-up Player's stand-in email each one acts as. */
   const demoActors = new WeakMap<Context, string>();
   /** Who is asking: the signed-in person, or the made-up Player a demo page's sample phone is. */
-  const signedInAs = (c: Context) => demoActors.get(c) ?? auth.sessionEmail(getCookie(c, SESSION_COOKIE));
+  /** Requests from a demo visitor about a real Game: there they count as not signed in (see the gate below). */
+  const strangers = new WeakSet<Context>();
+  const signedInAs = (c: Context) => (strangers.has(c) ? undefined : (demoActors.get(c) ?? auth.sessionEmail(getCookie(c, SESSION_COOKIE))));
   const roleIn = (gameId: string, email: string) =>
     db.select().from(gameHosts).where(and(eq(gameHosts.gameId, gameId), eq(gameHosts.email, email))).get()?.role;
   /** Rebuilt Games, so a Game's log is replayed only once per server start. `seq` counts its logged events. */
@@ -643,6 +645,19 @@ export function createServer({
     demoActors.set(c, emailOfPlayer(id, playerId) ?? DEMO_ACTOR + playerId);
     return next();
   });
+
+  // Someone trying the demo without signing in has no business in a real Game, even with its link: there they're
+  // treated as not signed in, so they can watch like anyone with the link but can't join, post, react or vote.
+  const visitorGate = async (c: Context, next: () => Promise<void>) => {
+    const email = auth.sessionEmail(getCookie(c, SESSION_COOKIE));
+    if (isVisitor(email)) {
+      const row = db.select({ demo: games.demo }).from(games).where(eq(games.id, c.req.param("id")!)).get();
+      if (row && !row.demo) strangers.add(c);
+    }
+    return next();
+  };
+  app.use("/api/games/:id", visitorGate);
+  app.use("/api/games/:id/*", visitorGate);
 
   // For Docker's HEALTHCHECK and uptime monitors: up only if the database answers.
   app.get("/api/health", (c) => {
@@ -1406,7 +1421,8 @@ export function createServer({
       if (wants !== saved?.pending) holdName(id, email, wants);
     } else if (!playerId && author !== saved?.name && author !== WAITING_GUEST) renamePerson(id, game, { email }, author);
 
-    const status = game.moderation === "approval" ? "pending" : "visible";
+    // Under Approval the Host and Co-hosts are the approvers: their own Posts go up at once.
+    const status = game.moderation === "approval" && !roleIn(id, email) ? "pending" : "visible";
     const postId = randomBytes(12).toString("base64url");
     if (photo) photos.save(id, postId, photo.data, await smallPhoto(photo.data));
     try {

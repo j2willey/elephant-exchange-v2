@@ -46,7 +46,7 @@ export type Event =
   | { type: "GiftDescribed"; giftId: GiftId; name: string; description: string }
   | { type: "PlayerRenamed"; playerId: PlayerId; name: string };
 
-export type RuleErrorCode = "NotActive" | "AlreadyPlayed" | "GiftOnTable" | "NotReturned" | "NoLeftoverGifts" | "TurnsInProgress" | "NothingToKeep" | "GameOver" | "NothingToUndo" | "GiftNotOpened" | "GiftFrozen" | "NoTakeBacks" | "NoSuchPlayer";
+export type RuleErrorCode = "NotActive" | "AlreadyPlayed" | "GiftOnTable" | "NotReturned" | "NoLeftoverGifts" | "TurnsInProgress" | "NothingToKeep" | "GameOver" | "NothingToUndo" | "GiftNotOpened" | "GiftFrozen" | "NoTakeBacks" | "NoSuchPlayer" | "WrongPhase";
 
 export interface RuleError {
   code: RuleErrorCode;
@@ -122,6 +122,8 @@ export function decide(state: GameState, command: Command, draw: DrawFn): Event[
     case "AddPlayer":
       return withDraws(state, [{ type: "PlayerAdded", playerId: command.playerId, name: command.name }], draw);
     case "StartGame":
+      // A stale console could send it again: never put a Game under way (or a Final Round) back to its start.
+      if (state.phase !== "setup") return { code: "WrongPhase", message: "The Game has already started" };
       return withDraws(state, [{ type: "GameStarted" }], draw);
     case "OpenGift":
       if (state.phase === "finalRound" && state.leftoverGifts === 0) {
@@ -173,6 +175,10 @@ export function decide(state: GameState, command: Command, draw: DrawFn): Event[
       if (!state.beforeLastPick) return { code: "NothingToUndo", message: "There is no Pick to undo" };
       return [{ type: "PickUndone" }];
     case "StartFinalRound": {
+      // Once only, and only from regular play: a second one would give the Finalists another chance.
+      if (state.phase !== "playing") {
+        return { code: "WrongPhase", message: state.phase === "setup" ? "The Game hasn't started yet" : "The Final Round has already started" };
+      }
       if (state.active.length > 0) {
         return { code: "TurnsInProgress", message: "Wait until every active Player has a Gift" };
       }
