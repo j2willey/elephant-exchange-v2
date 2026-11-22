@@ -451,4 +451,4 @@ export function createPeople<G, Result = unknown>(deps: {
   };
 }
 
-export type People<G> = ReturnType<typeof createPeople<G>>;
+export type People<G, Result = unknown> = ReturnType<typeof createPeople<G, Result>>;

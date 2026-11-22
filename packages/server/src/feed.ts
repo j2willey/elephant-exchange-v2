@@ -495,6 +495,10 @@ export function createFeed(deps: {
       .orderBy(asc(posts.createdAt), asc(sql`${posts}.rowid`))
       .all();
 
+  /** Who wrote a Post in the Game (their email), if there's such a Post. */
+  const posterOf = (id: string, postId: string): string | undefined =>
+    db.select({ email: posts.email }).from(posts).where(and(eq(posts.gameId, id), eq(posts.id, postId))).get()?.email;
+
   /** Puts a person's new name on everything they posted, in the caller's transaction; the caller then says it `changed`. */
   const renameAuthor = (tx: Tx, id: string, email: string, name: string) =>
     void tx.update(posts).set({ author: name }).where(and(eq(posts.gameId, id), eq(posts.email, email))).run();
@@ -516,6 +520,7 @@ export function createFeed(deps: {
     photoFor,
     album,
     renameAuthor,
+    posterOf,
     changed,
     forget,
     /** The Games with a shared copy in memory. */
