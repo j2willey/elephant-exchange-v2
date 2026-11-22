@@ -1179,11 +1179,9 @@ export function createServer({
   });
 
   // The Feed, as this viewer may see it: every visible Post, plus their own and, for a Host, all the others.
-  app.get("/api/games/:id/posts", (c) => {
-    const id = c.req.param("id");
-    if (!load(id)) return c.json({ error: "Game not found" }, 404);
-    const email = signedInAs(c);
-    const hosting = email !== undefined && roleIn(id, email) !== undefined;
+  app.get("/api/games/:id/posts", access.need("anyone"), (c) => {
+    const { id, email, role } = c.var.access;
+    const hosting = role !== undefined;
     const feed = feedOf(id);
     const rows = hosting ? feed.rows : feed.rows.filter((p) => p.status === "visible" || (email !== undefined && p.email === email));
     // Every Reaction in the Game, tallied per Post in the order they're offered, with the viewer's own marked.
@@ -1252,10 +1250,9 @@ export function createServer({
     onError: (c) => c.json({ error: "That Photo is too big to send" }, 413),
   });
 
-  app.post("/api/games/:id/posts", photoSizeLimit, async (c) => {
-    const id = c.req.param("id");
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in to post" }, 401);
+  app.post("/api/games/:id/posts", access.need("signedIn", "Sign in to post"), photoSizeLimit, async (c) => {
+    const { id } = c.var.access;
+    const email = c.var.access.email!;
     let upload: File | undefined;
     let body: Awaited<ReturnType<typeof parseBody<z.infer<typeof postBody>>>>;
     if (c.req.header("content-type")?.startsWith("multipart/form-data")) {
@@ -1398,10 +1395,10 @@ export function createServer({
    * It's a Post, so the Feed's rules apply: Approval, Paused, Mute, Hide. Words come as JSON; with a Photo, as a
    * multipart form, its file in `photo`. Nothing left (no tagline, words or Photo) removes the part.
    */
-  app.put("/api/games/:id/gifts/:giftId/pitch", photoSizeLimit, async (c) => {
-    const { id, giftId } = c.req.param();
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
+  app.put("/api/games/:id/gifts/:giftId/pitch", access.need("signedIn"), photoSizeLimit, async (c) => {
+    const { id } = c.var.access;
+    const email = c.var.access.email!;
+    const giftId = c.req.param("giftId");
     let upload: File | undefined;
     let body: Awaited<ReturnType<typeof parseBody<z.infer<typeof pitchBody>>>>;
     if (c.req.header("content-type")?.startsWith("multipart/form-data")) {
@@ -1475,10 +1472,10 @@ export function createServer({
    * more often than the Game allows (5 minutes unless the Host changed it), so nobody bombards the Feed; the Host
    * and Co-hosts may do it any time, for any holder.
    */
-  app.post("/api/games/:id/gifts/:giftId/pitch/again", async (c) => {
-    const { id, giftId } = c.req.param();
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
+  app.post("/api/games/:id/gifts/:giftId/pitch/again", access.need("signedIn"), async (c) => {
+    const { id } = c.var.access;
+    const email = c.var.access.email!;
+    const giftId = c.req.param("giftId");
     const body = await parseBody(c, repitchBody);
     if (!body.ok) return body.res;
     const found = pitchPart(id, giftId, email, body.data.playerId);
@@ -1495,13 +1492,8 @@ export function createServer({
   });
 
   // Every visible Photo in one zip, for the Host to keep before they're deleted (hidden ones stay out).
-  app.get("/api/games/:id/album.zip", (c) => {
-    const id = c.req.param("id");
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
-    const game = load(id);
-    if (!game) return c.json({ error: "Game not found" }, 404);
-    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can download the album" }, 403);
+  app.get("/api/games/:id/album.zip", access.need("staff", "Only the Host and Co-hosts can download the album"), (c) => {
+    const { id, game } = c.var.access;
 
     const rows = db
       .select()
@@ -1854,15 +1846,10 @@ export function createServer({
     return c.json({ myVote: giftId });
   });
 
-  app.post("/api/games/:id/moderation", async (c) => {
-    const id = c.req.param("id");
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
+  app.post("/api/games/:id/moderation", access.need("staff", "Only the Host and Co-hosts can moderate this Game"), async (c) => {
+    const { id, game } = c.var.access;
     const body = await parseBody(c, moderationBody);
     if (!body.ok) return body.res;
-    const game = load(id);
-    if (!game) return c.json({ error: "Game not found" }, 404);
-    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can moderate this Game" }, 403);
     db.update(games).set({ moderation: body.data.mode }).where(eq(games.id, id)).run();
     if (body.data.mode !== game.moderation) stats.optionChanged(id, "moderation");
     publish(id, { ...game, moderation: body.data.mode });
@@ -1870,10 +1857,10 @@ export function createServer({
   });
 
   // Anyone signed in can put a Reaction on a visible Post or take it back, even while posting is Paused.
-  app.post("/api/games/:id/posts/:postId/reactions", async (c) => {
-    const { id, postId } = c.req.param();
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in to react" }, 401);
+  app.post("/api/games/:id/posts/:postId/reactions", access.need("signedIn", "Sign in to react"), async (c) => {
+    const { id } = c.var.access;
+    const email = c.var.access.email!;
+    const postId = c.req.param("postId");
     const body = await parseBody(c, reactionBody);
     if (!body.ok) return body.res;
     const target = db
@@ -1894,14 +1881,11 @@ export function createServer({
   });
 
   // Approving a Pending Post and showing a Hidden one again are the same: it becomes visible.
-  app.post("/api/games/:id/posts/:postId/status", async (c) => {
-    const { id, postId } = c.req.param();
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
+  app.post("/api/games/:id/posts/:postId/status", access.need("staff", "Only the Host and Co-hosts can moderate this Game"), async (c) => {
+    const { id } = c.var.access;
+    const postId = c.req.param("postId");
     const body = await parseBody(c, postStatusBody);
     if (!body.ok) return body.res;
-    if (!load(id)) return c.json({ error: "Game not found" }, 404);
-    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can moderate this Game" }, 403);
     const all = db.select({ id: posts.id, replyTo: posts.replyTo, status: posts.status }).from(posts).where(eq(posts.gameId, id)).all();
     if (!all.some((p) => p.id === postId)) return c.json({ error: "Post not found" }, 404);
     db.transaction((tx) => {
@@ -1939,14 +1923,12 @@ export function createServer({
    * Attaches a Post to a Gift after it was posted (a great photo whose poster didn't pick the Gift), or takes it off.
    * For its poster, and the Host and Co-hosts.
    */
-  app.post("/api/games/:id/posts/:postId/gift", async (c) => {
-    const { id, postId } = c.req.param();
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
+  app.post("/api/games/:id/posts/:postId/gift", access.need("signedIn"), async (c) => {
+    const { id, game, role } = c.var.access;
+    const email = c.var.access.email!;
+    const postId = c.req.param("postId");
     const body = await parseBody(c, postGiftBody);
     if (!body.ok) return body.res;
-    const game = load(id);
-    if (!game) return c.json({ error: "Game not found" }, 404);
     const row = db
       .select({ email: posts.email, pitchFor: posts.pitchFor })
       .from(posts)
@@ -1954,7 +1936,7 @@ export function createServer({
       .get();
     if (!row) return c.json({ error: "Post not found" }, 404);
     if (row.pitchFor !== null) return c.json({ error: "A pitch stays with its Gift" }, 409);
-    if (row.email !== email && !roleIn(id, email)) return c.json({ error: "Only its poster, the Host and Co-hosts can change this Post" }, 403);
+    if (row.email !== email && !role) return c.json({ error: "Only its poster, the Host and Co-hosts can change this Post" }, 403);
     const { giftId } = body.data;
     if (giftId !== null && !gifts(game.state).some((g) => g.id === giftId)) return c.json({ error: "No such Gift in this Game" }, 400);
     db.update(posts)
@@ -1966,14 +1948,10 @@ export function createServer({
   });
 
   /** The Host or a Co-host mutes whoever wrote a Post (they can't post or reply), or unmutes them. */
-  app.post("/api/games/:id/mute", async (c) => {
-    const id = c.req.param("id");
-    const email = signedInAs(c);
-    if (!email) return c.json({ error: "Sign in first" }, 401);
+  app.post("/api/games/:id/mute", access.need("staff", "Only the Host and Co-hosts can moderate this Game"), async (c) => {
+    const { id } = c.var.access;
     const body = await parseBody(c, muteBody);
     if (!body.ok) return body.res;
-    if (!load(id)) return c.json({ error: "Game not found" }, 404);
-    if (!roleIn(id, email)) return c.json({ error: "Only the Host and Co-hosts can moderate this Game" }, 403);
     const { postId, muted, hidePosts } = body.data;
     const by = db
       .select({ email: posts.email })
