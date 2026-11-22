@@ -57,6 +57,19 @@ describe("A Game's look", () => {
     const step = (what: string) => console.error(`[ci-debug] ${(performance.now() - t0).toFixed(0).padStart(6)} ms  ${what}`);
     const { host, lodge, user } = await organizer();
     step("const { host, lodge, user } = await organizer();");
+    // What the page receives and sends, while it runs.
+    const editTheme = host.editGameTheme.bind(host);
+    host.editGameTheme = async (gameId, change) => {
+      step(`save colors sends ${JSON.stringify(change)}`);
+      const done = await editTheme(gameId, change);
+      step(`save colors answered ${JSON.stringify(done)}`);
+      return done;
+    };
+    const watch = host.watch.bind(host);
+    host.watch = (gameId, onGame, ...rest) => {
+      step("live connection asked for");
+      return watch(gameId, (g) => (step(`live copy v${g.version}, main color ${g.theme.color}, brand now ${cssVar("--brand")}`), onGame(g)), ...rest);
+    };
     const id = await host.createGame({ name: "Party", orgId: lodge, options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3, rosterMode: "host" } });
     step("const id = await host.createGame({ name: \"Party\", orgId: lodge, option");
     openApp(host, `/games/${id}/settings`);
@@ -65,7 +78,9 @@ describe("A Game's look", () => {
     step("const look = await panel();");
 
     fireEvent.input(within(look).getByLabelText(/main color/i), { target: { value: "#0b3d91" } });
+    step(`main color field now ${(within(look).getByLabelText(/main color/i) as HTMLInputElement).value}`);
     step("fireEvent.input(within(look).getByLabelText(/main color/i), { target: ");
+    step(`main color field just before Save ${(within(look).getByLabelText(/main color/i) as HTMLInputElement).value}`);
     await user.click(within(look).getByRole("button", { name: /save colors/i }));
     step("await user.click(within(look).getByRole(\"button\", { name: /save colors");
     await waitFor(() => expect(cssVar("--brand")).toBe("#0b3d91"));
