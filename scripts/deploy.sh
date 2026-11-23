@@ -5,7 +5,7 @@
 # Run on Omarchy, from anywhere in the repo:  ./scripts/deploy.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
-host=${DEPLOY_HOST:-conductor}
+host=${DEPLOY_HOST:-ej}
 dir=${DEPLOY_DIR:-ww/elephant-exchange-v2}
 keep=3 # tagged images kept on the droplet, to roll back to
 # One ssh connection for the whole run, so the key's passphrase is asked for once.

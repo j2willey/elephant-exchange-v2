@@ -4,7 +4,7 @@
 # every deploy; run it by hand any time, and weekly through December.
 #   ./scripts/pull-backups.sh            # into ~/elephant-backups
 set -euo pipefail
-host=${DEPLOY_HOST:-conductor}
+host=${DEPLOY_HOST:-ej}
 dir=${DEPLOY_DIR:-ww/elephant-exchange-v2}
 to=${BACKUP_COPY_DIR:-$HOME/elephant-backups}
 mkdir -p "$to"
