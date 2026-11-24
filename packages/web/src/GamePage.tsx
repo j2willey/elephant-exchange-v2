@@ -18,6 +18,7 @@ import { ScreenSwitch } from "./WatchScreen.js";
 import { VotePanel } from "./Vote.js";
 import { FeedbackCard } from "./Feedback.js";
 import { HighlightsLink } from "./HighlightsPage.js";
+import { BeforeTheParty } from "./HostTips.js";
 import { AskingToPlayPanel, AskToPlay, CopyInvitation, knownIn, useWatching, useWelcomeReturn, Welcome, WelcomeForm, WhenWhere } from "./Welcome.js";
 import { GiftPostsViewer, showGift } from "./GiftPosts.js";
 
@@ -218,6 +219,7 @@ export function GamePage({ gameId }: { gameId?: string } = {}) {
       )}
       <NamesToApprove game={game} changes={staffChanges} />
       <AskingToPlayPanel game={game} changes={staffChanges} />
+      <BeforeTheParty game={game} />
 
       {error && (
         <p className="error" role="alert">
@@ -327,8 +329,9 @@ function GuestView({
   const newcomer = !knownIn(game) && game.phase !== "ended";
 
   // Someone new to the Game: who they are and whether they brought a gift, or just watch (ADR 0007).
-  if (welcome && newcomer && !watching && signedIn !== "loading")
-    return <Welcome game={game} signedIn={signedIn} accept={accept} onWatch={watch} />;
+  // Not until it's known whether they're signed in: the Game showing first and then giving way would be a flicker.
+  if (welcome && newcomer && !watching)
+    return signedIn === "loading" ? <p className="muted">Loading…</p> : <Welcome game={game} signedIn={signedIn} accept={accept} onWatch={watch} />;
 
   return (
     <div className="guest">

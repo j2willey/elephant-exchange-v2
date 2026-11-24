@@ -9,6 +9,7 @@ import { Backdrop } from "./Backdrop.js";
 import party from "./assets/landing-party.webp";
 import scoreboard from "./assets/scoreboard.webp";
 import { SignInForm } from "./SignIn.js";
+import { ThreeThings, TipList } from "./HostTips.js";
 
 /**
  * The front page: what Elephant Exchange is, the problem it solves, how it helps and how it works, with the ways
@@ -140,6 +141,8 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
           <Link to="/guide">Read the Host's Guide</Link> for running a smooth one.
         </p>
       </section>
+
+      <ThreeThings />
 
       <Testimonials />
 
@@ -357,16 +360,33 @@ export function Playbook() {
 
       <section className="card">
         <h3>📋 Before the party</h3>
+        <p>Three things make the biggest difference, and they all happen before anyone arrives:</p>
+        <TipList />
         <p>
-          Start a Game and name it after your party. Use the recommended settings, or customize them: each one has an ⓘ
+          <strong>Setting up.</strong> Start a Game and name it after your party. Use the recommended settings, or customize them: each one has an ⓘ
           that explains it, and they're all explained at the end of this page too. Tick{" "}
           <strong>Always start with these settings</strong> and your next Game starts with them in one tap. Nothing is
           fixed: you can change any setting later in the Game's Settings, even mid-party.
         </p>
         <p>
-          Then get the names in. Paste the guest list straight from an email or a spreadsheet, one name per line; or let
-          guests add themselves from their phones while they eat appetizers, by turning on sign-up in Settings and sending
-          them the link.
+          <strong>The guest list.</strong> Paste it straight from an email or a spreadsheet, one person per line. Add an
+          email after a name (<em>Ann Lee, ann@example.com</em>), or with ✉ beside a name later, and whoever signs in with
+          that email plays as Ann from her own phone. Or let guests add themselves from their phones while they eat
+          appetizers, by turning on sign-up in Settings.
+        </p>
+        <p>
+          <strong>Inviting.</strong> 🔗 Invite on your console has the QR code, the link, and{" "}
+          <strong>Copy invitation</strong>: a few lines with the Game's name, When &amp; where and the link, to paste into
+          your own email or team chat. Anyone who opens the link gets a welcome: their name, their email, and whether they
+          brought a gift; or <em>Just watch</em>, with no email needed. For people on your guest list,{" "}
+          <strong>✉ Email invitations</strong> sends each one a link of their own that signs them in as themselves. It
+          comes from Elephant Exchange's address, so it may land in spam; the shared link works for them just as well,
+          with the same email. Beside each name you'll see <em>not yet</em>, <em>✉ invited</em> or <em>✓ in</em>.
+        </p>
+        <p>
+          <strong>Brought a gift, but not on your list?</strong> When you enter the Players yourself, a guest can ask to
+          play from their phone. They show up under <em>Asking to play</em> on your console, and one tap on{" "}
+          <em>Add as Player</em> puts them in.
         </p>
         <p>
           <strong>Recruit a Co-host or two.</strong> In a big group, a Co-host at your side can type in what each Gift is
@@ -532,8 +552,10 @@ export function Playbook() {
           through, play as a slideshow, and share with a link, for the people who couldn't make it.
         </p>
         <div className="tip">
-          <strong>Tip: the consolation prize.</strong> Keep one or two small, genuinely good gifts hidden, like chocolate
-          or a gift card. The Worst Gift's holder picks a prize, so a loss becomes a win and the night ends on a laugh.
+          <strong>Tip: the extra gifts.</strong> This is where the 2 to 5 extra gifts from <em>Before the party</em> come
+          in. Keep them aside, and genuinely good ones if you can, like chocolate or a gift card. The holders of the worst
+          Gifts pick from them, so a loss becomes a win and the night ends on a laugh. Any left over can go to someone who
+          forgot a gift, so they get to play too.
         </div>
       </section>
 
