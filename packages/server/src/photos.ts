@@ -1,4 +1,4 @@
-import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import sharp from "sharp";
 
@@ -82,9 +82,10 @@ export function photoStore(dir: string) {
       rmSync(file(gameId, postId, "small"), { force: true });
     },
     removeGame: (gameId: string) => rmSync(join(dir, gameId), { recursive: true, force: true }),
-    /** All the Photos kept, in bytes. */
+    /** All the Photos kept, in bytes: 0 before the first, when a new server hasn't made the folder yet. */
     bytes: () => {
       let total = 0;
+      if (!existsSync(dir)) return 0;
       for (const entry of readdirSync(dir, { recursive: true, withFileTypes: true })) {
         if (entry.isFile()) total += statSync(join(entry.parentPath, entry.name)).size;
       }
