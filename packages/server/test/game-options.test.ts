@@ -6,7 +6,7 @@ import { createServer } from "../src/server.js";
 import { capturingMailer, hostGame, post, signIn } from "./support.js";
 
 const patch = (body: unknown, cookie?: string) => ({ ...post(body, cookie), method: "PATCH" });
-type Shown = { name: string; tagline: string; rosterMode: string; clock: { turnSeconds: number } };
+type Shown = { name: string; tagline: string; whenWhere: string; rosterMode: string; clock: { turnSeconds: number } };
 
 async function setup() {
   const { sent, mailer } = capturingMailer();
@@ -36,6 +36,18 @@ describe("A Game's options", () => {
     expect((await app.request(`/api/games/${id}/options`, patch({ tagline: "x".repeat(101) }, host))).status).toBe(400);
     await app.request(`/api/games/${id}/options`, patch({ tagline: "" }, host));
     expect(await shown()).toMatchObject({ tagline: "" });
+  });
+
+  it("include When & where for the welcome screen, none to start with, which can be taken off again", async () => {
+    const { app, id, host, shown } = await setup();
+    expect(await shown()).toMatchObject({ whenWhere: "" });
+
+    await app.request(`/api/games/${id}/options`, patch({ whenWhere: "  Fri Dec 12, 10 am · Room B " }, host));
+    expect(await shown()).toMatchObject({ whenWhere: "Fri Dec 12, 10 am · Room B" });
+
+    expect((await app.request(`/api/games/${id}/options`, patch({ whenWhere: "x".repeat(121) }, host))).status).toBe(400);
+    await app.request(`/api/games/${id}/options`, patch({ whenWhere: "" }, host));
+    expect(await shown()).toMatchObject({ whenWhere: "" });
   });
 
   it("can be changed one at a time", async () => {

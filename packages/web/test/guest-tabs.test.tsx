@@ -70,8 +70,9 @@ describe("A guest's phone", () => {
 
     await user.click(await tab(/^you$/i));
 
-    expect(await screen.findByRole("heading", { name: /playing\? sign in first/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /send.*link/i })).toBeInTheDocument();
+    const form = await screen.findByRole("form", { name: /join this game/i });
+    expect(within(form).getByLabelText(/email/i)).toBeInTheDocument();
+    expect(within(form).getByRole("button", { name: /email me a link/i })).toBeInTheDocument();
   });
 
   it("lets someone signed in join under You, then shows who they are and the Players", async () => {
@@ -80,8 +81,9 @@ describe("A guest's phone", () => {
 
     await user.click(await tab(/^you$/i));
 
-    const join = await screen.findByRole("region", { name: /play in this game/i });
+    const join = await screen.findByRole("form", { name: /join this game/i });
     await user.type(await within(join).findByLabelText(/your name/i), "Gus");
+    await user.click(within(join).getByRole("checkbox", { name: /i brought a gift/i }));
     await user.click(within(join).getByRole("button", { name: /join as a player/i }));
     expect(await screen.findByText(/you're playing as gus/i)).toBeInTheDocument();
     expect(within(screen.getByRole("list", { name: /players/i })).getByText("Cat")).toBeInTheDocument();

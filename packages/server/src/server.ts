@@ -194,11 +194,13 @@ function tally(ballots: ReadonlyMap<string, string>): Record<string, number> {
 
 /** What screens are shown about a Game: answers from the rules module, never its internal state. */
 export function view(id: string, game: LoadedGame, now: Date) {
-  const { name, tagline, demo, rosterMode, moderation, approveNames, turnSeconds, postsPerMinute, repitchMinutes, clocks, state, seq, vote, screen } = game;
+  const { name, tagline, whenWhere, demo, rosterMode, moderation, approveNames, turnSeconds, postsPerMinute, repitchMinutes, clocks, state, seq, vote, screen } = game;
   return {
     id,
     name,
     tagline,
+    /** When and where the party is, in the Host's words; "" for none. */
+    whenWhere,
     demo,
     theme: resolveTheme(id, game.theme),
     rosterMode,
@@ -894,12 +896,12 @@ export function createServer({
     const { id } = c.var.access;
     const body = await parseBody(c, gameOptionsEdit);
     if (!body.ok) return body.res;
-    const { name, tagline, turnSeconds, rosterMode, approveNames, postsPerMinute, repitchMinutes } = body.data;
+    const { name, tagline, whenWhere, turnSeconds, rosterMode, approveNames, postsPerMinute, repitchMinutes } = body.data;
     const counted = { turnSeconds, rosterMode, approveNames, postsPerMinute, repitchMinutes };
     const game = store.change(id, (was) => {
       for (const [option, value] of Object.entries(counted))
         if (value !== undefined && value !== was[option as keyof typeof counted]) stats.optionChanged(id, option);
-      return { name, tagline, ...counted };
+      return { name, tagline, whenWhere, ...counted };
     })!;
     return c.json(view(id, game, now()));
   });

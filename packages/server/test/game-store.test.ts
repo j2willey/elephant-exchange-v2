@@ -25,6 +25,7 @@ describe("The Game store", () => {
   const patches: [string, GamePatch][] = [
     ["name", { name: "OA Holiday Party" }],
     ["tagline", { tagline: "It's going to be a gas!" }],
+    ["When & where", { whenWhere: "Fri Dec 12, 10 am · Room B" }],
     ["who adds Players", { rosterMode: "self" }],
     ["Moderation", { moderation: "approval" }],
     ["Approve names", { approveNames: true }],

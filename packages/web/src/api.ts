@@ -302,7 +302,7 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
     /** Changes a Game's name, turn timer or who adds the Players; only those given. */
     async setGameOptions(
       gameId: string,
-      options: { name?: string; tagline?: string; turnSeconds?: number; rosterMode?: RosterMode; approveNames?: boolean; postsPerMinute?: number; repitchMinutes?: number },
+      options: { name?: string; tagline?: string; whenWhere?: string; turnSeconds?: number; rosterMode?: RosterMode; approveNames?: boolean; postsPerMinute?: number; repitchMinutes?: number },
     ): Promise<SharedGame | undefined> {
       const res = await sendJson("PATCH", `/api/games/${encodeURIComponent(gameId)}/options`, options);
       return res.ok ? ((await res.json()) as SharedGame) : undefined;

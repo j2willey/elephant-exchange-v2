@@ -69,6 +69,9 @@ One gift exchange, from setup through the final results. The Host may end it at 
 **Game Tagline**:
 An optional line under the Game's name, set by the Host ("Ugly sweaters encouraged"), shown on the big screen and every phone. Not a Pitch's Tagline, which is about one Gift.
 
+**When & where**:
+An optional line the Host writes for the party, such as "Fri Dec 12, 10 am · Conference room B": shown on the welcome screen someone gets on the Game's link before it starts, and in the invitation the Host copies to send ahead. Free text, so no time zones to get wrong.
+
 **Scoreboard**:
 The big screen at the party (a TV or projector), which only watches. The Host or a Co-host switches its **Screen Mode**: **Gifts** (who's up, On Deck, every Gift with its holder and Steals, the latest Posts and a QR code), **Rules**, **QR code** (filling the screen), **Catalog** (every Gift as a card with its Photo) or, once the Game is over, **Highlights**. A new Game's starts on the QR code and switches to Gifts by itself when the Game starts.
 _Avoid_: TV screen, watch screen, display

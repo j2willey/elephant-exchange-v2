@@ -1,0 +1,1 @@
+ALTER TABLE `games` ADD `when_where` text DEFAULT '' NOT NULL;
