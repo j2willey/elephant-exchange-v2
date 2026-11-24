@@ -1,5 +1,7 @@
 # Prompt: build the guided demo replay
 
+> **Built** on the `guided-demo` branch (2026-11-24). Kept as the record of what was asked; the README says what was built and where. The paths below are from before the move to `packages/web/src/demo-scripts/`.
+
 Paste everything below the line into Claude Code on Omarchy, from the repo root (`elephant-exchange-v2`), or ask a Claude Code session there to follow this file.
 
 ---

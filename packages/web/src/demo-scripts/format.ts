@@ -53,7 +53,7 @@ export interface DemoScript {
   gifts: Record<string, { name: string; description?: string }>;
 
   /**
-   * Photos the script posts, by key. `file` is relative to demo-script/photos/ (or "asset:demo-gift-table" for the
+   * Photos the script posts, by key. `file` is relative to packages/web/src/demo-scripts/photos/ (or "asset:demo-gift-table" for the
    * app's existing packages/web/src/assets/demo-gift-table.webp). `placeholder` describes the picture: until a real
    * file exists, the replay draws a plain placeholder card with this text, and it doubles as the brief for the
    * picture that will replace it.

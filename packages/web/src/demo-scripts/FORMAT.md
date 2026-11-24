@@ -23,13 +23,13 @@ The rule that matters: **every action is something the app already does.** Game 
 
 - **players**: names, unique. Steps say `"Ann"`, never an id; the replay keeps a name → playerId map.
 - **gifts**: short keys (`"blanket"`) → what the Host types. Steps say `"blanket"`; the replay makes the giftId (`crypto.randomUUID()`, as the console does) when the Gift is opened.
-- **photos**: keys → a file under `demo-script/photos/` plus a description. The pictures don't exist yet: until a file is there, the replay draws a plain placeholder card showing the description. `"asset:demo-gift-table"` means the app's existing `packages/web/src/assets/demo-gift-table.webp`.
+- **photos**: keys → a file under `packages/web/src/demo-scripts/photos/` plus a description. The pictures don't exist yet: until a file is there, the replay draws a plain placeholder card showing the description. `"asset:demo-gift-table"` means the app's existing `packages/web/src/assets/demo-gift-table.webp`.
 
 ### Draws
 
 The Draw is random on the server (`randomDraw` in `packages/server/src/server.ts`), but a script needs the same order every time. So `draws` lists every Player the Draw will pick, in order. With `activeSlots: 1` the rules draw two at the start (one up, one On Deck), then one more each time a Turn ends. A **Skip** returns the Player to the pool and draws a replacement from everyone else, so a skipped Player appears in `draws` twice.
 
-The rules already take the Draw as a function (`DrawFn`, "tests pass a script"), so scripted Draws are a server change only: for a demo Game, its Host may say which Players to draw next (see the build prompt). Draws are still logged as `PlayerDrawn` events, so ADR 0001 holds.
+The rules already take the Draw as a function (`DrawFn`, "tests pass a script"), so scripted Draws are a server change only: for a demo Game, its Host may say which Players to draw next, in an `x-demo-draws` header ([ADR 0006](../../../../docs/adr/0006-demo-scripted-draws.md)). The replay works out which Draws are left before each command by playing the script through the rules (`play.ts`). Draws are still logged as `PlayerDrawn` events, so ADR 0001 holds.
 
 ## Steps
 
