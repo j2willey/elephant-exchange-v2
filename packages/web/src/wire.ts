@@ -24,6 +24,7 @@ export type {
   Session,
   SharedGame,
   StaffMember,
+  GuestListEntry,
   StatsInsights,
   StatsSummary,
   SystemReport,

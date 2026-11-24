@@ -176,7 +176,10 @@ export function WelcomeForm({ game, signedIn, accept, onWatch }: { game: GameVie
           I brought a gift, and I'm playing
         </label>
       ) : (
-        <p className="muted hint">The Host adds the Players for this Game. Brought a gift? Make sure the Host has your name.</p>
+        <p className="muted hint">
+          The Host adds the Players for this Game. Brought a gift? Use the email your Host has for you, and you'll be in as
+          yourself; if they don't have it, let them know you're here.
+        </p>
       )}
       <p className="muted hint">
         {selfSignUp && gift

@@ -1,6 +1,6 @@
 import type { Command, GameOptions, GameSettings, Phase, RuleErrorCode } from "@elephant/rules";
 import { io } from "socket.io-client";
-import type { AdminGame, AdminPerson, Emoji, FeedbackAsk, FeedbackSummary, StatsSummary, SystemReport, Testimonial, GameView, Moderation, MyGame, MyOrg, PendingName, Person, Post, RosterMode, ScreenMode, Session, SharedGame, StaffMember, Theme, VoteDisplay } from "./wire";
+import type { AdminGame, AdminPerson, Emoji, FeedbackAsk, FeedbackSummary, StatsSummary, SystemReport, Testimonial, GameView, Moderation, MyGame, MyOrg, PendingName, Person, Post, RosterMode, ScreenMode, Session, SharedGame, StaffMember, GuestListEntry, Theme, VoteDisplay } from "./wire";
 
 export type {
   AdminGame,
@@ -27,6 +27,7 @@ export type {
   Session,
   SharedGame,
   StaffMember,
+  GuestListEntry,
   Theme,
   Viewer,
   VoteDisplay,
@@ -485,6 +486,31 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
     },
 
     /** Which Players are the Host or a Co-host, for their consoles. */
+    /** For the Host and Co-hosts: the Players with emails, and whether each has opened the Game signed in. */
+    async guestList(gameId: string): Promise<GuestListEntry[]> {
+      const res = await fetchFn(`/api/games/${encodeURIComponent(gameId)}/guest-list`);
+      if (!res.ok) throw new Error(`loading the guest list failed: ${res.status}`);
+      return ((await res.json()) as { players: GuestListEntry[] }).players;
+    },
+
+    /** Adds a Player with their email: whoever signs in with it is that Player. Says why not, if refused. */
+    async addGuest(gameId: string, name: string, email: string): Promise<{ ok: true } | { ok: false; message: string }> {
+      const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/guest-list`, { name, email });
+      if (res.ok) return { ok: true };
+      if (res.status === 409) return { ok: false, message: ((await res.json()) as { message: string }).message };
+      if (res.status === 400) return { ok: false, message: "That doesn't look like an email address" };
+      return { ok: false, message: "Something went wrong" };
+    },
+
+    /** Gives a Player an email, changes it, or takes it off (null). Says why not, if refused. */
+    async setPlayerEmail(gameId: string, playerId: string, email: string | null): Promise<{ ok: true } | { ok: false; message: string }> {
+      const res = await sendJson("PUT", `/api/games/${encodeURIComponent(gameId)}/players/${encodeURIComponent(playerId)}/email`, { email });
+      if (res.ok) return { ok: true };
+      if (res.status === 409) return { ok: false, message: ((await res.json()) as { message: string }).message };
+      if (res.status === 400) return { ok: false, message: "That doesn't look like an email address" };
+      return { ok: false, message: "Something went wrong" };
+    },
+
     async staff(gameId: string): Promise<StaffMember[]> {
       const res = await fetchFn(`/api/games/${encodeURIComponent(gameId)}/staff`);
       if (!res.ok) throw new Error(`loading the Co-hosts failed: ${res.status}`);

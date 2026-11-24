@@ -2,11 +2,12 @@ import { aboutGift, GiftPitch } from "./Pitch.js";
 import { RenameButton } from "./Rename.js";
 import { GiftMedia } from "./GiftPosts.js";
 import { StaffMark } from "./Cohosts.js";
+import { PlayerEmail } from "./GuestList.js";
 import { useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { renderSVG } from "uqr";
 import type { Command } from "@elephant/rules";
-import type { GameView, Post, SharedGame, Viewer } from "./api.js";
+import type { GameView, GuestListEntry, Post, SharedGame, Viewer } from "./api.js";
 import { Countdown } from "./Countdown.js";
 import { Feed } from "./Feed.js";
 import { EndGame } from "./GameSettings.js";
@@ -37,10 +38,13 @@ export function LaptopConsole({
   joinPanel,
   finalRoundPanel,
   staffRole,
+  guestOf,
 }: {
   game: GameView;
   /** Whether a Player is the Host or a Co-host, marked beside their name. */
   staffRole: (playerId: string) => "host" | "cohost" | undefined;
+  /** A Player's guest-list email and whether they're in yet (GuestList.tsx). */
+  guestOf: (playerId: string) => GuestListEntry | undefined;
   send: (command: Command) => Promise<void>;
   error: string | null;
   accept: (game: SharedGame | null, viewer?: Partial<Viewer>) => void;
@@ -86,6 +90,7 @@ export function LaptopConsole({
             send={send}
             resetTimer={() => resetTimer(p.id)}
             staff={staffRole(p.id)}
+            guest={guestOf(p.id)}
           />
         ))}
       </ul>
@@ -303,10 +308,12 @@ function ParticipantRow({
   send,
   resetTimer,
   staff,
+  guest,
 }: {
   game: GameView;
   player: Player;
   staff?: "host" | "cohost" | undefined;
+  guest: GuestListEntry | undefined;
   stealing: boolean;
   onOpen: () => void;
   onSteal: () => void;
@@ -323,7 +330,8 @@ function ParticipantRow({
   return (
     <li aria-label={`${player.name} — ${status}`} className={up ? "lc-up" : undefined}>
       <span className="lc-name">
-        {player.name} <StaffMark role={staff} /> <RenameButton gameId={game.id} who={{ playerId: player.id }} name={player.name} />
+        {player.name} <StaffMark role={staff} /> <RenameButton gameId={game.id} who={{ playerId: player.id }} name={player.name} />{" "}
+        <PlayerEmail gameId={game.id} playerId={player.id} name={player.name} entry={guest} />
       </span>
       {up ? (
         <span className="lc-turn">

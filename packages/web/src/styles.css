@@ -3466,3 +3466,19 @@ kbd {
   margin: -4px 0 0;
   font-weight: 600;
 }
+
+/* Beside a name on the consoles: whether someone on the guest list is in yet (GuestList.tsx). */
+.guest-mark {
+  display: inline-block;
+  padding: 0 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--muted);
+  border: 1px solid currentColor;
+  border-radius: 999px;
+}
+
+.guest-mark.joined {
+  color: #1d6b35;
+}

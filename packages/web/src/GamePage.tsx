@@ -1,6 +1,7 @@
 import { aboutGift, GiftPitch } from "./Pitch.js";
 import { MyName, NamesToApprove, RenameButton } from "./Rename.js";
 import { StaffMark, useStaff } from "./Cohosts.js";
+import { PlayerEmail, useGuestList } from "./GuestList.js";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useLocation, useParams } from "react-router";
 import type { Command } from "@elephant/rules";
@@ -27,6 +28,7 @@ export function GamePage({ gameId }: { gameId?: string } = {}) {
   const id = gameId ?? inAddress;
   const [game, accept, feedChanges, staffChanges] = useLiveGame(id);
   const staffRole = useStaff(game, staffChanges);
+  const guestOf = useGuestList(game, staffChanges);
   const [error, setError] = useState<string | null>(null);
   const stars = useStars(id);
   const [posts, reloadFeed] = useFeed(id, feedChanges);
@@ -64,6 +66,7 @@ export function GamePage({ gameId }: { gameId?: string } = {}) {
             <li key={p.id}>
               <span data-name>{p.name}</span> <StaffMark role={staffRole(p.id)} />
               {runs && <RenameButton gameId={game.id} who={{ playerId: p.id }} name={p.name} />}
+              {runs && <PlayerEmail gameId={game.id} playerId={p.id} name={p.name} entry={guestOf(p.id)} />}
               {runs && game.phase === "setup" && (
                 <button className="link" aria-label={`Remove ${p.name}`} onClick={() => send({ type: "RemovePlayer", playerId: p.id })}>
                   Remove
@@ -165,6 +168,7 @@ export function GamePage({ gameId }: { gameId?: string } = {}) {
         posts={posts}
         reloadFeed={reloadFeed}
         staffRole={staffRole}
+        guestOf={guestOf}
         resetTimer={async (playerId) => {
           const next = await api.resetTimer(game.id, playerId);
           if (next) accept(next);

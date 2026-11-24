@@ -695,8 +695,11 @@ export function createServer({
     // Only this answer says who is asking: live updates go to everyone watching, so they never carry a role.
     const { id, game, email, role, playerId } = c.var.access;
     // Remembered so the Host can find them by name in the Co-hosts panel (not the demo's stand-ins).
-    if (email && !email.startsWith(DEMO_ACTOR))
-      db.insert(gameVisitors).values({ gameId: id, email, firstSeenAt: now() }).onConflictDoNothing().run();
+    // The first time a Player on the guest list opens it, the Staff's consoles show they're in.
+    if (email && !email.startsWith(DEMO_ACTOR)) {
+      const first = db.insert(gameVisitors).values({ gameId: id, email, firstSeenAt: now() }).onConflictDoNothing().run().changes > 0;
+      if (first && playerId) staffChanged(id);
+    }
     const viewer = {
       role: role ?? null,
       me: playerId ? { playerId } : null,
