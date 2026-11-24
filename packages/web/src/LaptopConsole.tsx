@@ -18,6 +18,7 @@ import { FeedbackCard } from "./Feedback.js";
 import { RosterPaste } from "./RosterPaste.js";
 import { ScreenSwitch } from "./WatchScreen.js";
 import { CopyInvitation } from "./Welcome.js";
+import { BeforeTheParty } from "./HostTips.js";
 
 type Player = GameView["players"][number];
 type Gift = GameView["gifts"][number];
@@ -173,6 +174,8 @@ export function LaptopConsole({
           {error}
         </p>
       )}
+
+      <BeforeTheParty game={game} onInvite={() => setInviting(true)} />
 
       <div className="lc-columns">
         {game.phase === "ended" ? (

@@ -3483,3 +3483,27 @@ kbd {
 .guest-mark.joined {
   color: #1d6b35;
 }
+
+/* Jim's three things to do before the party (HostTips.tsx): the front page, the Host's Guide and a new Game's console. */
+.host-tips {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.host-tips li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.host-tip-icon {
+  font-size: 1.6rem;
+  line-height: 1.2;
+}
+
+.host-tip-actions {
+  margin-top: 6px;
+}
