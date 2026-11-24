@@ -3283,3 +3283,156 @@ kbd {
   pointer-events: none;
   z-index: 1;
 }
+
+/* The guided tour (Guided.tsx): the demo page's frames, with speech bubbles drawn over the console at full size. */
+.page:has(.guided) {
+  max-width: 96rem;
+}
+
+.guided {
+  display: grid;
+  gap: 12px;
+}
+
+.guided-head h1 {
+  margin: 0;
+  color: var(--page-heading);
+}
+
+.guided-head p {
+  margin: 4px 0 0;
+}
+
+.guided-stage {
+  position: relative;
+}
+
+.guided-loading {
+  display: grid;
+  place-items: center;
+}
+
+/* Over the frame, but clicks go through to the console underneath. */
+.guided-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.guided-ring {
+  position: absolute;
+  border-radius: 10px;
+  box-shadow:
+    0 0 0 3px var(--brand),
+    0 0 0 9px color-mix(in srgb, var(--brand) 25%, transparent);
+  transition:
+    left 0.25s,
+    top 0.25s,
+    width 0.25s,
+    height 0.25s;
+}
+
+.guided-bubble {
+  position: absolute;
+  max-width: 340px;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: var(--brand);
+  color: var(--brand-ink);
+  font-size: 1.05rem;
+  line-height: 1.4;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+  transition:
+    left 0.25s,
+    top 0.25s;
+  animation: guided-pop 0.2s ease-out;
+}
+
+/* The arrow: a small square turned on its corner, on the edge facing the target, at --arrow along that edge. */
+.guided-bubble::before {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: var(--brand);
+  transform: rotate(45deg);
+}
+
+.guided-bubble-below::before {
+  top: -7px;
+  left: calc(var(--arrow) - 7px);
+}
+
+.guided-bubble-above::before {
+  bottom: -7px;
+  left: calc(var(--arrow) - 7px);
+}
+
+.guided-bubble-right::before {
+  left: -7px;
+  top: calc(var(--arrow) - 7px);
+}
+
+.guided-bubble-left::before {
+  right: -7px;
+  top: calc(var(--arrow) - 7px);
+}
+
+@keyframes guided-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .guided-ring,
+  .guided-bubble {
+    transition: none;
+    animation: none;
+  }
+}
+
+.guided-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.guided-controls .hint,
+.guided-controls .error {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.guided-count {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.guided-jump {
+  margin-left: auto;
+}
+
+.guided-jump select {
+  max-width: 28rem;
+}
+
+.guided-spinner {
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: -0.1em;
+  animation: guided-spin 0.7s linear infinite;
+}
+
+@keyframes guided-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

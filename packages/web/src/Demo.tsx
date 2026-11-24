@@ -164,7 +164,8 @@ export function DemoPage() {
           <ScaledFrame key={t.id} width={t.width} id={`demo-${t.id}`} role="tabpanel" aria-labelledby={`demo-tab-${t.id}`} title={t.label} src={t.src} hidden={tab !== t.id} />
         ))}
         <p className="muted hint">
-          Run the game here; the scoreboard and the phone follow along. <Link to={`/games/${id}`}>Open the Host console on its own</Link>
+          Run the game here; the scoreboard and the phone follow along. <Link to={`/games/${id}`}>Open the Host console on its own</Link> ·{" "}
+          <Link to="/guided/happy-path">▶ Guided tour</Link>
         </p>
       </section>
 
@@ -194,16 +195,16 @@ export function DemoPage() {
 }
 
 /** How wide the Host console is drawn in the demo: a laptop's, so it's the two-column console (GamePage's WIDE). */
-const LAPTOP_WIDTH = 1060;
+export const LAPTOP_WIDTH = 1060;
 /** How wide the scoreboard is drawn in the demo: a TV's proportions. */
-const TV_WIDTH = 1280;
+export const TV_WIDTH = 1280;
 
 /**
  * A page in a frame drawn at least `width` wide, then shrunk to fit the space it has, like a screenshot. So a laptop
  * window too narrow for both the console and the phone still shows the console the way a Host will see it on their
  * laptop, not the phone's single column.
  */
-function ScaledFrame({ width, hidden, ...frame }: { width: number; hidden: boolean; id: string; role: string; title: string; src: string; "aria-labelledby": string }) {
+export function ScaledFrame({ width, hidden, ...frame }: { width: number; hidden: boolean; id: string; role: string; title: string; src: string; "aria-labelledby": string }) {
   const box = useRef<HTMLDivElement>(null);
   const [room, setRoom] = useState<{ w: number; h: number } | null>(null);
   useEffect(() => {

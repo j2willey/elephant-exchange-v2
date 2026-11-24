@@ -6,6 +6,7 @@ import { useApi } from "./ApiContext.js";
 import { AdminPage } from "./Admin.js";
 import { DemoGame, DemoPage } from "./Demo.js";
 import { GamePage } from "./GamePage.js";
+import { GuidedPage } from "./Guided.js";
 import { GameSettings } from "./GameSettings.js";
 import { ConfirmDelete } from "./ConfirmDelete.js";
 import { StatsPage } from "./Stats.js";
@@ -51,6 +52,7 @@ export function AppRoutes() {
         <Route path="/playbook" element={<Playbook />} />
         <Route path="/about" element={<About />} />
         <Route path="/try" element={<TryDemo />} />
+        <Route path="/guided/:scriptId" element={<GuidedPage />} />
         <Route path={`/games/${SAMPLE_GAME_ID}`} element={<SamplePhone />} />
         <Route path="/sample" element={<SamplePhone />} />
         <Route path="/games/:id" element={<GamePage />} />
