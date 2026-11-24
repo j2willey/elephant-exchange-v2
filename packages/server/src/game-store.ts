@@ -172,12 +172,13 @@ export function createGameStore(deps: {
   /**
    * Decides a command against the latest copy, logs its events and announces the Game. `alsoWrite` goes in the
    * same transaction, so what's stored beside the log never disagrees with it. Returns the Game as it now stands,
-   * or the rule that refused the command (nothing is written or announced then).
+   * or the rule that refused the command (nothing is written or announced then). `drawWith` replaces the store's
+   * Draw for this one command: a demo Game's scripted Draws (ADR 0006).
    */
-  function command(id: string, cmd: Command, alsoWrite?: (tx: Tx, game: LoadedGame) => void): LoadedGame | RuleError | undefined {
+  function command(id: string, cmd: Command, alsoWrite?: (tx: Tx, game: LoadedGame) => void, drawWith: DrawFn = draw): LoadedGame | RuleError | undefined {
     const game = get(id);
     if (!game) return undefined;
-    const result = decide(game.state, cmd, draw);
+    const result = decide(game.state, cmd, drawWith);
     if (!Array.isArray(result)) return result;
     const at = now();
     const state = result.reduce(evolve, game.state);

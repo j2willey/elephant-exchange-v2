@@ -760,8 +760,12 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
       return res.ok ? ((await res.json()) as SharedGame) : undefined;
     },
 
-    async command(gameId: string, command: Command): Promise<CommandResult> {
-      const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/commands`, command);
+    /** `draws`: in a demo Game, who the Draws this command makes pick, in order (the guided tour's, ADR 0006). */
+    async command(gameId: string, command: Command, draws?: string[]): Promise<CommandResult> {
+      const path = `/api/games/${encodeURIComponent(gameId)}/commands`;
+      const res = draws
+        ? await fetchFn(path, { method: "POST", headers: { "content-type": "application/json", "x-demo-draws": draws.join(",") }, body: JSON.stringify(command) })
+        : await postJson(path, command);
       if (res.ok) return { ok: true, game: (await res.json()) as GameView };
       if (res.status === 409) return { ok: false, ...((await res.json()) as { code: RuleErrorCode; message: string }) };
       if (res.status === 401 || res.status === 403) return { ok: false, code: "Forbidden", message: "Only the Host and Co-hosts can do that." };

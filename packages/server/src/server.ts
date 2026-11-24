@@ -22,7 +22,7 @@ import {
 } from "@elephant/rules";
 import { Server as SocketServer } from "socket.io";
 import { diskOf, lastBackupAt, memoryLimit, type ServerHealth } from "./system.js";
-import { createAccess, DEMO_ACTOR, SESSION_COOKIE } from "./access.js";
+import { createAccess, DEMO_ACTOR, DEMO_DRAWS_HEADER, SESSION_COOKIE } from "./access.js";
 import { createFeed } from "./feed.js";
 import { createGameLifecycle } from "./games.js";
 import { createVisitors } from "./visitors.js";
@@ -149,6 +149,18 @@ export const CONTACT_EMAILS_PER_DAY = 50;
 export const IDLE_GAME_HOURS = 6;
 
 const randomDraw: DrawFn = (candidates) => candidates[randomInt(candidates.length)]!;
+
+/**
+ * A guided demo's Draws (ADR 0006): each Draw takes the first listed Player who may be drawn now, and uses them up.
+ * Anyone listed who can't be drawn is passed over; once none of the list can, `otherwise` draws.
+ */
+export function scriptedDraws(listed: string[], otherwise: DrawFn): DrawFn {
+  const left = [...listed];
+  return (candidates) => {
+    const i = left.findIndex((id) => candidates.includes(id));
+    return i < 0 ? otherwise(candidates) : left.splice(i, 1)[0]!;
+  };
+}
 
 
 /**
@@ -316,8 +328,8 @@ export function createServer({
    * Decides a command against the latest copy of the Game, logs its events and tells every screen (see the Game
    * store). Returns the Game as now shown, or the rule that refused the command. The Game must exist.
    */
-  function run(id: string, cmd: Command, alsoWrite?: (tx: Tx, game: LoadedGame) => void) {
-    const result = store.command(id, cmd, alsoWrite)!;
+  function run(id: string, cmd: Command, alsoWrite?: (tx: Tx, game: LoadedGame) => void, drawWith?: DrawFn) {
+    const result = store.command(id, cmd, alsoWrite, drawWith)!;
     return "code" in result ? result : view(id, result, now());
   }
 
@@ -699,13 +711,19 @@ export function createServer({
     if (!body.ok) return body.res;
     const game = load(id)!; // the latest copy, read after the body: see GameAccess.game
 
+    // A guided demo names who the Draw picks next, so its script plays the same every time (ADR 0006). Only in a
+    // demo Game; the route already lets only its Host and Co-hosts this far.
+    const listed = c.req.header(DEMO_DRAWS_HEADER);
+    if (listed !== undefined && !game.demo) return c.json({ error: "Only a demo Game can choose its Draws" }, 403);
+    const drawWith = listed === undefined ? undefined : scriptedDraws(listed.split(",").filter(Boolean), draw);
+
     // A demo Game's made-up Players each get a stand-in email, so the Host can find them in the Co-hosts panel and
     // make one a Co-host, as with real people. At example.com, which takes no mail: nobody can ever sign in as one.
     const cmd = body.data;
     const standIn = game.demo && cmd.type === "AddPlayer" ? people.standInEmail(id, cmd.name) : undefined;
     const result = run(id, cmd, (tx) => {
       if (standIn && cmd.type === "AddPlayer") people.linkPlayer(tx, id, cmd.playerId, standIn);
-    });
+    }, drawWith);
     if (standIn) people.changed(id); // in case the Pick was refused after the link was written
     if (!("code" in result) && cmd.type === "ChangeSettings")
       for (const [option, value] of Object.entries(cmd.settings))

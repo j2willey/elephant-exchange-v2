@@ -1,0 +1,982 @@
+{
+  "format": 1,
+  "id": "happy-path",
+  "title": "A swap from start to finish",
+  "summary": "Eight friends play a full swap: opening, a steal, a chain of steals ending in a steal-back that freezes a Gift, a Player who stepped out and gets skipped, photos in the Chat, and a Final Round.",
+  "game": {
+    "name": "Holiday Swap",
+    "tagline": "Ugly sweaters encouraged",
+    "options": {
+      "activeSlots": 1,
+      "maxSteals": 3,
+      "turnSeconds": 0,
+      "rosterMode": "host",
+      "approveNames": false,
+      "moderation": "open"
+    },
+    "postsPerMinute": 0,
+    "repitchMinutes": 0
+  },
+  "players": [
+    "Ann",
+    "Ben",
+    "Cat",
+    "Dev",
+    "Eve",
+    "Finn",
+    "Gus",
+    "Hana"
+  ],
+  "draws": [
+    "Ann",
+    "Ben",
+    "Cat",
+    "Dev",
+    "Eve",
+    "Finn",
+    "Gus",
+    "Hana",
+    "Dev"
+  ],
+  "gifts": {
+    "blanket": {
+      "name": "Heated blanket",
+      "description": "Plush, with a remote"
+    },
+    "fish": {
+      "name": "Singing fish plaque",
+      "description": "Motion-activated"
+    },
+    "espresso": {
+      "name": "Espresso machine",
+      "description": "Barely used"
+    },
+    "sweater": {
+      "name": "Ugly sweater kit",
+      "description": "Glue gun included"
+    },
+    "hotsauce": {
+      "name": "Hot sauce sampler",
+      "description": "12 bottles, one labeled 'regret'"
+    },
+    "fondue": {
+      "name": "Fondue set"
+    },
+    "snowglobe": {
+      "name": "Snow globe",
+      "description": "Plays a tune"
+    },
+    "karaoke": {
+      "name": "Mini karaoke machine",
+      "description": "Two microphones"
+    }
+  },
+  "photos": {
+    "table": {
+      "file": "asset:demo-gift-table",
+      "placeholder": "The app's existing demo photo of a gift table."
+    },
+    "blanket": {
+      "file": "heated-blanket.jpg",
+      "placeholder": "PLACEHOLDER: a person wrapped head to toe in a cozy plaid heated blanket on a couch, holiday party in the background, phone-camera snapshot."
+    },
+    "hotsauce": {
+      "file": "hot-sauce.jpg",
+      "placeholder": "PLACEHOLDER: a box of twelve small hot sauce bottles, one with a hand-written label reading 'regret', on a party table."
+    },
+    "karaoke": {
+      "file": "karaoke.jpg",
+      "placeholder": "PLACEHOLDER: a small karaoke speaker with two microphones, plugged in and glowing, someone mid-song in the background."
+    }
+  },
+  "steps": [
+    {
+      "id": "s01-welcome",
+      "chapter": "Getting started",
+      "bubble": {
+        "text": "This is the Host's console for a White Elephant swap with 8 players. Press Next to play it through, one move at a time.",
+        "target": "center"
+      }
+    },
+    {
+      "id": "s02-gift-table",
+      "actions": [
+        {
+          "do": "post",
+          "as": "Hana",
+          "text": "The gift table is getting serious 👀",
+          "photo": "table",
+          "ref": "table"
+        },
+        {
+          "do": "react",
+          "as": "Ben",
+          "post": "table",
+          "emoji": "😂"
+        },
+        {
+          "do": "react",
+          "as": "Eve",
+          "post": "table",
+          "emoji": "🔥"
+        }
+      ],
+      "bubble": {
+        "text": "Guests can follow along on their phones if they like, and post to the 💬 Chat. Hana shares the gift table.",
+        "target": "post:table",
+        "placement": "left"
+      }
+    },
+    {
+      "id": "s03-start",
+      "run": "next",
+      "actions": [
+        {
+          "do": "startGame"
+        }
+      ],
+      "bubble": {
+        "text": "Everyone's here. The Host presses Start game, and the app draws who goes first.",
+        "target": "start-game",
+        "placement": "below"
+      }
+    },
+    {
+      "id": "s04-ann-up",
+      "bubble": {
+        "text": "Ann is up first. Ben is On Deck, so he gets a heads-up before his turn.",
+        "target": "player-row:Ann",
+        "placement": "right"
+      },
+      "expect": {
+        "phase": "playing",
+        "up": "Ann",
+        "onDeck": "Ben"
+      }
+    },
+    {
+      "id": "s05-ann-opens",
+      "chapter": "Opening and stealing",
+      "run": "next",
+      "actions": [
+        {
+          "do": "open",
+          "player": "Ann",
+          "gift": "blanket"
+        }
+      ],
+      "bubble": {
+        "text": "Ann picks a wrapped gift from the table. The Host presses 🎁 and types what's inside.",
+        "target": "open:Ann",
+        "placement": "right"
+      }
+    },
+    {
+      "id": "s06-blanket",
+      "bubble": {
+        "text": "A heated blanket! It's on the Gift Tracker now, and on the big screen.",
+        "target": "gift-row:blanket",
+        "placement": "left"
+      },
+      "expect": {
+        "holders": {
+          "blanket": "Ann"
+        },
+        "up": "Ben",
+        "onDeck": "Cat"
+      }
+    },
+    {
+      "id": "s07-ann-photo",
+      "actions": [
+        {
+          "do": "post",
+          "as": "Ann",
+          "text": "Already wrapped up in it 😌",
+          "photo": "blanket",
+          "gift": "blanket",
+          "ref": "ann-blanket"
+        },
+        {
+          "do": "react",
+          "as": "Gus",
+          "post": "ann-blanket",
+          "emoji": "❤️"
+        }
+      ],
+      "bubble": {
+        "text": "Ann adds a photo from her phone. It shows under the gift, and in the Chat.",
+        "target": "gift-row:blanket",
+        "placement": "left"
+      }
+    },
+    {
+      "id": "s08-ben-opens",
+      "run": "next",
+      "actions": [
+        {
+          "do": "open",
+          "player": "Ben",
+          "gift": "fish"
+        }
+      ],
+      "bubble": {
+        "text": "Ben's turn. He opens a gift too.",
+        "target": "open:Ben",
+        "placement": "right"
+      }
+    },
+    {
+      "id": "s09-fish",
+      "actions": [
+        {
+          "do": "pitch",
+          "holder": "Ben",
+          "gift": "fish",
+          "tagline": "Sings. Every. Time.",
+          "text": "Motion-activated, so it greets every guest. Your living room will never be quiet again."
+        }
+      ],
+      "bubble": {
+        "text": "A singing fish plaque. Ben writes a Pitch to tempt someone into stealing it. His story stays with the gift all night.",
+        "target": "gift-row:fish",
+        "placement": "left"
+      },
+      "expect": {
+        "holders": {
+          "fish": "Ben"
+        },
+        "up": "Cat",
+        "onDeck": "Dev"
+      }
+    },
+    {
+      "id": "s10-cat-steal-press",
+      "bubble": {
+        "text": "Cat's up. Instead of opening a gift, she can steal one. The Host presses 😈…",
+        "target": "steal:Cat",
+        "placement": "right"
+      }
+    },
+    {
+      "id": "s11-cat-steals",
+      "run": "next",
+      "actions": [
+        {
+          "do": "steal",
+          "player": "Cat",
+          "gift": "blanket"
+        }
+      ],
+      "bubble": {
+        "text": "…and picks the heated blanket.",
+        "target": "gift-row:blanket",
+        "placement": "left"
+      }
+    },
+    {
+      "id": "s12-ann-victim",
+      "actions": [
+        {
+          "do": "post",
+          "as": "Ann",
+          "text": "Cat. CAT. 😤",
+          "ref": "ann-cat"
+        },
+        {
+          "do": "react",
+          "as": "Ben",
+          "post": "ann-cat",
+          "emoji": "😂"
+        },
+        {
+          "do": "react",
+          "as": "Gus",
+          "post": "ann-cat",
+          "emoji": "😂"
+        },
+        {
+          "do": "react",
+          "as": "Hana",
+          "post": "ann-cat",
+          "emoji": "😮"
+        }
+      ],
+      "bubble": {
+        "text": "Ann just lost her gift, so she goes again right away, ahead of Dev who's On Deck.",
+        "target": "player-row:Ann",
+        "placement": "right"
+      },
+      "expect": {
+        "up": "Ann",
+        "onDeck": "Dev",
+        "holders": {
+          "blanket": "Cat"
+        },
+        "steals": {
+          "blanket": 1
+        }
+      }
+    },
+    {
+      "id": "s13-no-take-backs",
+      "bubble": {
+        "text": "Ann can't steal the blanket straight back: No Take-Backs. She can steal something else, or open a new gift.",
+        "target": "gift-row:blanket",
+        "placement": "left"
+      }
+    },
+    {
+      "id": "s14-ann-opens-again",
+      "run": "next",
+      "actions": [
+        {
+          "do": "open",
+          "player": "Ann",
+          "gift": "espresso"
+        }
+      ],
+      "bubble": {
+        "text": "She opens a new one.",
+        "target": "open:Ann",
+        "placement": "right"
+      }
+    },
+    {
+      "id": "s15-espresso",
+      "bubble": {
+        "text": "An espresso machine. Not a bad consolation prize.",
+        "target": "gift-row:espresso",
+        "placement": "left"
+      },
+      "expect": {
+        "holders": {
+          "espresso": "Ann"
+        },
+        "up": "Dev",
+        "onDeck": "Eve"
+      }
+    },
+    {
+      "id": "s16-skip-dev",
+      "chapter": "Someone stepped out",
+      "run": "next",
+      "actions": [
+        {
+          "do": "skip",
+          "player": "Dev"
+        }
+      ],
+      "bubble": {
+        "text": "Dev's up, but he stepped out. The Host presses ⤵ Skip: Dev goes back in the draw, and the next player is called.",
+        "target": "skip:Dev",
+        "placement": "right"
+      }
+    },
+    {
+      "id": "s17-eve-up",
+      "bubble": {
+        "text": "Eve's up instead. Dev will be drawn again later.",
+        "target": "player-row:Eve",
+        "placement": "right"
+      },
+      "expect": {
+        "up": "Eve",
+        "onDeck": "Finn"
+      }
+    },
+    {
+      "id": "s18-eve-steal-press",
+      "chapter": "A chain of steals",
+      "bubble": {
+        "text": "Eve wants that blanket too. 😈…",
+        "target": "steal:Eve",
+        "placement": "right"
+      }
+    },
+    {
+      "id": "s19-eve-steals",
+      "run": "next",
+      "actions": [
+        {
+          "do": "steal",
+          "player": "Eve",
+          "gift": "blanket"
+        }
+      ],
+      "bubble": {
+        "text": "…the heated blanket, from Cat.",
+        "target": "gift-row:blanket",
+        "placement": "left"
+      }
+    },
+    {
+      "id": "s20-cat-victim",
+      "bubble": {
+        "text": "Now Cat goes again. The blanket is off limits to her, so she eyes Ann's espresso machine.",
+        "target": "player-row:Cat",
+        "placement": "right"
+      },
+      "expect": {
+        "up": "Cat",
+        "onDeck": "Finn",
+        "holders": {
+          "blanket": "Eve"
+        },
+        "steals": {
+          "blanket": 2
+        }
+      }
+    },
+    {
+      "id": "s21-cat-steals",
+      "run": "next",
+      "actions": [
+        {
+          "do": "steal",
+          "player": "Cat",
+          "gift": "espresso"
+        }
+      ],
+      "bubble": {
+        "text": "Cat steals the espresso machine.",
+        "target": "gift-row:espresso",
+        "placement": "left"
+      }
+    },
+    {
+      "id": "s22-ann-again",
+      "bubble": {
+        "text": "Ann's turn again. The gift she just lost is the espresso machine, so the blanket is fair game.",
+        "target": "player-row:Ann",
+        "placement": "right"
+      },
+      "expect": {
+        "up": "Ann",
+        "holders": {
+          "espresso": "Cat"
+        }
+      }
+    },
+    {
+      "id": "s23-ann-steals-back",
+      "run": "next",
+      "actions": [
+        {
+          "do": "steal",
+          "player": "Ann",
+          "gift": "blanket"
+        }
+      ],
+      "bubble": {
+        "text": "Ann steals her blanket back from Eve!",
+        "target": "gift-row:blanket",
+        "placement": "left"
+      }
+    },
+    {
+      "id": "s24-frozen",
+      "actions": [
+        {
+          "do": "post",
+          "as": "Ann",
+          "text": "It's back where it belongs 🔥",
+          "ref": "ann-back"
+        },
+        {
+          "do": "post",
+          "as": "Cat",
+          "text": "Frozen?! Unbelievable 😂",
+          "replyTo": "ann-back",
+          "ref": "cat-reply"
+        },
+        {
+          "do": "react",
+          "as": "Eve",
+          "post": "cat-reply",
+          "emoji": "😂"
+        },
+        {
+          "do": "react",
+          "as": "Finn",
+          "post": "ann-back",
+          "emoji": "🎉"
+        }
+      ],
+      "bubble": {
+        "text": "That was the blanket's third steal, so it's Frozen: it stays with Ann for the rest of the game.",
+        "target": "gift-row:blanket",
+        "placement": "left"
+      },
+      "expect": {
+        "holders": {
+          "blanket": "Ann"
+        },
+        "steals": {
+          "blanket": 3
+        },
+        "frozen": [
+          "blanket"
+        ],
+        "up": "Eve"
+      }
+    },
+    {
+      "id": "s25-reply",
+      "bubble": {
+        "text": "The Chat keeps up. Replies quote the post they answer.",
+        "target": "post:cat-reply",
+        "placement": "left"
+      }
+    },
+    {
+      "id": "s26-eve-opens",
+      "run": "next",
+      "actions": [
+        {
+          "do": "open",
+          "player": "Eve",
+          "gift": "sweater"
+        }
+      ],
+      "bubble": {
+        "text": "Eve lost the blanket, so she's up. She opens a new gift.",
+        "target": "open:Eve",
+        "placement": "right"
+      }
+    },
+    {
+      "id": "s27-sweater",
+      "bubble": {
+        "text": "An ugly sweater kit. Opening a new gift ends the Turn, however many steals came before it.",
+        "target": "gift-row:sweater",
+        "placement": "left"
+      },
+      "expect": {
+        "holders": {
+          "sweater": "Eve"
+        },
+        "up": "Finn",
+        "onDeck": "Gus"
+      }
+    },
+    {
+      "id": "s28-finn-name-later",
+      "chapter": "Keeping up with the party",
+      "run": "next",
+      "actions": [
+        {
+          "do": "open",
+          "player": "Finn",
+          "gift": "hotsauce",
+          "unnamed": true
+        }
+      ],
+      "bubble": {
+        "text": "Finn's up. The room is loud and Finn's still unwrapping, so the Host presses 🎁 and ⏩ Name it later.",
+        "target": "open:Finn",
+        "placement": "right"
+      }
+    },
+    {
+      "id": "s29-finns-gift",
+      "bubble": {
+        "text": "It shows as \"Finn's gift\" until someone names it, and the next turn goes ahead.",
+        "target": "name-gift:hotsauce",
+        "placement": "left"
+      },
+      "expect": {
+        "up": "Gus",
+        "onDeck": "Hana"
+      }
+    },
+    {
+      "id": "s30-name-it",
+      "run": "next",
+      "actions": [
+        {
+          "do": "describe",
+          "gift": "hotsauce"
+        }
+      ],
+      "bubble": {
+        "text": "When there's a moment, the Host presses ✏️ What is it? and types it in.",
+        "target": "name-gift:hotsauce",
+        "placement": "left"
+      }
+    },
+    {
+      "id": "s31-hot-sauce",
+      "actions": [
+        {
+          "do": "post",
+          "as": "Finn",
+          "text": "One of these is labeled 'regret' 🌶️",
+          "photo": "hotsauce",
+          "gift": "hotsauce",
+          "ref": "finn-sauce"
+        },
+        {
+          "do": "react",
+          "as": "Ann",
+          "post": "finn-sauce",
+          "emoji": "😮"
+        },
+        {
+          "do": "react",
+          "as": "Hana",
+          "post": "finn-sauce",
+          "emoji": "🔥"
+        }
+      ],
+      "bubble": {
+        "text": "A hot sauce sampler. Finn posts a photo of it.",
+        "target": "gift-row:hotsauce",
+        "placement": "left"
+      },
+      "expect": {
+        "holders": {
+          "hotsauce": "Finn"
+        }
+      }
+    },
+    {
+      "id": "s32-gus-opens",
+      "run": "next",
+      "actions": [
+        {
+          "do": "open",
+          "player": "Gus",
+          "gift": "fondue"
+        }
+      ],
+      "bubble": {
+        "text": "Gus opens a gift.",
+        "target": "open:Gus",
+        "placement": "right"
+      }
+    },
+    {
+      "id": "s33-dev-back",
+      "bubble": {
+        "text": "A fondue set. And look who's On Deck: Dev is back, and drawn again.",
+        "target": "player-row:Dev",
+        "placement": "right"
+      },
+      "expect": {
+        "holders": {
+          "fondue": "Gus"
+        },
+        "up": "Hana",
+        "onDeck": "Dev"
+      }
+    },
+    {
+      "id": "s34-hana-steal-press",
+      "bubble": {
+        "text": "Hana's up, and she's had her eye on the espresso machine. 😈…",
+        "target": "steal:Hana",
+        "placement": "right"
+      }
+    },
+    {
+      "id": "s35-hana-steals",
+      "run": "next",
+      "actions": [
+        {
+          "do": "steal",
+          "player": "Hana",
+          "gift": "espresso"
+        }
+      ],
+      "bubble": {
+        "text": "…the espresso machine, from Cat.",
+        "target": "gift-row:espresso",
+        "placement": "left"
+      },
+      "expect": {
+        "up": "Cat",
+        "onDeck": "Dev",
+        "holders": {
+          "espresso": "Hana"
+        }
+      }
+    },
+    {
+      "id": "s36-cat-opens",
+      "run": "next",
+      "actions": [
+        {
+          "do": "open",
+          "player": "Cat",
+          "gift": "snowglobe"
+        }
+      ],
+      "bubble": {
+        "text": "Cat's been stolen from twice tonight. This time she opens a gift.",
+        "target": "open:Cat",
+        "placement": "right"
+      }
+    },
+    {
+      "id": "s37-snow-globe",
+      "bubble": {
+        "text": "A snow globe that plays a tune.",
+        "target": "gift-row:snowglobe",
+        "placement": "left"
+      },
+      "expect": {
+        "holders": {
+          "snowglobe": "Cat"
+        },
+        "up": "Dev",
+        "onDeck": []
+      }
+    },
+    {
+      "id": "s38-dev-opens",
+      "run": "next",
+      "actions": [
+        {
+          "do": "open",
+          "player": "Dev",
+          "gift": "karaoke"
+        }
+      ],
+      "bubble": {
+        "text": "Dev's turn at last, and the last wrapped gift for this group.",
+        "target": "open:Dev",
+        "placement": "right"
+      }
+    },
+    {
+      "id": "s39-karaoke",
+      "actions": [
+        {
+          "do": "post",
+          "as": "Dev",
+          "text": "Already plugged in 🎤",
+          "photo": "karaoke",
+          "gift": "karaoke",
+          "ref": "dev-karaoke"
+        },
+        {
+          "do": "react",
+          "as": "Hana",
+          "post": "dev-karaoke",
+          "emoji": "🎉"
+        },
+        {
+          "do": "react",
+          "as": "Ben",
+          "post": "dev-karaoke",
+          "emoji": "😂"
+        }
+      ],
+      "bubble": {
+        "text": "A mini karaoke machine, and Dev wastes no time.",
+        "target": "post:dev-karaoke",
+        "placement": "left"
+      },
+      "expect": {
+        "up": [],
+        "onDeck": [],
+        "holders": {
+          "blanket": "Ann",
+          "fish": "Ben",
+          "snowglobe": "Cat",
+          "karaoke": "Dev",
+          "sweater": "Eve",
+          "hotsauce": "Finn",
+          "fondue": "Gus",
+          "espresso": "Hana"
+        }
+      }
+    },
+    {
+      "id": "s40-final-round-offer",
+      "chapter": "The Final Round",
+      "bubble": {
+        "text": "Everyone has a gift. In the Final Round, the first players called get one last chance, since they had little to steal when they went.",
+        "target": "final-round-panel",
+        "placement": "left"
+      }
+    },
+    {
+      "id": "s41-start-final",
+      "run": "next",
+      "actions": [
+        {
+          "do": "startFinalRound",
+          "finalists": 2,
+          "leftoverGifts": 1
+        }
+      ],
+      "bubble": {
+        "text": "The Host gives the first 2 players a final chance, and counts 1 spare gift still wrapped on the table.",
+        "target": "final-round-panel",
+        "placement": "left"
+      },
+      "expect": {
+        "phase": "finalRound",
+        "up": "Ann",
+        "onDeck": "Ben",
+        "leftoverGifts": 1
+      }
+    },
+    {
+      "id": "s42-ann-keeps",
+      "run": "next",
+      "actions": [
+        {
+          "do": "keep",
+          "player": "Ann"
+        }
+      ],
+      "bubble": {
+        "text": "Ann goes first. She's happy with her blanket, so she keeps it.",
+        "target": "keep:Ann",
+        "placement": "right"
+      }
+    },
+    {
+      "id": "s43-ben-steal-press",
+      "bubble": {
+        "text": "Ben's last chance. He'll put the singing fish back on the table and steal something. 😈…",
+        "target": "steal:Ben",
+        "placement": "right"
+      },
+      "expect": {
+        "up": "Ben"
+      }
+    },
+    {
+      "id": "s44-ben-steals",
+      "run": "next",
+      "actions": [
+        {
+          "do": "steal",
+          "player": "Ben",
+          "gift": "karaoke"
+        }
+      ],
+      "bubble": {
+        "text": "…the karaoke machine, from Dev.",
+        "target": "gift-row:karaoke",
+        "placement": "left"
+      }
+    },
+    {
+      "id": "s45-fish-on-table",
+      "bubble": {
+        "text": "The singing fish is back on the table. Dev can take it without a steal, steal something else, or open the spare.",
+        "target": "gift-row:fish",
+        "placement": "left"
+      },
+      "expect": {
+        "up": "Dev",
+        "holders": {
+          "karaoke": "Ben",
+          "fish": null
+        }
+      }
+    },
+    {
+      "id": "s46-dev-takes-fish",
+      "run": "next",
+      "actions": [
+        {
+          "do": "takeReturned",
+          "player": "Dev",
+          "gift": "fish"
+        }
+      ],
+      "bubble": {
+        "text": "Dev takes the fish.",
+        "target": "gift-row:fish",
+        "placement": "left"
+      }
+    },
+    {
+      "id": "s47-dev-happy",
+      "actions": [
+        {
+          "do": "post",
+          "as": "Dev",
+          "text": "Honestly? Wanted the fish all along 🐟",
+          "ref": "dev-fish"
+        },
+        {
+          "do": "react",
+          "as": "Ben",
+          "post": "dev-fish",
+          "emoji": "😂"
+        },
+        {
+          "do": "react",
+          "as": "Cat",
+          "post": "dev-fish",
+          "emoji": "😂"
+        },
+        {
+          "do": "react",
+          "as": "Ann",
+          "post": "dev-fish",
+          "emoji": "❤️"
+        }
+      ],
+      "bubble": {
+        "text": "No hard feelings.",
+        "target": "post:dev-fish",
+        "placement": "left"
+      },
+      "expect": {
+        "up": [],
+        "holders": {
+          "fish": "Dev",
+          "karaoke": "Ben"
+        },
+        "leftoverGifts": 1
+      }
+    },
+    {
+      "id": "s48-end-game",
+      "chapter": "Wrapping up",
+      "run": "next",
+      "actions": [
+        {
+          "do": "endGame"
+        }
+      ],
+      "bubble": {
+        "text": "Every final chance is taken. The Host presses 🛑 End Game.",
+        "target": "end-game",
+        "placement": "above"
+      }
+    },
+    {
+      "id": "s49-highlights",
+      "actions": [
+        {
+          "do": "screen",
+          "mode": "highlights"
+        }
+      ],
+      "bubble": {
+        "text": "Game over. The Host can open a Worst Gift Vote (the spare gift makes a good prize) and put the night's Highlights on the big screen.",
+        "target": "screen-switch",
+        "placement": "below"
+      },
+      "expect": {
+        "phase": "ended"
+      }
+    },
+    {
+      "id": "s50-thanks",
+      "bubble": {
+        "text": "That's a whole swap. Try a demo game of your own and press every button.",
+        "target": "center"
+      }
+    }
+  ]
+}
