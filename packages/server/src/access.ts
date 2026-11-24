@@ -6,6 +6,8 @@ import { isVisitor } from "./stats.js";
 export const SESSION_COOKIE = "session";
 /** Names the made-up Player a demo page's sample phone is (ADR 0004). */
 export const DEMO_PLAYER_HEADER = "x-demo-player";
+/** Who a demo Game's next Draws pick, comma-separated playerIds, from its guided tour (ADR 0006). */
+export const DEMO_DRAWS_HEADER = "x-demo-draws";
 /** The stand-in identity of a made-up Player who has no stand-in email. */
 export const DEMO_ACTOR = "demo-player:";
 
