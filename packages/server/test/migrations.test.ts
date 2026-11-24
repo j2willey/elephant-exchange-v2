@@ -66,7 +66,7 @@ describe("Database migrations", () => {
         rmSync(dir, { recursive: true, force: true });
       }
     }
-  });
+  }, 30_000); // one fresh database per earlier version: it grows with every migration
 
   it("leave foreign keys enforced once the database is open (they're off only while migrating)", () => {
     const db = openDb(":memory:");

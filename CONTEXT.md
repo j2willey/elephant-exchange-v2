@@ -87,7 +87,7 @@ _Avoid_: TV screen, watch screen, display
 The list of Players in a Game.
 
 **Roster Mode**:
-How a Game's Roster is built: **Host-entered** (only the Host and Co-hosts add Players; everyone on a phone is a Guest) or **Self sign-up** (people add themselves as Players or Guests, and the Host and Co-hosts can still add Players who have no phone).
+How a Game's Roster is built: **Host-entered** (only the Host and Co-hosts add Players; everyone on a phone is a Guest, unless they're on the guest list, and a Guest who brought a gift can **ask to play**, which the Host or a Co-host answers with a tap) or **Self sign-up** (people add themselves as Players or Guests, and the Host and Co-hosts can still add Players who have no phone).
 
 **Draw**:
 Choosing the next Player to call up, at random, from the Players not yet called. Nobody knows their place in line ahead of time.

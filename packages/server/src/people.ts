@@ -415,6 +415,59 @@ export function createPeople<G, Result = unknown>(deps: {
       .map(([email, playerId]) => ({ playerId, email, joined: seen.has(email), invitedAt: invited.get(email) ?? null }));
   }
 
+  /**
+   * In a Host-entered Game, a Guest who brought a gift asks to be added as a Player. Gives them this Guest name if
+   * they have none yet (as posting would), and puts the request where the Staff see it.
+   */
+  function askToPlay(gameId: string, email: string, name: string): PeopleRefusal | null {
+    const game = latest(gameId);
+    if (playerOf(gameId, email, game)) return refuse("AlreadyJoined", "You're already playing in this Game");
+    const row = nameRow(gameId, email);
+    if (!row?.name && !row?.pending) changeMyName(gameId, email, name);
+    db.insert(gameNames)
+      .values({ gameId, email, asksToPlay: name })
+      .onConflictDoUpdate({ target: [gameNames.gameId, gameNames.email], set: { asksToPlay: name } })
+      .run();
+    return null;
+  }
+
+  /** They take back their request to play. */
+  const stopAsking = (gameId: string, email: string) =>
+    void db
+      .update(gameNames)
+      .set({ asksToPlay: null })
+      .where(and(eq(gameNames.gameId, gameId), eq(gameNames.email, email)))
+      .run();
+
+  /** For the Staff: who's asking to be added as a Player, by the name each gave (never their email). */
+  function askingToPlay(gameId: string, game: G): { key: string; name: string }[] {
+    return db
+      .select()
+      .from(gameNames)
+      .where(and(eq(gameNames.gameId, gameId), isNotNull(gameNames.asksToPlay)))
+      .all()
+      .filter((r) => !playerOf(gameId, r.email, game))
+      .map((r) => ({ key: personKey(gameId, r.email), name: r.asksToPlay! }));
+  }
+
+  /**
+   * The Host or a Co-host answers someone asking to play: adds them as a Player under the name they gave (as on the
+   * guest list, so it's them from then on), or not. Either way the request is done.
+   */
+  function answerAsk(gameId: string, key: string, add: boolean): PeopleRefusal | { added: { playerId: string; result: Result } | null } {
+    const row = db
+      .select()
+      .from(gameNames)
+      .where(and(eq(gameNames.gameId, gameId), isNotNull(gameNames.asksToPlay)))
+      .all()
+      .find((r) => personKey(gameId, r.email) === key);
+    if (!row) return refuse("NotFound", "Nobody is asking to play by that name");
+    stopAsking(gameId, row.email);
+    if (!add) return { added: null };
+    const added = addWithEmail(gameId, row.asksToPlay!, row.email);
+    return "refused" in added ? { added: null } : { added };
+  }
+
   /** A demo Player's stand-in email: "fay@example.com", or "fay2@example.com" when there's already a Fay. */
   function standInEmail(gameId: string, name: string): string {
     const base = name.toLowerCase().replace(/[^a-z0-9]/g, "") || "player";
@@ -449,6 +502,10 @@ export function createPeople<G, Result = unknown>(deps: {
     join,
     addWithEmail,
     setPlayerEmail,
+    askToPlay,
+    stopAsking,
+    askingToPlay,
+    answerAsk,
     guestList,
     standInEmail,
     isMuted,

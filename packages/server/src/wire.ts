@@ -40,6 +40,14 @@ export interface Viewer {
   muted: boolean;
   /** The Gift the person looking voted the worst, if they have. */
   myVote: string | null;
+  /** In a Host-entered Game: they've asked the Host to add them as a Player, and are waiting. */
+  asking: boolean;
+}
+
+/** For the Host and Co-hosts: someone asking to be added as a Player, by the name they gave. */
+export interface AskingToPlay {
+  key: string;
+  name: string;
 }
 /** A Game as the person looking is shown it. */
 export type GameView = SharedGame & Viewer;

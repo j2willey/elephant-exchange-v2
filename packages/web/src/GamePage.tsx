@@ -18,7 +18,7 @@ import { ScreenSwitch } from "./WatchScreen.js";
 import { VotePanel } from "./Vote.js";
 import { FeedbackCard } from "./Feedback.js";
 import { HighlightsLink } from "./HighlightsPage.js";
-import { CopyInvitation, knownIn, useWatching, useWelcomeReturn, Welcome, WelcomeForm, WhenWhere } from "./Welcome.js";
+import { AskingToPlayPanel, AskToPlay, CopyInvitation, knownIn, useWatching, useWelcomeReturn, Welcome, WelcomeForm, WhenWhere } from "./Welcome.js";
 import { GiftPostsViewer, showGift } from "./GiftPosts.js";
 
 /** `gameId`: the Game to show, when it isn't the one in the address (the front page's sample phone). */
@@ -162,6 +162,7 @@ export function GamePage({ gameId }: { gameId?: string } = {}) {
     return (
       <>
       <NamesToApprove game={game} changes={staffChanges} />
+      <AskingToPlayPanel game={game} changes={staffChanges} />
       <LaptopConsole
         game={game}
         send={send}
@@ -216,6 +217,7 @@ export function GamePage({ gameId }: { gameId?: string } = {}) {
         joinOffered && <JoinPanel gameId={game.id} onJoined={accept} />
       )}
       <NamesToApprove game={game} changes={staffChanges} />
+      <AskingToPlayPanel game={game} changes={staffChanges} />
 
       {error && (
         <p className="error" role="alert">
@@ -378,7 +380,7 @@ function GuestView({
             ) : joinOffered ? (
               <JoinPanel gameId={game.id} onJoined={accept} />
             ) : (
-              <p className="card muted">You're following along. The Host enters the Players for this Game.</p>
+              <AskToPlay game={game} accept={accept} />
             )}
             {!game.me && (game.myName?.name || game.myName?.pending) && (
               <section className="card" aria-label="Your name">

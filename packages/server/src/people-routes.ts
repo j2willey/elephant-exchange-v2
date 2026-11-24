@@ -5,7 +5,7 @@ import type { Feed } from "./feed.js";
 import type { LoadedGame } from "./game-store.js";
 import { parseBody } from "./http.js";
 import type { People } from "./people.js";
-import { approveNameBody, cohostBody, guestBody, joinBody, personBody, playerEmailBody, renameBody } from "./schemas.js";
+import { approveNameBody, askAnswerBody, cohostBody, guestBody, joinBody, personBody, playerEmailBody, renameBody } from "./schemas.js";
 import type * as Wire from "./wire.js";
 
 /**
@@ -112,6 +112,41 @@ export function peopleRoutes<Result extends object>(deps: {
     if (!body.ok) return body.res;
     const no = people.setPlayerEmail(id, c.req.param("playerId"), body.data.email);
     if (no) return c.json({ code: no.refused, message: no.message }, no.refused === "NotFound" ? 404 : 409);
+    staffChanged(id);
+    return c.body(null, 204);
+  });
+
+  // In a Host-entered Game, a Guest who brought a gift asks to be added as a Player; the Staff add them with a tap.
+  routes.post("/api/games/:id/ask-to-play", access.need("signedIn"), async (c) => {
+    const { id, game } = c.var.access;
+    const email = c.var.access.email!;
+    const body = await parseBody(c, joinBody);
+    if (!body.ok) return body.res;
+    if (game.rosterMode === "self") return c.json({ error: "Join as a Player yourself in this Game" }, 409);
+    const no = people.askToPlay(id, email, body.data.name);
+    if (no) return c.json({ code: no.refused, message: no.message }, 409);
+    staffChanged(id);
+    return c.body(null, 204);
+  });
+
+  routes.delete("/api/games/:id/ask-to-play", access.need("signedIn"), (c) => {
+    const { id } = c.var.access;
+    people.stopAsking(id, c.var.access.email!);
+    staffChanged(id);
+    return c.body(null, 204);
+  });
+
+  routes.get("/api/games/:id/asking", access.need("staff", "Only the Host and Co-hosts"), (c) => {
+    const { id, game } = c.var.access;
+    return c.json({ asking: people.askingToPlay(id, game) satisfies Wire.AskingToPlay[] });
+  });
+
+  routes.post("/api/games/:id/asking", access.need("staff", "Only the Host and Co-hosts can add Players"), async (c) => {
+    const { id } = c.var.access;
+    const body = await parseBody(c, askAnswerBody);
+    if (!body.ok) return body.res;
+    const answered = people.answerAsk(id, body.data.key, body.data.add);
+    if ("refused" in answered) return c.json({ error: answered.message }, 404);
     staffChanged(id);
     return c.body(null, 204);
   });

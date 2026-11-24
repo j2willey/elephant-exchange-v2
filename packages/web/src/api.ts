@@ -1,6 +1,6 @@
 import type { Command, GameOptions, GameSettings, Phase, RuleErrorCode } from "@elephant/rules";
 import { io } from "socket.io-client";
-import type { AdminGame, AdminPerson, Emoji, FeedbackAsk, FeedbackSummary, StatsSummary, SystemReport, Testimonial, GameView, Moderation, MyGame, MyOrg, PendingName, Person, Post, RosterMode, ScreenMode, Session, SharedGame, StaffMember, GuestListEntry, Theme, VoteDisplay } from "./wire";
+import type { AdminGame, AdminPerson, Emoji, FeedbackAsk, FeedbackSummary, StatsSummary, SystemReport, Testimonial, GameView, Moderation, MyGame, MyOrg, PendingName, Person, Post, RosterMode, ScreenMode, Session, SharedGame, StaffMember, GuestListEntry, AskingToPlay, Theme, VoteDisplay } from "./wire";
 
 export type {
   AdminGame,
@@ -19,6 +19,7 @@ export type {
   MyGame,
   MyOrg,
   PendingName,
+  AskingToPlay,
   Person,
   Post,
   Quote,
@@ -673,6 +674,28 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
     async changeMyName(gameId: string, name: string): Promise<"ok" | "waiting" | "locked" | "failed"> {
       const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/me/name`, { name });
       return res.status === 204 ? "ok" : res.status === 202 ? "waiting" : res.status === 409 ? "locked" : "failed";
+    },
+
+    /** In a Host-entered Game: asks the Host to add the person looking as a Player, by this name. */
+    async askToPlay(gameId: string, name: string): Promise<boolean> {
+      return (await postJson(`/api/games/${encodeURIComponent(gameId)}/ask-to-play`, { name })).ok;
+    },
+
+    /** Takes back a request to play. */
+    async stopAsking(gameId: string): Promise<boolean> {
+      return (await fetchFn(`/api/games/${encodeURIComponent(gameId)}/ask-to-play`, { method: "DELETE" })).ok;
+    },
+
+    /** For the Staff: who's asking to be added as a Player. */
+    async askingToPlay(gameId: string): Promise<AskingToPlay[]> {
+      const res = await fetchFn(`/api/games/${encodeURIComponent(gameId)}/asking`);
+      if (!res.ok) throw new Error(`loading who's asking to play failed: ${res.status}`);
+      return ((await res.json()) as { asking: AskingToPlay[] }).asking;
+    },
+
+    /** The Staff add someone asking to play as a Player, or not. */
+    async answerAsk(gameId: string, key: string, add: boolean): Promise<boolean> {
+      return (await postJson(`/api/games/${encodeURIComponent(gameId)}/asking`, { key, add })).ok;
     },
 
     /** Under Approve names: the names people asked for, waiting for the Host or a Co-host. */

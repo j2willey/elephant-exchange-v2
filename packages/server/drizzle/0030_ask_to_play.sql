@@ -1,0 +1,1 @@
+ALTER TABLE `game_names` ADD `asks_to_play` text;

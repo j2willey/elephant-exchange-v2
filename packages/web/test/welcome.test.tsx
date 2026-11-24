@@ -86,19 +86,21 @@ describe("The welcome screen on a Game's link", () => {
     expect((await host.game(id))?.players.map((p) => p.name)).toEqual(["Ann"]);
   });
 
-  it("offers no gift box when the Host enters the Players: everyone on a phone joins as a Guest", async () => {
-    const { origin, id, user, linkFor } = await party("host");
+  it("in a Host-entered Game, makes the gift box ask the Host to add them, and comes back from the link asking", async () => {
+    const { origin, id, user, linkFor, host } = await party("host");
     const phone = browser(origin);
     const first = openApp(phone, `/games/${id}`, { welcome: true });
     const form = await welcomeForm();
-    expect(within(form).queryByRole("checkbox")).not.toBeInTheDocument();
-    expect(within(form).getByText(/the host adds the players/i)).toBeInTheDocument();
-    await fillIn(user, { name: "Gil", email: "gil@example.com", gift: false });
+    expect(within(form).getByRole("checkbox", { name: /ask the host to add me as a player/i })).toBeInTheDocument();
+    expect(within(form).getByText(/on the host's guest list already/i)).toBeInTheDocument();
+    await fillIn(user, { name: "Gil", email: "gil@example.com", gift: true });
     first.unmount();
 
     openApp(phone, linkFor("gil@example.com"));
     await onYouTab();
+    expect(await screen.findByText(/you've asked to play/i)).toBeInTheDocument();
     expect(await screen.findByText(/you're posting as gil/i)).toBeInTheDocument();
+    expect((await host.askingToPlay(id)).map((a) => a.name)).toEqual(["Gil"]);
   });
 
   it("gets the Host their console when they sign in from the welcome screen on another device", async () => {

@@ -119,6 +119,8 @@ export const renameBody = z
   });
 /** Approves the name someone asked for under Approve names; `key` is from the list of names waiting. */
 export const approveNameBody = z.object({ key: id });
+/** The Host's answer to someone asking to play: add them as a Player, or not. */
+export const askAnswerBody = z.object({ key: id, add: z.boolean() });
 
 /**
  * A page of this app to return to after signing in: a path on this site only. "//host" and "/\\host" are
