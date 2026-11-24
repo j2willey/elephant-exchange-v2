@@ -23,6 +23,8 @@ const server = createServer({
   ...(apiKey && from ? { mailer: resendMailer({ apiKey, from }) } : {}),
   // The built web app, in production. In development it's left unset and Vite serves the app.
   ...(env["WEB_ROOT"] ? { webRoot: env["WEB_ROOT"] } : {}),
+  // The git commit the image was built from (scripts/deploy.sh passes it in), for the admin pages.
+  ...(env["COMMIT"] ? { commit: env["COMMIT"] } : {}),
   // Who may use the admin pages: comma-separated emails. Unset, nobody can.
   adminEmails: (env["ADMIN_EMAILS"] ?? "").split(","),
   // Sign-in links emailed per day, site-wide: match it to the Resend plan (the free plan allows 100).

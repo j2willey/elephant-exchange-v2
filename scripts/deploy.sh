@@ -20,7 +20,7 @@ git fetch -q origin main
 
 tag=$(git rev-parse --short HEAD)
 echo "== Building elephant-exchange:$tag"
-docker build -t "elephant-exchange:$tag" .
+docker build --build-arg COMMIT="$(git rev-parse HEAD)" -t "elephant-exchange:$tag" .
 
 echo "== Shipping it to $host"
 docker save "elephant-exchange:$tag" | gzip | ssh "${ssh_opts[@]}" "$host" 'gunzip | docker load'

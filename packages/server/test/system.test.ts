@@ -23,6 +23,7 @@ describe("The admin's view of the servers", () => {
       adminEmails: ["boss@example.org"],
       overload: { maxScreens: 500, maxLagMs: 300 },
       build: "abc123",
+      commit: "5235227f0e8b1c2d3a4f5e6d7c8b9a0f1e2d3c4b",
       ...options,
     });
     const { port, close } = await server.listen(0);
@@ -54,7 +55,7 @@ describe("The admin's view of the servers", () => {
     const [me, ...others] = await report();
 
     expect(others).toEqual([]);
-    expect(me).toMatchObject({ tag: "a", build: "abc123", up: true, busy: false, limits: { maxScreens: 500, maxLagMs: 300 } });
+    expect(me).toMatchObject({ tag: "a", build: "abc123", commit: "5235227f0e8b1c2d3a4f5e6d7c8b9a0f1e2d3c4b", up: true, busy: false, limits: { maxScreens: 500, maxLagMs: 300 } });
     expect(me!.uptimeSeconds).toBeGreaterThanOrEqual(0);
     expect(me!.memory.rssBytes).toBeGreaterThan(0);
     expect(me!.disk?.freeBytes).toBeGreaterThan(0);
@@ -92,6 +93,7 @@ describe("What counts as a warning", () => {
   const healthy: ServerHealth = {
     tag: "a",
     build: "abc123",
+    commit: null,
     up: true,
     startedAt: "2026-11-20T12:00:00Z",
     uptimeSeconds: 86_400,

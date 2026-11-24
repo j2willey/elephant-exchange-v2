@@ -3,6 +3,16 @@ import { Link } from "react-router";
 import type { ServerHealth, SystemReport } from "./api.js";
 import { useApi } from "./ApiContext.js";
 
+/** A commit by its short name, linked to it on GitHub; "development" when the server wasn't built by the deploy. */
+export function CommitLink({ commit }: { commit: string | null }) {
+  if (!commit) return <span className="muted">development</span>;
+  return (
+    <a href={`https://github.com/j2willey/elephant-exchange-v2/commit/${commit}`} target="_blank" rel="noreferrer">
+      <code>{commit.slice(0, 7)}</code>
+    </a>
+  );
+}
+
 /** How often the page asks again while it's open. */
 const REFRESH_MS = 30_000;
 
@@ -85,7 +95,7 @@ export function SystemPage() {
                 <th>Disk free</th>
                 <th>Last backup</th>
                 <th>Up for</th>
-                <th>Build</th>
+                <th>Commit</th>
               </tr>
             </thead>
             <tbody>
@@ -120,7 +130,8 @@ export function SystemPage() {
                       <td>{ago(s.lastBackupAt, now)}</td>
                       <td>{duration(s.uptimeSeconds)}</td>
                       <td>
-                        <code>{s.build ?? "dev"}</code>
+                        <CommitLink commit={s.commit} />
+                        <div className="muted">build {s.build ?? "dev"}</div>
                       </td>
                     </>
                   ) : (

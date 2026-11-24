@@ -103,6 +103,8 @@ export interface ServerOptions {
    * older build offers to reload. Worked out from webRoot's index.html when left out; with neither, nothing is said.
    */
   build?: string;
+  /** The git commit this server was built from (the deploy passes it into the image); left out outside production. */
+  commit?: string;
   /** Where Photos are stored. Left out (as in most tests), they go to a fresh temporary folder. */
   photosDir?: string;
   /** Where Theme logos and backgrounds are stored; likewise a temporary folder if left out. */
@@ -235,6 +237,7 @@ export function createServer({
   webRoot,
   build = webRoot ? buildOf(readFileSync(join(webRoot, "index.html"), "utf8")) : undefined,
   adminEmails = [],
+  commit,
   feedSignalMs = 0,
   serverTag = "a",
   backupsDir,
@@ -983,6 +986,7 @@ export function createServer({
     return {
       tag: serverTag,
       build: build ?? null,
+      commit: commit ?? null,
       up: true,
       startedAt: startedAt.toISOString(),
       uptimeSeconds: Math.round((Date.now() - startedAt.getTime()) / 1000),

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import type { AdminGame, AdminPerson } from "./api.js";
 import { useApi } from "./ApiContext.js";
+import { CommitLink } from "./System.js";
 
 /** The smoke test's accounts: an address nobody can really have. */
 const isTestAccount = (email: string) => email.toLowerCase().endsWith("@example.com");
@@ -22,10 +23,13 @@ export function AdminPage() {
   const [deleting, setDeleting] = useState<AdminGame | "test data" | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
+  /** The commit the server is running; undefined until known. */
+  const [commit, setCommit] = useState<string | null | undefined>(undefined);
   const reload = useCallback(async () => {
-    const [p, g] = await Promise.all([api.adminPeople(), api.adminGames()]);
+    const [p, g, system] = await Promise.all([api.adminPeople(), api.adminGames(), api.adminSystem().catch(() => "notFound" as const)]);
     setPeople(p);
     setGames(g === "notFound" ? [] : g);
+    setCommit(system === "notFound" ? undefined : (system.servers[0]?.commit ?? null));
   }, [api]);
 
   useEffect(() => {
@@ -71,6 +75,11 @@ export function AdminPage() {
         <p>
           <Link to="/admin/stats">📊 Stats</Link> · <Link to="/admin/feedback">💬 Feedback</Link> · <Link to="/admin/system">🩺 System</Link>
         </p>
+        {commit !== undefined && (
+          <p className="muted">
+            Running <CommitLink commit={commit} />
+          </p>
+        )}
         <p className="muted">
           {plural(people.filter((p) => !isTestAccount(p.email)).length, "person", "people")} signed in ·{" "}
           {plural(games.filter((g) => !isTestAccount(g.host)).length, "game")} · {okToAsk.length} OK to ask for feedback

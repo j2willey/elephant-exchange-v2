@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { cleanup, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { openApp, startServer } from "./harness.js";
@@ -23,5 +23,22 @@ describe("The admin's System page", () => {
     openApp(await server.signedIn("ann@example.org"), "/admin/system");
 
     expect(await screen.findByText(/nothing here/i)).toBeInTheDocument();
+  });
+});
+
+describe("Which commit is running", () => {
+  it("is on the System page and the Admin page, linked to the commit on GitHub", async () => {
+    const sha = "5235227f0e8b1c2d3a4f5e6d7c8b9a0f1e2d3c4b";
+    const server = await startServer({ adminEmails: ["boss@example.org"], commit: sha });
+    const admin = await server.signedIn("boss@example.org");
+
+    openApp(admin, "/admin/system");
+    const onSystem = await screen.findByRole("link", { name: "5235227" });
+    expect(onSystem).toHaveAttribute("href", `https://github.com/j2willey/elephant-exchange-v2/commit/${sha}`);
+    cleanup();
+
+    openApp(admin, "/admin");
+    const onAdmin = await screen.findByRole("link", { name: "5235227" });
+    expect(onAdmin.closest("p")).toHaveTextContent(/running 5235227/i);
   });
 });

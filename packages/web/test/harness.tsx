@@ -41,7 +41,7 @@ export const clock = {
 
 /** Starts the real server, in memory on a free port. Sign-in links are kept in `sent` instead of emailed. */
 export async function startServer(
-  { servePages, ...options }: { draw?: DrawFn; adminEmails?: string[]; build?: string; overload?: { maxScreens?: number }; servePages?: boolean } = {},
+  { servePages, ...options }: { draw?: DrawFn; adminEmails?: string[]; build?: string; commit?: string; overload?: { maxScreens?: number }; servePages?: boolean } = {},
 ) {
   const sent: { email: string; url: string }[] = [];
   const mailer: Mailer = {

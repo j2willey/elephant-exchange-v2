@@ -16,7 +16,10 @@ RUN npm run build --workspace @elephant/web \
  && npm prune --omit=dev
 
 FROM node:26.8.2-trixie-slim
-ENV NODE_ENV=production \
+# The commit this image is built from (scripts/deploy.sh passes it), shown on the admin pages.
+ARG COMMIT=""
+ENV COMMIT=$COMMIT \
+    NODE_ENV=production \
     PORT=3000 \
     DB_PATH=/data/elephant.db \
     PHOTOS_DIR=/data/photos \

@@ -10,6 +10,8 @@ export interface ServerHealth {
   tag: string;
   /** The web app's build it's serving (the content hash), or null outside production. */
   build: string | null;
+  /** The git commit it was built from, or null outside production. */
+  commit: string | null;
   /** False for a server that didn't answer (with more than one server); this server always answers for itself. */
   up: boolean;
   startedAt: string;
