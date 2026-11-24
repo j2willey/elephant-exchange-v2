@@ -8,5 +8,6 @@ playwright-report/
 .env
 backups/
 photos/
+!packages/web/src/demo-scripts/photos/
 themes/
 !art/themes/
