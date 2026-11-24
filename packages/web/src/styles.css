@@ -3305,6 +3305,7 @@ kbd {
 
 .guided-stage {
   position: relative;
+  min-width: 0; /* so the console frame shrinks to the column, not the column to the frame */
 }
 
 .guided-loading {
@@ -3349,8 +3350,12 @@ kbd {
   animation: guided-pop 0.2s ease-out;
 }
 
-/* The arrow: a small square turned on its corner, on the edge facing the target, at --arrow along that edge. */
-.guided-bubble::before {
+/* The arrow: a small square turned on its corner, on the edge facing the target, at --arrow along that edge. A
+   bubble in the middle (pointing at nothing) has none. */
+.guided-bubble-below::before,
+.guided-bubble-above::before,
+.guided-bubble-right::before,
+.guided-bubble-left::before {
   content: "";
   position: absolute;
   width: 14px;
@@ -3435,4 +3440,14 @@ kbd {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* Header and controls above the frames: the frames are shorter than on the demo page, so Next stays on screen. */
+.guided .demo-main .scaled-frame {
+  height: calc(100vh - 330px);
+  min-height: 460px;
+}
+
+.guided .demo-phone iframe {
+  height: min(760px, max(460px, calc(100vh - 360px)));
 }

@@ -117,7 +117,9 @@ function Guided({ script }: { script: DemoScript }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
-      if (el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(el.tagName))) return;
+      if (el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName))) return;
+      // On a button, Space presses that button: leave it be. The arrows still step.
+      if (el?.tagName === "BUTTON" && e.key === " ") return;
       if (e.key === "ArrowRight" || e.key === " ") {
         e.preventDefault();
         if (!last) next();
@@ -140,6 +142,47 @@ function Guided({ script }: { script: DemoScript }) {
         <p className="muted">{script.summary}</p>
       </header>
 
+      <nav className="guided-controls card" aria-label="Guided tour">
+        <button className="secondary" onClick={() => show(step - 1)} disabled={busy || step === 0}>
+          ◀ Back
+        </button>
+        <button onClick={next} disabled={busy || last || broken !== null} aria-busy={busy}>
+          {busy ? <span className="guided-spinner" aria-label="Working" /> : null} Next ▶
+        </button>
+        <button className="secondary" onClick={() => setAutoplay((a) => !a)} disabled={last || broken !== null} aria-pressed={autoplay}>
+          {autoplay ? "⏸ Pause" : "⏯ Autoplay"}
+        </button>
+        <button className="secondary" onClick={() => show(0)} disabled={busy}>
+          ↺ Restart
+        </button>
+        <span className="guided-count" aria-live="polite">
+          {step + 1} / {script.steps.length}
+          {chapter ? ` · ${chapter}` : ""}
+        </span>
+        <label className="guided-jump">
+          <select aria-label="Go to step" value={step} disabled={busy} onChange={(e) => show(Number(e.target.value))}>
+            {script.steps.map((s, i) => (
+              <option key={s.id} value={i}>
+                {i + 1}. {s.chapter ? `${s.chapter}: ` : ""}
+                {s.bubble.text.length > 60 ? `${s.bubble.text.slice(0, 57)}…` : s.bubble.text}
+              </option>
+            ))}
+          </select>
+        </label>
+        {broken && (
+          <p className="error" role="alert">
+            {broken}
+          </p>
+        )}
+        {drift && (
+          <p className="error guided-drift" role="alert">
+            Off script at {drift}
+          </p>
+        )}
+        <p className="muted hint">
+          You can press the console's own buttons between steps, though that may take the swap off script. ↺ Restart puts it back.
+        </p>
+      </nav>
       {gameId && <Follow key={gameId} id={gameId} onGame={setLive} />}
       <div className="demo">
         <section className="demo-main" aria-label="Host">
@@ -193,47 +236,6 @@ function Guided({ script }: { script: DemoScript }) {
         </section>
       </div>
 
-      <nav className="guided-controls card" aria-label="Guided tour">
-        <button className="secondary" onClick={() => show(step - 1)} disabled={busy || step === 0}>
-          ◀ Back
-        </button>
-        <button onClick={next} disabled={busy || last || broken !== null} aria-busy={busy}>
-          {busy ? <span className="guided-spinner" aria-label="Working" /> : null} Next ▶
-        </button>
-        <button className="secondary" onClick={() => setAutoplay((a) => !a)} disabled={last || broken !== null} aria-pressed={autoplay}>
-          {autoplay ? "⏸ Pause" : "⏯ Autoplay"}
-        </button>
-        <button className="secondary" onClick={() => show(0)} disabled={busy}>
-          ↺ Restart
-        </button>
-        <span className="guided-count" aria-live="polite">
-          {step + 1} / {script.steps.length}
-          {chapter ? ` · ${chapter}` : ""}
-        </span>
-        <label className="guided-jump">
-          <select aria-label="Go to step" value={step} disabled={busy} onChange={(e) => show(Number(e.target.value))}>
-            {script.steps.map((s, i) => (
-              <option key={s.id} value={i}>
-                {i + 1}. {s.chapter ? `${s.chapter}: ` : ""}
-                {s.bubble.text.length > 60 ? `${s.bubble.text.slice(0, 57)}…` : s.bubble.text}
-              </option>
-            ))}
-          </select>
-        </label>
-        {broken && (
-          <p className="error" role="alert">
-            {broken}
-          </p>
-        )}
-        {drift && (
-          <p className="error guided-drift" role="alert">
-            Off script at {drift}
-          </p>
-        )}
-        <p className="muted hint">
-          You can press the console's own buttons between steps, though that may take the swap off script. ↺ Restart puts it back.
-        </p>
-      </nav>
     </div>
   );
 }
