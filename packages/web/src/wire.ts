@@ -14,6 +14,7 @@ export type {
   MyGame,
   MyOrg,
   PendingName,
+  AskingToPlay,
   Person,
   Post,
   Quote,

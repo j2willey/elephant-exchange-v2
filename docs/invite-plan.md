@@ -47,4 +47,6 @@ Built in `packages/server/src/invitation-routes.ts`, `people.ts` (the guest list
 
 Not built: a phone already open when the Host adds its owner's email learns it on reload.
 
-Open: whether someone who isn't on a Host-entered Game's list and ticks "I brought a gift" can ask to be added (one tap for the Host to approve).
+## Asking to play (built 2026-11-24)
+
+In a Host-entered Game, someone not on the guest list who ticks "I brought a gift: ask the Host to add me as a Player" (on the welcome screen, or **I brought a gift: ask to play** on the You tab) is a Guest meanwhile, and the Host and Co-hosts get an **Asking to play** card: **Add as Player** (by the name they gave, with their email, so it's them from then on) or **Not playing**. Their phone hears the answer by itself (it reloads who it is on the Staff's changes only while asking). They can take it back. Built in `people.ts` (askToPlay, answerAsk), `Welcome.tsx` (AskToPlay, AskingToPlayPanel); tests `ask-to-play.test.ts`, `joining.test.tsx`, `welcome.test.tsx`.

@@ -211,6 +211,13 @@
       "when": 1795557209818,
       "tag": "0029_invitations",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1795558940325,
+      "tag": "0030_ask_to_play",
+      "breakpoints": true
     }
   ]
 }

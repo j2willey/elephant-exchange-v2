@@ -92,11 +92,11 @@ export function WelcomeForm({ game, signedIn, accept, onWatch }: { game: GameVie
     e.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return;
-    const as = selfSignUp && gift ? "player" : "guest";
+    const as = gift ? "player" : "guest";
     setError(null);
     setStatus("sending");
     if (signedIn) {
-      const failed = await finishJoining(api, game.id, as, trimmed, accept);
+      const failed = await finishJoining(api, game, as, trimmed, accept);
       setStatus("idle");
       if (failed) setError(failed);
       return;
@@ -123,7 +123,7 @@ export function WelcomeForm({ game, signedIn, accept, onWatch }: { game: GameVie
         <h2>Check your email</h2>
         <p>
           We sent a link to <strong>{email.trim()}</strong>. Tap it to come back here as <strong>{name.trim()}</strong>
-          {selfSignUp && gift ? ", playing" : ""}.
+          {gift ? (selfSignUp ? ", playing" : ", asking the Host to add you as a Player") : ""}.
         </p>
         <p className="muted">
           Not there in a minute or two? Check your <strong>spam or junk folder</strong> for an email from Elephant
@@ -170,31 +170,29 @@ export function WelcomeForm({ game, signedIn, accept, onWatch }: { game: GameVie
           />
         </>
       )}
-      {selfSignUp ? (
-        <label className="check">
-          <input type="checkbox" checked={gift} onChange={(e) => setGift(e.target.checked)} />
-          I brought a gift, and I'm playing
-        </label>
-      ) : (
-        <p className="muted hint">
-          The Host adds the Players for this Game. Brought a gift? Use the email your Host has for you, and you'll be in as
-          yourself; if they don't have it, let them know you're here.
-        </p>
-      )}
+      <label className="check">
+        <input type="checkbox" checked={gift} onChange={(e) => setGift(e.target.checked)} />
+        {selfSignUp ? "I brought a gift, and I'm playing" : "I brought a gift: ask the Host to add me as a Player"}
+      </label>
       <p className="muted hint">
-        {selfSignUp && gift
+        {gift && selfSignUp
           ? started
             ? "You'll join the Players not called yet."
             : "You'll be on the Players list, waiting for the Host to start."
-          : "You can chat and post photos as a guest."}
+          : gift
+            ? "The Host adds you with a tap. Meanwhile you can chat and post photos."
+            : "You can chat and post photos as a guest."}
       </p>
+      {!selfSignUp && (
+        <p className="muted hint">On the Host's guest list already? Use the email they have for you, and you're in as yourself.</p>
+      )}
       {error && (
         <p className="error" role="alert">
           {error}
         </p>
       )}
       <button type="submit" disabled={!name.trim() || status === "sending"}>
-        {signedIn ? (selfSignUp && gift ? "Join as a Player" : "Join as a guest") : "Email me a link to join"}
+        {signedIn ? (gift ? (selfSignUp ? "Join as a Player" : "Ask to play") : "Join as a guest") : "Email me a link to join"}
       </button>
       {!signedIn && (
         <p className="muted hint">
@@ -206,8 +204,19 @@ export function WelcomeForm({ game, signedIn, accept, onWatch }: { game: GameVie
   );
 }
 
-/** Joins as a Player or sets a Guest's Name; says what went wrong, if anything. */
-async function finishJoining(api: ReturnType<typeof useApi>, gameId: string, as: "player" | "guest", name: string, accept: Accept): Promise<string | null> {
+/**
+ * Joins as a Player (in a Host-entered Game: asks the Host to add them) or sets a Guest's Name; says what went
+ * wrong, if anything.
+ */
+async function finishJoining(api: ReturnType<typeof useApi>, game: GameView, as: "player" | "guest", name: string, accept: Accept): Promise<string | null> {
+  const gameId = game.id;
+  if (as === "player" && game.rosterMode !== "self") {
+    if (!(await api.askToPlay(gameId, name))) return "That didn't work. Please try again.";
+    api.setGuestName(name);
+    const now = await api.game(gameId);
+    if (now) accept(null, { myName: now.myName, asking: now.asking, me: now.me });
+    return null;
+  }
   if (as === "player") {
     const result = await api.join(gameId, name);
     if (!result.ok) return result.message.endsWith(".") ? result.message : `${result.message}.`;
@@ -246,7 +255,7 @@ export function useWelcomeReturn(game: GameView | null | "loading", signedIn: bo
     const name = params.get("name")?.trim();
     navigate(pathname, { replace: true });
     if (!name || game.role !== null || knownIn(game)) return setFinishing(false);
-    void finishJoining(api, game.id, as === "player" && game.rosterMode === "self" ? "player" : "guest", name, accept).finally(() =>
+    void finishJoining(api, game, as, name, accept).finally(() =>
       setFinishing(false),
     );
   }, [game, signedIn, search, pathname, navigate, api, accept]);
@@ -289,5 +298,92 @@ export function CopyInvitation({ game, className = "secondary" }: { game: GameVi
     >
       {copied ? "Copied!" : "Copy invitation"}
     </button>
+  );
+}
+
+/**
+ * On the You tab of a Guest in a Host-entered Game: ask the Host to add them as a Player (they brought a gift), or,
+ * once asked, that they're waiting, with a way to take it back. Their phone hears the Host's answer by itself.
+ */
+export function AskToPlay({ game, accept }: { game: GameView; accept: Accept }) {
+  const api = useApi();
+  const [busy, setBusy] = useState(false);
+  const name = game.myName?.name ?? game.myName?.pending ?? api.guestName();
+  if (game.phase === "ended") return <p className="card muted">You followed along as a guest.</p>;
+
+  async function change(ask: boolean) {
+    setBusy(true);
+    const done = ask ? await api.askToPlay(game.id, name) : await api.stopAsking(game.id);
+    setBusy(false);
+    if (done) accept(null, { asking: ask });
+  }
+
+  return (
+    <section className="card stack" aria-label="Playing?">
+      {game.asking ? (
+        <>
+          <p>
+            <strong>You've asked to play.</strong> The Host will add you as a Player; this page updates by itself.
+          </p>
+          <button type="button" className="link" disabled={busy} onClick={() => void change(false)}>
+            Take it back
+          </button>
+        </>
+      ) : (
+        <>
+          <p>You're following along as a guest. The Host adds the Players for this Game.</p>
+          {name && (
+            <button type="button" className="secondary" disabled={busy} onClick={() => void change(true)}>
+              I brought a gift: ask to play
+            </button>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+/** For the Host and Co-hosts: who's asking to be added as a Player, each added with a tap, or not. */
+export function AskingToPlayPanel({ game, changes }: { game: GameView; changes: number }) {
+  const api = useApi();
+  const [asking, setAsking] = useState<{ key: string; name: string }[]>([]);
+  const [answered, setAnswered] = useState(0);
+
+  useEffect(() => {
+    if (game.role === null || game.rosterMode === "self") return setAsking([]);
+    let current = true;
+    api.askingToPlay(game.id).then(
+      (list) => current && setAsking(list),
+      () => {}, // keep what we had
+    );
+    return () => {
+      current = false;
+    };
+  }, [api, game.id, game.role, game.rosterMode, changes, answered]);
+
+  if (asking.length === 0) return null;
+  const answer = (key: string, add: boolean) => void api.answerAsk(game.id, key, add).then(() => setAnswered((n) => n + 1));
+  return (
+    <section className="card names-waiting" aria-label="Asking to play">
+      <h2>Asking to play</h2>
+      <p className="muted hint">They say they brought a gift.</p>
+      <ul className="people">
+        {asking.map((a) => (
+          <li key={a.key} aria-label={a.name}>
+            <span className="person">
+              <strong>{a.name}</strong>
+            </span>
+            <span className="inline">
+              <button type="button" onClick={() => answer(a.key, true)}>
+                Add as Player
+              </button>
+              <button type="button" className="secondary" onClick={() => answer(a.key, false)}>
+                Not playing
+              </button>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

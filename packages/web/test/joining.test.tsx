@@ -111,19 +111,62 @@ describe("Joining a Game from a phone", () => {
     expect(rosterNames()).toEqual(["Ann", "Bob", "Dan"]);
   });
 
-  it("isn't offered as a Player when the Host enters the Players: they join as a Guest", async () => {
+  it("asks the Host to add them when the Host enters the Players, and they're in once the Host taps Add", async () => {
     const { signedIn } = await startServer();
     const host = await signedIn("host@example.com");
     const id = await host.createGame({ name: "Office swap", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
     await host.command(id, { type: "AddPlayer", playerId: "ann", name: "Ann" });
 
     openApp(await signedIn("dan@example.com"), `/games/${id}`);
+    const user = userEvent.setup();
     await onTab(/^you$/i);
-
     await screen.findByText("Ann");
     const panel = await screen.findByRole("form", { name: /join this game/i });
-    expect(within(panel).queryByRole("checkbox", { name: /i brought a gift/i })).not.toBeInTheDocument();
-    expect(within(panel).getByText(/the host adds the players/i)).toBeInTheDocument();
-    expect(within(panel).getByRole("button", { name: /join as a guest/i })).toBeInTheDocument();
+    await user.type(within(panel).getByLabelText(/your name/i), "Dan");
+    await user.click(within(panel).getByRole("checkbox", { name: /ask the host to add me/i }));
+    await user.click(within(panel).getByRole("button", { name: /ask to play/i }));
+    expect(await screen.findByText(/you've asked to play/i)).toBeInTheDocument();
+
+    // The Host adds them; their phone hears it by itself.
+    const [asking] = await host.askingToPlay(id);
+    expect(asking?.name).toBe("Dan");
+    await host.answerAsk(id, asking!.key, true);
+    expect(await screen.findByText(/you're playing as dan/i)).toBeInTheDocument();
+    await waitFor(() => expect(rosterNames()).toEqual(["Ann", "Dan"]));
+  });
+
+  it("shows the Host who's asking to play, to add with a tap or not", async () => {
+    const { signedIn } = await startServer();
+    const host = await signedIn("host@example.com");
+    const id = await host.createGame({ name: "Office swap", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
+    await (await signedIn("dan@example.com")).askToPlay(id, "Dan");
+    await (await signedIn("eve@example.com")).askToPlay(id, "Eve");
+    openApp(host, `/games/${id}`);
+    const user = userEvent.setup();
+
+    const card = await screen.findByRole("region", { name: /asking to play/i });
+    await user.click(within(within(card).getByRole("listitem", { name: "Dan" })).getByRole("button", { name: /add as player/i }));
+    await user.click(within(within(card).getByRole("listitem", { name: "Eve" })).getByRole("button", { name: /not playing/i }));
+
+    await waitFor(() => expect(screen.queryByRole("region", { name: /asking to play/i })).not.toBeInTheDocument());
+    await waitFor(() => expect(rosterNames()).toEqual(["Dan"]));
+  });
+
+  it("can take back asking to play, and ask again", async () => {
+    const { signedIn } = await startServer();
+    const host = await signedIn("host@example.com");
+    const id = await host.createGame({ name: "Office swap", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
+    const dan = await signedIn("dan@example.com");
+    await dan.changeMyName(id, "Dan");
+    openApp(dan, `/games/${id}`);
+    const user = userEvent.setup();
+    await onTab(/^you$/i);
+
+    await user.click(await screen.findByRole("button", { name: /i brought a gift: ask to play/i }));
+    expect(await screen.findByText(/you've asked to play/i)).toBeInTheDocument();
+    expect(await host.askingToPlay(id)).toHaveLength(1);
+    await user.click(screen.getByRole("button", { name: /take it back/i }));
+    expect(await screen.findByRole("button", { name: /i brought a gift: ask to play/i })).toBeInTheDocument();
+    expect(await host.askingToPlay(id)).toEqual([]);
   });
 });

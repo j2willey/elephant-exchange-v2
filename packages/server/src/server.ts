@@ -715,6 +715,7 @@ export function createServer({
       myName: email ? nameIn(id, email, game) : null,
       muted: email ? (nameRow(id, email)?.muted ?? false) : false,
       myVote: (email && game.vote.ballots.get(email)) ?? null,
+      asking: email ? Boolean(nameRow(id, email)?.asksToPlay) && !playerId : false,
     } satisfies Wire.Viewer;
     return c.json({ ...view(id, game, now()), ...viewer });
   });
