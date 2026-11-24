@@ -22,7 +22,12 @@ export function capturingMailer() {
   const sent: { email: string; url: string }[] = [];
   /** Follow-up emails asking a Host how their Game went. */
   const asked: { email: string; gameName: string; url: string }[] = [];
+  /** Personal invitations, with what each said. */
+  const invited: { email: string; name: string; gameName: string; whenWhere: string; url: string }[] = [];
   const mailer: Mailer = {
+    async sendInvitation(email, { name, gameName, whenWhere, url }) {
+      invited.push({ email, name, gameName, whenWhere, url });
+    },
     async sendSignInLink(email, url) {
       sent.push({ email, url });
     },
@@ -30,7 +35,7 @@ export function capturingMailer() {
       asked.push({ email, gameName, url });
     },
   };
-  return { sent, asked, mailer };
+  return { sent, asked, invited, mailer };
 }
 
 type App = { request: (path: string, init?: RequestInit) => Response | Promise<Response> };

@@ -14,5 +14,5 @@ We chose this over typing an email without confirming it, which anyone could use
 ## Consequences
 
 - The welcome screen on the Game's link asks for an email, a Name and whether they brought a gift, and sends the sign-in link. The link brings them back to the Game, joined, wherever they opened it: what they asked for travels in the link's return address, not in the browser that asked, since the link often opens in the mail app's own browser.
-- An email on the Roster (Phase 2: a Host's list of guests' emails) will make whoever signs in with it that Player, by any route: a personal invitation, the shared link or the QR code.
-- A forwarded personal invitation would let its reader in as that person. That's tolerable at a party, where the Host can rename or remove anyone, but an invitation will never carry a Co-host's or Host's role. Those still need a sign-in link.
+- An email on the Roster (the guest list) makes whoever signs in with it that Player, by any route: a personal invitation, the shared link or the QR code.
+- A personal invitation signs its person in once, until the Game ends. Opened again (a second device, or forwarded), it signs nobody in and offers a sign-in link to the address it went to, so a forwarded invitation can't let anyone else in once its owner has used it. It never signs in anyone who is a Host or Co-host of any Game, whose role needs a sign-in link, and isn't sent to a Co-host of the Game.

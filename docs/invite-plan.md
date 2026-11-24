@@ -36,11 +36,15 @@ Built in `packages/web/src/Welcome.tsx` (tests: `test/welcome.test.tsx`). Someon
 
 Not in Phase 1: the top bar's Sign in on other pages still lands on the home page.
 
-## Phase 2: personal invitations (after the party)
+## Phase 2: personal invitations (built 2026-11-24)
 
 1. **Guest list by email.** In setup, the Host pastes names and emails ("Ann Lee, ann@corp.com"). Each becomes a Player with that email. Whoever signs in with it, by any route (shared link, QR code, personal invitation), *is* that Player: no claiming. In a Host-entered Game this is also how "I brought a gift" becomes a Player.
-2. **Send personal invitations** (optional): one email each, with a link good until the Game ends, on more than one device. It never carries a Co-host's role (ADR 0007).
-3. **Who's in.** The Roster shows each Player as invited, joined, or not yet, so the Host can nudge someone or resend.
+2. **Send personal invitations** (optional): one email each, from ✉ Email invitations (the laptop's 🔗 Invite dialog, or under the phone console's Players) or one at a time from a Player's ✉ form. The link signs its person in **once**, until the Game ends; opened again (another device, or forwarded) it signs nobody in and offers a sign-in link to the address it went to (shown as "an…@corp.com"). Changed from "on more than one device": a link that keeps signing in for days is a password in an inbox. It never signs in a Host or Co-host, and isn't sent to one (ADR 0007). Invitations and sign-in links share the day's email limit.
+3. **Who's in.** Beside each Player on the guest list: not yet, ✉ invited, or ✓ in (opened the Game signed in), live; the Host can send an invitation again from the ✉ form. Only the Staff see emails.
 4. Risks: sending many emails from the app (the mail service's daily limit; cold emails to company addresses hurt its reputation and land in spam). A Player whose invitation is lost still gets in by the shared link with the same email.
+
+Built in `packages/server/src/invitation-routes.ts`, `people.ts` (the guest list), `packages/web/src/GuestList.tsx` and `InvitePage.tsx`; tests `guest-list.test.ts(x)` and `invitations.test.ts(x)`.
+
+Not built: a phone already open when the Host adds its owner's email learns it on reload.
 
 Open: whether someone who isn't on a Host-entered Game's list and ticks "I brought a gift" can ask to be added (one tap for the Host to approve).

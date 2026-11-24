@@ -44,9 +44,13 @@ export async function startServer(
   { servePages, ...options }: { draw?: DrawFn; adminEmails?: string[]; build?: string; commit?: string; overload?: { maxScreens?: number }; servePages?: boolean } = {},
 ) {
   const sent: { email: string; url: string }[] = [];
+  const invited: { email: string; url: string }[] = [];
   const mailer: Mailer = {
     async sendSignInLink(email, url) {
       sent.push({ email, url });
+    },
+    async sendInvitation(email, { url }) {
+      invited.push({ email, url });
     },
   };
   // With `servePages`, the server also serves the app's page (a stand-in for the build), as on the droplet.
@@ -75,7 +79,14 @@ export async function startServer(
     if (tipNoteRead) await api.markTipNoteRead();
     return api;
   };
-  return { origin, sent, linkFor, signedIn };
+  /** The path of the latest personal invitation emailed to this address. */
+  const invitationFor = (email: string) => {
+    const link = invited.filter((m) => m.email === email).at(-1);
+    if (!link) throw new Error(`no invitation was emailed to ${email}`);
+    const url = new URL(link.url);
+    return url.pathname + url.search;
+  };
+  return { origin, sent, linkFor, invitationFor, signedIn };
 }
 
 /** Always draws the earliest-added Player still waiting, so tests know who is called up without knowing ids. */

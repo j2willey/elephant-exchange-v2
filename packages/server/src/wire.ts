@@ -98,6 +98,15 @@ export interface Person {
 }
 
 /** A Player who is also the Host or a Co-host, marked on their consoles. */
+/** For the Host and Co-hosts only: a Player's email on the guest list, and whether they've opened the Game signed in. */
+export interface GuestListEntry {
+  playerId: string;
+  email: string;
+  joined: boolean;
+  /** When they were last emailed a personal invitation (ms since 1970); null if never. */
+  invitedAt: number | null;
+}
+
 export interface StaffMember {
   playerId: string;
   role: Role;

@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import type { Command } from "@elephant/rules";
 import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { DEMO_ACTOR, type Role } from "./access.js";
-import { gameHosts, gameNames, gamePlayers, gameVisitors, postReactions, posts, votes, type Db, type Tx } from "./db.js";
+import { gameHosts, gameNames, gamePlayers, gameVisitors, invitations, postReactions, posts, votes, type Db, type Tx } from "./db.js";
 import type { PendingName, Person } from "./wire.js";
 
 /** Why People said no: no such person (or Player) here, or a change that can't be made. */
@@ -12,7 +12,7 @@ const refuse = (refused: PeopleRefusal["refused"], message: string): PeopleRefus
 /** A stable, opaque name for a person in a Game, so the Co-hosts panel never needs their email. */
 const personKey = (gameId: string, email: string) => createHash("sha256").update(`${gameId}\n${email}`).digest("base64url").slice(0, 16);
 /** Enough of an email to tell two people of the same name apart: "te…@example.com". */
-const emailHint = (email: string) => {
+export const emailHint = (email: string) => {
   const at = email.lastIndexOf("@");
   return `${email.slice(0, Math.min(2, at))}…${email.slice(at)}`;
 };
@@ -360,6 +360,61 @@ export function createPeople<G, Result = unknown>(deps: {
     }
   }
 
+  /**
+   * The Host or a Co-host adds a Player with their email (a guest list), so whoever signs in with it is that Player,
+   * by any route: the shared link, the QR code or a personal invitation (ADR 0007). The same AddPlayer as ever.
+   */
+  function addWithEmail(gameId: string, name: string, email: string): PeopleRefusal | { playerId: string; result: Result } {
+    const game = latest(gameId);
+    const already = playerOf(gameId, email, game);
+    if (already) return refuse("AlreadyJoined", `That email is already ${playerName(game, already) ?? "on the Roster"}'s`);
+    const playerId = randomBytes(12).toString("base64url");
+    try {
+      const result = command(gameId, { type: "AddPlayer", playerId, name }, (tx) => linkPlayer(tx, gameId, playerId, email));
+      return { playerId, result };
+    } finally {
+      changed(gameId); // in case the AddPlayer was refused after the link was written
+    }
+  }
+
+  /**
+   * The Host or a Co-host gives a Player on the Roster an email, changes it, or takes it off (null). Whoever has
+   * it is that Player from then on; someone who had the old one is a Guest again. An email can be only one Player's.
+   */
+  function setPlayerEmail(gameId: string, playerId: string, email: string | null): PeopleRefusal | null {
+    const game = latest(gameId);
+    if (!rosterIds(game).includes(playerId)) return refuse("NotFound", "No such Player in this Game");
+    if (email) {
+      const other = playerOf(gameId, email, game);
+      if (other && other !== playerId) return refuse("Invalid", `That email is already ${playerName(game, other) ?? "another Player"}'s`);
+    }
+    writing(gameId, () =>
+      db.transaction((tx) => {
+        tx.delete(gamePlayers).where(and(eq(gamePlayers.gameId, gameId), eq(gamePlayers.playerId, playerId))).run();
+        if (email) {
+          tx.delete(gamePlayers).where(and(eq(gamePlayers.gameId, gameId), eq(gamePlayers.email, email))).run();
+          tx.insert(gamePlayers).values({ gameId, playerId, email }).run();
+        }
+      }),
+    );
+    return null;
+  }
+
+  /**
+   * For the Staff only: each Player on the Roster with an email, and whether that person has opened the Game while
+   * signed in (joined) or not yet. Demo stand-ins aren't people, so they're left out.
+   */
+  function guestList(gameId: string, game: G): { playerId: string; email: string; joined: boolean; invitedAt: number | null }[] {
+    const seen = new Set(db.select({ email: gameVisitors.email }).from(gameVisitors).where(eq(gameVisitors.gameId, gameId)).all().map((r) => r.email));
+    const invited = new Map<string, number>();
+    for (const r of db.select({ email: invitations.email, sentAt: invitations.sentAt }).from(invitations).where(eq(invitations.gameId, gameId)).all())
+      invited.set(r.email, Math.max(invited.get(r.email) ?? 0, r.sentAt.getTime()));
+    const onRoster = new Set(rosterIds(game));
+    return [...of(gameId).players]
+      .filter(([email, playerId]) => onRoster.has(playerId) && !email.startsWith(DEMO_ACTOR))
+      .map(([email, playerId]) => ({ playerId, email, joined: seen.has(email), invitedAt: invited.get(email) ?? null }));
+  }
+
   /** A demo Player's stand-in email: "fay@example.com", or "fay2@example.com" when there's already a Fay. */
   function standInEmail(gameId: string, name: string): string {
     const base = name.toLowerCase().replace(/[^a-z0-9]/g, "") || "player";
@@ -392,6 +447,9 @@ export function createPeople<G, Result = unknown>(deps: {
 
   return {
     join,
+    addWithEmail,
+    setPlayerEmail,
+    guestList,
     standInEmail,
     isMuted,
     mutedIn,

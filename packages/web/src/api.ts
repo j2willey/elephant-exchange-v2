@@ -1,6 +1,6 @@
 import type { Command, GameOptions, GameSettings, Phase, RuleErrorCode } from "@elephant/rules";
 import { io } from "socket.io-client";
-import type { AdminGame, AdminPerson, Emoji, FeedbackAsk, FeedbackSummary, StatsSummary, SystemReport, Testimonial, GameView, Moderation, MyGame, MyOrg, PendingName, Person, Post, RosterMode, ScreenMode, Session, SharedGame, StaffMember, Theme, VoteDisplay } from "./wire";
+import type { AdminGame, AdminPerson, Emoji, FeedbackAsk, FeedbackSummary, StatsSummary, SystemReport, Testimonial, GameView, Moderation, MyGame, MyOrg, PendingName, Person, Post, RosterMode, ScreenMode, Session, SharedGame, StaffMember, GuestListEntry, Theme, VoteDisplay } from "./wire";
 
 export type {
   AdminGame,
@@ -27,6 +27,7 @@ export type {
   Session,
   SharedGame,
   StaffMember,
+  GuestListEntry,
   Theme,
   Viewer,
   VoteDisplay,
@@ -485,6 +486,56 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
     },
 
     /** Which Players are the Host or a Co-host, for their consoles. */
+    /** For the Host and Co-hosts: the Players with emails, and whether each has opened the Game signed in. */
+    async guestList(gameId: string): Promise<GuestListEntry[]> {
+      const res = await fetchFn(`/api/games/${encodeURIComponent(gameId)}/guest-list`);
+      if (!res.ok) throw new Error(`loading the guest list failed: ${res.status}`);
+      return ((await res.json()) as { players: GuestListEntry[] }).players;
+    },
+
+    /** Adds a Player with their email: whoever signs in with it is that Player. Says why not, if refused. */
+    async addGuest(gameId: string, name: string, email: string): Promise<{ ok: true } | { ok: false; message: string }> {
+      const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/guest-list`, { name, email });
+      if (res.ok) return { ok: true };
+      if (res.status === 409) return { ok: false, message: ((await res.json()) as { message: string }).message };
+      if (res.status === 400) return { ok: false, message: "That doesn't look like an email address" };
+      return { ok: false, message: "Something went wrong" };
+    },
+
+    /** Emails personal invitations: to these Players, or to everyone listed who isn't in or invited yet. */
+    async sendInvitations(gameId: string, playerIds?: string[]): Promise<{ sent: string[]; notSent: { playerId: string; reason: string }[] } | { error: string }> {
+      const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/invitations`, playerIds ? { playerIds } : {});
+      if (res.ok) return (await res.json()) as { sent: string[]; notSent: { playerId: string; reason: string }[] };
+      return { error: res.status === 409 ? "The Game is over." : "The invitations couldn't be sent just now. Please try again." };
+    },
+
+    /**
+     * Opens a personal invitation: signed in, and which Game; or refused (used already, or a Host's), with a hint of
+     * the address it went to; or "expired".
+     */
+    async openInvitation(token: string): Promise<{ gameId: string } | { refused: "used" | "staff"; gameId: string; hint: string } | "expired"> {
+      const res = await postJson("/api/auth/invitation", { token });
+      if (res.ok) return { gameId: ((await res.json()) as { gameId: string }).gameId };
+      if (res.status === 409) return (await res.json()) as { refused: "used" | "staff"; gameId: string; hint: string };
+      if (res.status === 401 || res.status === 400) return "expired";
+      throw new Error(`opening the invitation failed: ${res.status}`);
+    },
+
+    /** For an invitation already used: a sign-in link to the address it went to. */
+    async invitationLink(token: string): Promise<"sent" | "tooMany" | "expired" | "failed"> {
+      const res = await postJson("/api/auth/invitation/link", { token });
+      return res.status === 202 ? "sent" : res.status === 429 ? "tooMany" : res.status === 401 ? "expired" : "failed";
+    },
+
+    /** Gives a Player an email, changes it, or takes it off (null). Says why not, if refused. */
+    async setPlayerEmail(gameId: string, playerId: string, email: string | null): Promise<{ ok: true } | { ok: false; message: string }> {
+      const res = await sendJson("PUT", `/api/games/${encodeURIComponent(gameId)}/players/${encodeURIComponent(playerId)}/email`, { email });
+      if (res.ok) return { ok: true };
+      if (res.status === 409) return { ok: false, message: ((await res.json()) as { message: string }).message };
+      if (res.status === 400) return { ok: false, message: "That doesn't look like an email address" };
+      return { ok: false, message: "Something went wrong" };
+    },
+
     async staff(gameId: string): Promise<StaffMember[]> {
       const res = await fetchFn(`/api/games/${encodeURIComponent(gameId)}/staff`);
       if (!res.ok) throw new Error(`loading the Co-hosts failed: ${res.status}`);

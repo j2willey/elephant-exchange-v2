@@ -5,7 +5,7 @@ import type { Feed } from "./feed.js";
 import type { LoadedGame } from "./game-store.js";
 import { parseBody } from "./http.js";
 import type { People } from "./people.js";
-import { approveNameBody, cohostBody, joinBody, personBody, renameBody } from "./schemas.js";
+import { approveNameBody, cohostBody, guestBody, joinBody, personBody, playerEmailBody, renameBody } from "./schemas.js";
 import type * as Wire from "./wire.js";
 
 /**
@@ -86,6 +86,33 @@ export function peopleRoutes<Result extends object>(deps: {
       if (!by) return c.json({ error: "No such Post in this Game" }, 404);
       people.rename(id, { email: by }, name, locked);
     }
+    return c.body(null, 204);
+  });
+
+  // The guest list: Players with emails, so whoever signs in with one is that Player (ADR 0007). Emails are seen
+  // only by the Staff.
+  routes.get("/api/games/:id/guest-list", access.need("staff", "Only the Host and Co-hosts"), (c) => {
+    const { id, game } = c.var.access;
+    return c.json({ players: people.guestList(id, game) satisfies Wire.GuestListEntry[] });
+  });
+
+  routes.post("/api/games/:id/guest-list", access.need("staff", "Only the Host and Co-hosts can add Players"), async (c) => {
+    const { id } = c.var.access;
+    const body = await parseBody(c, guestBody);
+    if (!body.ok) return body.res;
+    const added = people.addWithEmail(id, body.data.name, body.data.email);
+    if ("refused" in added) return c.json({ code: added.refused, message: added.message }, 409);
+    staffChanged(id);
+    return "code" in added.result ? c.json(added.result, 409) : c.json({ ...added.result, playerId: added.playerId });
+  });
+
+  routes.put("/api/games/:id/players/:playerId/email", access.need("staff", "Only the Host and Co-hosts can change the guest list"), async (c) => {
+    const { id } = c.var.access;
+    const body = await parseBody(c, playerEmailBody);
+    if (!body.ok) return body.res;
+    const no = people.setPlayerEmail(id, c.req.param("playerId"), body.data.email);
+    if (no) return c.json({ code: no.refused, message: no.message }, no.refused === "NotFound" ? 404 : 409);
+    staffChanged(id);
     return c.body(null, 204);
   });
 
