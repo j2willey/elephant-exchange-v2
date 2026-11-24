@@ -90,7 +90,8 @@ describe("Describing a Gift from the Host's phone", () => {
     openApp(host, `/games/${id}`);
 
     const gifts = await screen.findByRole("list", { name: /^gifts$/i });
-    await user.click(within(within(gifts).getByRole("listitem", { name: "Espreso" })).getByRole("button", { name: /edit espreso/i }));
+    // The edit buttons come once the page knows this is the Host, which can be a moment after the Gifts show.
+    await user.click(await within(within(gifts).getByRole("listitem", { name: "Espreso" })).findByRole("button", { name: /edit espreso/i }));
     const form = await screen.findByRole("form", { name: /edit espreso/i });
     await user.clear(within(form).getByLabelText(/what's inside/i));
     await user.type(within(form).getByLabelText(/what's inside/i), "Espresso machine");
