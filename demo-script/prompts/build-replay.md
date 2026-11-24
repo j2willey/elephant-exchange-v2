@@ -1,6 +1,6 @@
 # Prompt: build the guided demo replay
 
-Paste everything below the line into Claude Code on Omarchy, from the repo root (`elephant-exchange-v2`).
+Paste everything below the line into Claude Code on Omarchy, from the repo root (`elephant-exchange-v2`), or ask a Claude Code session there to follow this file.
 
 ---
 
@@ -8,7 +8,7 @@ Build a **guided demo replay** for Elephant Exchange: a page that plays a script
 
 ## Work on its own branch
 
-Before changing anything, make a new branch (or a worktree, if `main` has uncommitted work): `git switch -c guided-demo` from the latest `main`. This is experimental: commit on that branch only, don't merge, don't deploy, and don't push unless I ask.
+Work on the existing `guided-demo` branch (`git switch guided-demo`; it already holds `demo-script/` and is on GitHub). If it has uncommitted work, use a worktree instead. This is experimental: commit on that branch only, don't merge into `main`, don't deploy, and don't push unless I ask.
 
 ## Read first
 
@@ -57,4 +57,4 @@ A new route, `/guided/:scriptId` (or as you see fit), reachable from the existin
 - The validator test over every script.
 - One Playwright test (in `e2e/`) that opens `/guided/happy-path`, presses Next through the first eight steps, checks that a bubble is visible each time and that the console shows "Heated blanket" held by Cat after the first steal, then presses Back once and checks the blanket is with Ann again.
 
-Run `npm test`, `npm run typecheck` and the new e2e test before you finish. Then summarise for me: what you built, where the files went, anything in the script format you changed and why, and what's left. Commit on the `guided-demo` branch with clear messages; don't push.
+Run `npm test`, `npm run typecheck` and the new e2e test before you finish. Then summarise for me: what you built, where the files went, anything in the script format you changed and why, and what's left. Commit on the `guided-demo` branch with clear messages; don't push unless I ask.
