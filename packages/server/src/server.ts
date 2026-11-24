@@ -25,6 +25,7 @@ import { diskOf, lastBackupAt, memoryLimit, type ServerHealth } from "./system.j
 import { createAccess, DEMO_ACTOR, SESSION_COOKIE } from "./access.js";
 import { createFeed } from "./feed.js";
 import { createGameLifecycle } from "./games.js";
+import { createVisitors } from "./visitors.js";
 import { adminRoutes } from "./admin-routes.js";
 import { createPeople } from "./people.js";
 import { peopleRoutes } from "./people-routes.js";
@@ -323,6 +324,8 @@ export function createServer({
   const lifecycle = createGameLifecycle({ db, store, feed, people, photos, themeImages, lastWord: (id) => stats.snapshotGame(id, true) });
   /** Removes a Game and everything kept for it (games.ts). */
   const deleteGame = (id: string) => lifecycle.remove(id);
+  /** Unique visitors to the site, counted without tracking anyone (visitors.ts). */
+  const visitors = createVisitors({ db, now });
   /** After any change to a Game's Posts or Reactions: every screen watching asks for the Feed again. */
   const postsChanged = (id: string) => feed.changed(id);
 
@@ -998,7 +1001,7 @@ export function createServer({
   }
 
   // The admin pages' routes (admin-routes.ts); only for ADMIN_EMAILS, checked just above.
-  app.route("/", adminRoutes({ db, now, load: (id) => load(id)!, stats, said, health, signInEmailCap: linkLimits.perDay, photoBytes: () => photos.bytes(), deleteGame, store, themeImages }));
+  app.route("/", adminRoutes({ db, now, load: (id) => load(id)!, stats, said, health, signInEmailCap: linkLimits.perDay, photoBytes: () => photos.bytes(), deleteGame, visitorDays: visitors.lastDays, store, themeImages }));
 
   // Anything else under /api is a mistake, never a page of the app.
   app.all("/api/*", (c) => c.json({ error: "Not found" }, 404));
@@ -1018,6 +1021,9 @@ export function createServer({
     const page = readFileSync(join(webRoot, "index.html"), "utf8");
     app.get("*", (c) => {
       c.header("Cache-Control", "no-cache");
+      // A visitor, for the statistics; not Jim (or another admin) checking them.
+      if (!isAdmin(signedInAs(c)))
+        visitors.arrived({ ip: clientIp(c), userAgent: c.req.header("user-agent") ?? "", path: c.req.path, ref: cleanRef(c.req.query("ref")) ?? undefined });
       return c.html(page);
     });
   }
@@ -1083,7 +1089,7 @@ export function createServer({
 
   /** Clears out what's kept only for a while: old sign-in records, Photos past their time, demo visitors, Games nobody's using. */
   function sweep() {
-    return { ...auth.sweep(), photos: sweepPhotos(), visitors: sweepVisitors(), gamesForgotten: forgetIdleGames() };
+    return { ...auth.sweep(), photos: sweepPhotos(), visitors: sweepVisitors(), visitorDays: visitors.sweep(), gamesForgotten: forgetIdleGames() };
   }
 
   /** Serves HTTP and live updates on one port (0 picks a free one). Screens only listen; moves go over HTTP. */

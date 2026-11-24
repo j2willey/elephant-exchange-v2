@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import type { GameRecord, StatsSummary } from "./api.js";
 import { useApi } from "./ApiContext.js";
 import { Insights } from "./Insights.js";
+import { Visitors } from "./Visitors.js";
 
 const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—");
 const mins = (m: number | null) => (m === null ? "—" : m < 1 ? "under 1 min" : m < 90 ? `${Math.round(m)} min` : `${(m / 60).toFixed(1)} h`);
@@ -70,6 +71,8 @@ export function StatsPage() {
           ))}
         </dl>
       </section>
+
+      <Visitors days={stats.visitors} />
 
       <Records records={stats.records} />
 

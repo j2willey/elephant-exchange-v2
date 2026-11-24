@@ -9,6 +9,7 @@ import type { themeStore } from "./photos.js";
 import { excludeBody, publishBody } from "./schemas.js";
 import { isVisitor, type createStats } from "./stats.js";
 import { healthWarnings, type ServerHealth } from "./system.js";
+import type { VisitorDay } from "./visitors.js";
 import type * as Wire from "./wire.js";
 
 /**
@@ -29,10 +30,12 @@ export function adminRoutes(deps: {
   photoBytes: () => number;
   /** Removes a Game and everything kept for it (games.ts). */
   deleteGame: (id: string) => void;
+  /** The last `n` days' unique visitors (visitors.ts). */
+  visitorDays: (n: number) => VisitorDay[];
   store: Pick<GameStore, "clear">;
   themeImages: ReturnType<typeof themeStore>;
 }) {
-  const { db, now, load, stats, said, health, signInEmailCap, photoBytes, deleteGame, store, themeImages } = deps;
+  const { db, now, load, stats, said, health, signInEmailCap, photoBytes, deleteGame, visitorDays, store, themeImages } = deps;
   const routes = new Hono();
 
   /** Everyone who has signed in, newest first: when, whether a feedback email is OK, and what they've made. */
@@ -88,7 +91,7 @@ export function adminRoutes(deps: {
   /** The usage statistics (ADR-0005), brought up to date first. */
   routes.get("/api/admin/stats", (c) => {
     stats.refresh();
-    return c.json(stats.summary({ signInEmailCap, photoBytes: photoBytes(), ratings: said.hostRatings() }));
+    return c.json(stats.summary({ signInEmailCap, photoBytes: photoBytes(), ratings: said.hostRatings(), visitors: visitorDays(14) }));
   });
 
 

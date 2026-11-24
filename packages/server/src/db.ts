@@ -370,6 +370,25 @@ export const dailyCounts = sqliteTable(
   (t) => [primaryKey({ columns: [t.day, t.name] })],
 );
 
+/**
+ * Today's secret for telling visitors apart (see visitors.ts): a new one each day, deleted the next, so a day's
+ * fingerprints can never be linked to another day's, or worked back to anyone.
+ */
+export const visitorDays = sqliteTable("visitor_days", {
+  day: text("day").primaryKey(),
+  secret: text("secret").notNull(),
+});
+
+/** The day's fingerprints of the visitors seen (a keyed hash of their address and browser), deleted the next day. */
+export const visitorsSeen = sqliteTable(
+  "visitors_seen",
+  {
+    day: text("day").notNull(),
+    fingerprint: text("fingerprint").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.day, t.fingerprint] })],
+);
+
 /** One row per person who ever signed in, as a keyed hash of their email; never their address. */
 export const peopleStats = sqliteTable("people_stats", {
   personKey: text("person_key").primaryKey(),

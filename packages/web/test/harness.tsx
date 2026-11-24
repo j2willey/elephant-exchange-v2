@@ -1,4 +1,7 @@
 import { File as NodeFile } from "node:buffer";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { StrictMode } from "react";
 import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
@@ -37,14 +40,19 @@ export const clock = {
 };
 
 /** Starts the real server, in memory on a free port. Sign-in links are kept in `sent` instead of emailed. */
-export async function startServer(options: { draw?: DrawFn; adminEmails?: string[]; build?: string; overload?: { maxScreens?: number } } = {}) {
+export async function startServer(
+  { servePages, ...options }: { draw?: DrawFn; adminEmails?: string[]; build?: string; overload?: { maxScreens?: number }; servePages?: boolean } = {},
+) {
   const sent: { email: string; url: string }[] = [];
   const mailer: Mailer = {
     async sendSignInLink(email, url) {
       sent.push({ email, url });
     },
   };
-  const server = createServer({ dbPath: ":memory:", mailer, baseUrl: "http://app.test", now: clock.now, ...options });
+  // With `servePages`, the server also serves the app's page (a stand-in for the build), as on the droplet.
+  const webRoot = servePages ? mkdtempSync(join(tmpdir(), "harness-web-")) : undefined;
+  if (webRoot) writeFileSync(join(webRoot, "index.html"), "<!doctype html><title>Elephant Exchange</title>");
+  const server = createServer({ dbPath: ":memory:", mailer, baseUrl: "http://app.test", now: clock.now, ...(webRoot ? { webRoot } : {}), ...options });
   const { port, close } = await server.listen(0);
   running.push(close);
   /** The path (with its token) of the latest link emailed to this address, as the app would be opened at. */

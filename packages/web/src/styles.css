@@ -3228,3 +3228,58 @@ kbd {
     align-content: start;
   }
 }
+
+/* The admin's Stats page: unique visitors a day (Visitors.tsx). One series in the accent color, recessive grid. */
+/* On a phone the chart keeps a readable size and scrolls sideways within the card, as the tables do. */
+.visitor-scroll {
+  overflow-x: auto;
+  margin: 16px 0 12px;
+}
+.visitor-chart {
+  position: relative;
+  min-width: 480px;
+}
+.visitor-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.visitor-grid line {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.visitor-grid text,
+.visitor-day {
+  fill: var(--muted);
+  font-size: 11px;
+}
+.visitor-bar {
+  fill: var(--brand);
+  stroke: var(--brand);
+  stroke-width: 0;
+}
+.visitor-bar.active {
+  opacity: 0.8;
+}
+.visitor-value {
+  fill: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+.visitor-tip {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.12);
+  font-size: 0.85rem;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 1;
+}

@@ -1,3 +1,4 @@
+import type { VisitorDay } from "./visitors.js";
 import { createHmac, randomBytes } from "node:crypto";
 import { and, asc, count, desc, eq, gte, isNotNull, sql } from "drizzle-orm";
 import { activePlayers, evolve, newGame, OPTION_NAMES, RECOMMENDED_OPTIONS, type Event, type GameOptions, type GameSettings } from "@elephant/rules";
@@ -132,6 +133,8 @@ export interface StatsSummary {
   hosts: { email: string | null; games: number; averageMinutes: number | null }[];
   organizations: { name: string; deleted: boolean; games: number }[];
   sources: { ref: string; visits: number; signUps: number }[];
+  /** Unique visitors to the site, a day at a time over the last 14 days, oldest first (visitors.ts). */
+  visitors: VisitorDay[];
   insights: Insights;
   /** The record holders among played Games: the top 5 for each, for "the biggest party so far had 60 Players". */
   records: GameRecord[];
@@ -406,9 +409,12 @@ export function createStats(db: Db, now: () => Date) {
     signInEmailCap,
     photoBytes,
     ratings = new Map(),
+    visitors = [],
   }: {
     signInEmailCap: number;
     photoBytes: number;
+    /** The last days' unique visitors. */
+    visitors?: VisitorDay[];
     /** Each Game's Host rating (1–5), from the feedback. */
     ratings?: ReadonlyMap<string, number>;
   }): StatsSummary {
@@ -560,6 +566,7 @@ export function createStats(db: Db, now: () => Date) {
       organizations: orgs
         .map((o) => ({ name: o.name, deleted: o.deletedAt !== null, games: counted.filter((s) => s.g.orgId === o.orgId).length }))
         .sort((a, b) => b.games - a.games),
+      visitors,
       sources: [...refs]
         .map((ref) => ({ ref, visits: visits.find((v) => v.ref === ref)?.visits ?? 0, signUps: people.filter((p) => p.ref === ref).length }))
         .sort((a, b) => b.visits - a.visits),

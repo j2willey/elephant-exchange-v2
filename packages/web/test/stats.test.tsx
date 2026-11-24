@@ -125,3 +125,23 @@ describe("Records, on the Stats page", () => {
     expect(within(most).getAllByRole("listitem")[0]).toHaveTextContent(/5 players · office party.*min/i);
   });
 });
+
+describe("Visitors on the Stats page", () => {
+  it("shows unique visitors per day over the last 14 days, as a graph and a table", async () => {
+    const server = await startServer({ adminEmails: ["boss@example.org"], servePages: true });
+    const phone = { "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1" };
+    await fetch(`${server.origin}/try?ref=linkedin`, { headers: { ...phone, "x-forwarded-for": "1.1.1.1" } });
+    await fetch(`${server.origin}/`, { headers: { ...phone, "x-forwarded-for": "1.1.1.1" } }); // the same visitor
+    await fetch(`${server.origin}/`, { headers: { "user-agent": "Mozilla/5.0 (X11; Linux x86_64) Chrome/140.0" } }); // another
+    await fetch(`${server.origin}/`, { headers: { "user-agent": "LinkedInBot/1.0 (compatible; Mozilla/5.0)" } }); // a link preview
+
+    openApp(await server.signedIn("boss@example.org"), "/admin/stats");
+    const section = await screen.findByRole("region", { name: /visitors/i });
+
+    const chart = within(section).getByRole("img", { name: /unique visitors per day, last 14 days/i });
+    expect(within(chart).getAllByTestId("visitor-bar")).toHaveLength(14);
+    expect(within(section).getByText("Today (UTC)", { selector: "dt" }).nextElementSibling).toHaveTextContent(/^2$/);
+    const rows = within(within(section).getByRole("table")).getAllByRole("row");
+    expect(rows[1]).toHaveTextContent(/2\s*1\s*1\s*0\s*0\s*1\s*1$/); // the latest day: visitors, front, demo, game, other, from links, previews
+  });
+});
