@@ -38,7 +38,7 @@ describe("The guest list on the Host's console", () => {
     await user.click(await screen.findByRole("button", { name: /paste a list/i }));
     await user.type(screen.getByLabelText(/names, one per line/i), "Ann Lee, ann@corp.example\nBob");
     await user.click(screen.getByRole("button", { name: /add 2 players/i }));
-    expect(await screen.findByText("✉ not yet")).toHaveAttribute("title", "ann@corp.example");
+    expect(await screen.findByText("not yet")).toHaveAttribute("title", "ann@corp.example");
     cleanup();
 
     // Ann follows the shared link on her own phone and signs in with that email: she's Ann, though it's a
@@ -77,7 +77,7 @@ describe("The guest list on the Host's console", () => {
     await user.clear(within(form).getByLabelText(/email/i));
     await user.type(within(form).getByLabelText(/email/i), "cat@corp.example");
     await user.click(within(form).getByRole("button", { name: /save/i }));
-    await waitFor(() => expect(screen.getAllByText("✉ not yet").map((m) => m.title)).toContain("cat@corp.example"));
+    await waitFor(() => expect(screen.getAllByText("not yet").map((m) => m.title)).toContain("cat@corp.example"));
     expect(screen.getByRole("button", { name: "Change Cat's email" })).toBeInTheDocument();
   });
 
@@ -87,7 +87,7 @@ describe("The guest list on the Host's console", () => {
     openApp(browser(origin), `/games/${id}`);
     await onTab(/^you$/i);
     await screen.findByText("Dan");
-    expect(screen.queryByText("✉ not yet")).not.toBeInTheDocument();
+    expect(screen.queryByText("not yet")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^(add|change) .*'s email$/i })).not.toBeInTheDocument();
   });
 });

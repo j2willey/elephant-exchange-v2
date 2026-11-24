@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { gameEvents, gameHosts, gameNames, gamePlayers, games, gameVisitors, postReactions, posts, turnClocks, votes, type Db, type Tx } from "./db.js";
+import { gameEvents, gameHosts, gameNames, gamePlayers, games, gameVisitors, invitations, postReactions, posts, turnClocks, votes, type Db, type Tx } from "./db.js";
 
 /** Something that keeps a copy of some of each Game in memory, and can let a Game's copy go. */
 interface Remembers {
@@ -28,7 +28,7 @@ export function createGameLifecycle(deps: {
   const { db, store, feed, people, photos, themeImages, lastWord } = deps;
 
   /** Every table with rows of a Game, children first. */
-  const parts = [votes, postReactions, posts, gameNames, gameVisitors, turnClocks, gamePlayers, gameHosts, gameEvents] as const;
+  const parts = [votes, postReactions, posts, gameNames, gameVisitors, invitations, turnClocks, gamePlayers, gameHosts, gameEvents] as const;
 
   /** Lets go of every copy of the Game in memory; the database keeps it, and the next request rebuilds it. */
   function forget(id: string) {

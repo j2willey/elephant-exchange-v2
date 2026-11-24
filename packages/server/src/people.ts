@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import type { Command } from "@elephant/rules";
 import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { DEMO_ACTOR, type Role } from "./access.js";
-import { gameHosts, gameNames, gamePlayers, gameVisitors, postReactions, posts, votes, type Db, type Tx } from "./db.js";
+import { gameHosts, gameNames, gamePlayers, gameVisitors, invitations, postReactions, posts, votes, type Db, type Tx } from "./db.js";
 import type { PendingName, Person } from "./wire.js";
 
 /** Why People said no: no such person (or Player) here, or a change that can't be made. */
@@ -12,7 +12,7 @@ const refuse = (refused: PeopleRefusal["refused"], message: string): PeopleRefus
 /** A stable, opaque name for a person in a Game, so the Co-hosts panel never needs their email. */
 const personKey = (gameId: string, email: string) => createHash("sha256").update(`${gameId}\n${email}`).digest("base64url").slice(0, 16);
 /** Enough of an email to tell two people of the same name apart: "te…@example.com". */
-const emailHint = (email: string) => {
+export const emailHint = (email: string) => {
   const at = email.lastIndexOf("@");
   return `${email.slice(0, Math.min(2, at))}…${email.slice(at)}`;
 };
@@ -404,12 +404,15 @@ export function createPeople<G, Result = unknown>(deps: {
    * For the Staff only: each Player on the Roster with an email, and whether that person has opened the Game while
    * signed in (joined) or not yet. Demo stand-ins aren't people, so they're left out.
    */
-  function guestList(gameId: string, game: G): { playerId: string; email: string; joined: boolean }[] {
+  function guestList(gameId: string, game: G): { playerId: string; email: string; joined: boolean; invitedAt: number | null }[] {
     const seen = new Set(db.select({ email: gameVisitors.email }).from(gameVisitors).where(eq(gameVisitors.gameId, gameId)).all().map((r) => r.email));
+    const invited = new Map<string, number>();
+    for (const r of db.select({ email: invitations.email, sentAt: invitations.sentAt }).from(invitations).where(eq(invitations.gameId, gameId)).all())
+      invited.set(r.email, Math.max(invited.get(r.email) ?? 0, r.sentAt.getTime()));
     const onRoster = new Set(rosterIds(game));
     return [...of(gameId).players]
       .filter(([email, playerId]) => onRoster.has(playerId) && !email.startsWith(DEMO_ACTOR))
-      .map(([email, playerId]) => ({ playerId, email, joined: seen.has(email) }));
+      .map(([email, playerId]) => ({ playerId, email, joined: seen.has(email), invitedAt: invited.get(email) ?? null }));
   }
 
   /** A demo Player's stand-in email: "fay@example.com", or "fay2@example.com" when there's already a Fay. */

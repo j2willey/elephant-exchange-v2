@@ -52,6 +52,13 @@ _Avoid_: Spectator, viewer
 What a person goes by in a Game, for everyone to see: a Player's name on the Roster, or the one a Guest posts as. One per person per Game; changing it changes it on their earlier Posts too. The Host or a Co-host can rename anyone, from the Roster or from one of their Posts, and **lock** the name so its owner can't change it back (for an unkind name). Names go live at once, unless the Host has switched on **Approve names** (for a tough crowd): then a name someone picks for themselves shows as "New player" or "Guest" until the Host or a Co-host approves it or renames them. Names the Host and Co-hosts give, or pick for themselves, never wait.
 _Avoid_: Nickname, handle, display name
 
+**Guest list**:
+The Players whose emails the Host or a Co-host has given (✉ beside a name, or a pasted list with emails). Whoever signs in with a Player's email *is* that Player, from their own phone, by any route. Only the Staff see the emails, and whether each person is in yet.
+
+**Invitation**:
+An email the Host sends from the app to someone on the guest list, with a link of their own that signs them in once, as their Player, until the Game ends. Not the shared link the Host copies to send from their own email (Copy invitation), which signs nobody in.
+_Avoid_: Invite code, ticket
+
 **Late Arrival**:
 A Player added after the Game has started; they simply join the Players not yet called. Once the Final Round has started, a Late Arrival gets no Turn.
 

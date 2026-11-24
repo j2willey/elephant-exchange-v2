@@ -1,21 +1,36 @@
 import { createHash, randomBytes } from "node:crypto";
 import { and, count, eq, gt, isNull, lte, sql, type SQL } from "drizzle-orm";
-import { users, sessions, signInLinks, type Db } from "./db.js";
+import { invitations, users, sessions, signInLinks, type Db } from "./db.js";
 import { VISITOR_DAYS, VISITOR_DOMAIN } from "./stats.js";
 
 /** Sends sign-in links. Resend in production; tests capture the links instead. */
 export interface Mailer {
   sendSignInLink(email: string, url: string): Promise<void>;
+  /** A Host's personal invitation to a Player on their guest list (ADR 0007). */
+  sendInvitation?(email: string, invitation: Invitation): Promise<void>;
   /** Asks a Host, who said it's OK, how their Game went; without it, nobody is asked by email. */
   sendFeedbackRequest?(email: string, gameName: string, url: string): Promise<void>;
   /** Passes a message from the contact form to Jim (the admins); a reply goes straight to `replyTo`, if given. */
   sendContactMessage?(to: readonly string[], message: string, replyTo: string | undefined, from: string): Promise<void>;
 }
 
+/** What a personal invitation says: the Game, as its Host wrote it, who it's for, and the link that signs them in. */
+export interface Invitation {
+  gameName: string;
+  tagline: string;
+  whenWhere: string;
+  /** The Player's name on the Roster. */
+  name: string;
+  url: string;
+}
+
 /** Until there's a domain to send from, links are written to the server log. */
 export const logMailer: Mailer = {
   async sendSignInLink(email, url) {
     console.log(`Sign-in link for ${email}: ${url}`);
+  },
+  async sendInvitation(email, invitation) {
+    console.log(`Invitation for ${email} to ${invitation.gameName}: ${invitation.url}`);
   },
   async sendFeedbackRequest(email, gameName, url) {
     console.log(`Feedback request for ${email} about ${gameName}: ${url}`);
@@ -34,7 +49,7 @@ export interface LinkLimits {
   perEmail: number;
   /** From one client IP in an hour. Generous: a whole party may share the venue's Wi-Fi. */
   perIp: number;
-  /** In all, in 24 hours: protects the email quota (Resend's free plan allows 100 a day). */
+  /** In all, in 24 hours, invitations too: protects the email quota (Resend's free plan allows 100 a day). */
   perDay: number;
 }
 
@@ -62,7 +77,85 @@ export function createAuth(db: Db, now: () => Date, limits: LinkLimits) {
       .where(and(gt(signInLinks.requestedAt, new Date(now().getTime() - minutes * MINUTE)), where))
       .get()!.n;
 
+  /** Every email the app sent in the last day: sign-in links and invitations. */
+  const emailedToday = () =>
+    recent(24 * 60) +
+    db
+      .select({ n: count() })
+      .from(invitations)
+      .where(gt(invitations.sentAt, new Date(now().getTime() - 24 * 60 * MINUTE)))
+      .get()!.n;
+
+  /** Opens a session for this email, making them a user if they're new. */
+  function openSession(email: string, at: Date, feedbackOk = false): { sessionToken: string; email: string } {
+    db.insert(users).values({ id: newToken(), email, createdAt: at }).onConflictDoNothing().run();
+    // A box left unticked on a later sign-in doesn't take back a yes; the home screen is where they change it.
+    db.update(users)
+      .set({ lastSignInAt: at, ...(feedbackOk ? { feedbackOk: true } : {}) })
+      .where(eq(users.email, email))
+      .run();
+    const user = db.select().from(users).where(eq(users.email, email)).get()!;
+    const sessionToken = newToken();
+    db.insert(sessions)
+      .values({ tokenHash: hash(sessionToken), userId: user.id, expiresAt: new Date(at.getTime() + SESSION_LIFETIME_MS) })
+      .run();
+    return { sessionToken, email: user.email };
+  }
+
   return {
+    /** How many more emails may go today (sign-in links and invitations share the quota). */
+    emailsLeftToday: () => Math.max(0, limits.perDay - emailedToday()),
+
+    /**
+     * A personal invitation's token, replacing any unused one to the same person for this Game; undefined once
+     * the day's emails are used up.
+     */
+    issueInvitation(gameId: string, email: string): string | undefined {
+      if (emailedToday() >= limits.perDay) return undefined;
+      db.delete(invitations)
+        .where(and(eq(invitations.gameId, gameId), eq(invitations.email, email), isNull(invitations.usedAt)))
+        .run();
+      const token = newToken();
+      db.insert(invitations).values({ tokenHash: hash(token), gameId, email, sentAt: now() }).run();
+      return token;
+    },
+
+    /** Whose an invitation is, and for which Game, without using it; undefined if there's no such invitation. */
+    invitationOf(token: string): { gameId: string; email: string } | undefined {
+      return db.select({ gameId: invitations.gameId, email: invitations.email }).from(invitations).where(eq(invitations.tokenHash, hash(token))).get();
+    },
+
+    /** Takes back an invitation that couldn't be sent, so it doesn't count as sent. */
+    withdrawInvitation(token: string): void {
+      db.delete(invitations).where(eq(invitations.tokenHash, hash(token))).run();
+    },
+
+    /**
+     * Opens a personal invitation. `allowed` says whether it may still sign its person in: "ok", "staff" (a Host or
+     * Co-host, whose role needs a real sign-in) or "gone" (the Game ended, or they're no longer on its guest list).
+     * Signs them in the first time only; used again, it says so, with whose it was, so they can be sent a sign-in link.
+     */
+    redeemInvitation(
+      token: string,
+      allowed: (gameId: string, email: string) => "ok" | "staff" | "gone",
+    ): { signedIn: { sessionToken: string; email: string }; gameId: string } | { refused: "used" | "staff"; gameId: string; email: string } | undefined {
+      const invitation = db.select().from(invitations).where(eq(invitations.tokenHash, hash(token))).get();
+      if (!invitation) return undefined;
+      const { gameId, email } = invitation;
+      const may = allowed(gameId, email);
+      if (may === "gone") return undefined;
+      if (may === "staff") return { refused: "staff", gameId, email };
+      const at = now();
+      const used = db
+        .update(invitations)
+        .set({ usedAt: at })
+        .where(and(eq(invitations.tokenHash, hash(token)), isNull(invitations.usedAt)))
+        .returning()
+        .get();
+      if (!used) return { refused: "used", gameId, email };
+      return { signedIn: openSession(email, at), gameId };
+    },
+
     /**
      * Records a new sign-in link and returns its token, or undefined if a limit has been reached. `feedbackOk`:
      * they ticked "OK to email me for feedback", which takes effect once the link is used.
@@ -71,7 +164,7 @@ export function createAuth(db: Db, now: () => Date, limits: LinkLimits) {
       if (
         recent(15, eq(signInLinks.email, email)) >= limits.perEmail ||
         recent(60, eq(signInLinks.clientIp, clientIp)) >= limits.perIp ||
-        recent(24 * 60) >= limits.perDay
+        emailedToday() >= limits.perDay
       ) {
         return undefined;
       }
@@ -93,19 +186,7 @@ export function createAuth(db: Db, now: () => Date, limits: LinkLimits) {
         .returning()
         .get();
       if (!link) return undefined;
-
-      db.insert(users).values({ id: newToken(), email: link.email, createdAt: at }).onConflictDoNothing().run();
-      // A box left unticked on a later sign-in doesn't take back a yes; the home screen is where they change it.
-      db.update(users)
-        .set({ lastSignInAt: at, ...(link.feedbackOk ? { feedbackOk: true } : {}) })
-        .where(eq(users.email, link.email))
-        .run();
-      const user = db.select().from(users).where(eq(users.email, link.email)).get()!;
-      const sessionToken = newToken();
-      db.insert(sessions)
-        .values({ tokenHash: hash(sessionToken), userId: user.id, expiresAt: new Date(at.getTime() + SESSION_LIFETIME_MS) })
-        .run();
-      return { sessionToken, email: user.email, ref: link.ref };
+      return { ...openSession(link.email, at, link.feedbackOk), ref: link.ref };
     },
 
     /**

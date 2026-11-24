@@ -198,6 +198,24 @@ export const gamePlayers = sqliteTable(
 );
 
 /**
+ * Personal invitations a Host emailed to Players on the guest list (ADR 0007). Each signs its person in once, until
+ * the Game ends; only a hash of the token is kept. A newer invitation to the same person replaces an unused one.
+ */
+export const invitations = sqliteTable(
+  "invitations",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    gameId: text("game_id")
+      .notNull()
+      .references(() => games.id),
+    email: text("email").notNull(),
+    sentAt: integer("sent_at", { mode: "timestamp_ms" }).notNull(),
+    usedAt: integer("used_at", { mode: "timestamp_ms" }),
+  },
+  (t) => [index("invitations_person").on(t.gameId, t.email), index("invitations_sent_at").on(t.sentAt)],
+);
+
+/**
  * When each Player who's up now was called up (or their timer last reset), for the turn timer. Kept beside the
  * log rather than in it: the timer is only a guide and changes nothing in the Game.
  */

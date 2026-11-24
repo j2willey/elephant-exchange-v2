@@ -157,6 +157,8 @@ export const contactBody = z.object({
 });
 export const feedbackBody = z.object({ ok: z.boolean() });
 export const linkRedemption = z.object({ token: z.string().min(1).max(100) });
+/** Emails personal invitations: to these Players, or to everyone on the guest list not in or invited yet. */
+export const invitationsBody = z.object({ playerIds: z.array(id).min(1).max(200).optional() });
 /** A Co-host by email; `playsAs` links them to a Player the Host typed in, who hasn't signed in yet. */
 export const cohostBody = z.object({ email, playsAs: id.optional() });
 /** A Player's email on the guest list; null takes it off. */

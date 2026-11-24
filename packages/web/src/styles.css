@@ -637,7 +637,8 @@ select {
 
 /* The Game's tagline, on a line of its own under the name (and the logo beside it). */
 .screen-banner:has(.screen-tagline),
-.guest-head:has(.game-tagline) {
+.guest-head:has(.game-tagline),
+.guest-head:has(.when-where) {
   flex-wrap: wrap;
 }
 

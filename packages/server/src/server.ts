@@ -29,6 +29,7 @@ import { createVisitors } from "./visitors.js";
 import { adminRoutes } from "./admin-routes.js";
 import { createPeople } from "./people.js";
 import { peopleRoutes } from "./people-routes.js";
+import { invitationRoutes } from "./invitation-routes.js";
 import type * as Wire from "./wire.js";
 import { feedRoutes } from "./feed-routes.js";
 import { parseBody, photoSizeLimit } from "./http.js";
@@ -559,16 +560,24 @@ export function createServer({
     if (!body.ok) return body.res;
     const session = auth.redeemLink(body.data.token);
     if (!session) return c.json({ error: "This sign-in link is used or expired; ask for a new one" }, 401);
-    stats.recordPerson(session.email, now(), session.ref);
-    setCookie(c, SESSION_COOKIE, session.sessionToken, {
+    startSession(c, session.sessionToken, session.email, session.ref);
+    return c.json({ email: session.email });
+  });
+
+  /** Signs someone in on this browser: the session cookie, and the statistics' count of people. */
+  function startSession(c: Context, sessionToken: string, email: string, ref: string | null = null) {
+    stats.recordPerson(email, now(), ref);
+    setCookie(c, SESSION_COOKIE, sessionToken, {
       httpOnly: true,
       sameSite: "Lax",
       secure: baseUrl.startsWith("https:"),
       path: "/",
       maxAge: SESSION_LIFETIME_MS / 1000,
     });
-    return c.json({ email: session.email });
-  });
+  }
+
+  // Personal invitations from a guest list (ADR 0007).
+  app.route("/", invitationRoutes({ access, auth, mailer, baseUrl, db, people, load, staffChanged, startSession, clientIp }));
 
   app.get("/api/session", (c) => {
     const email = signedInAs(c);

@@ -2,7 +2,7 @@ import { aboutGift, GiftPitch } from "./Pitch.js";
 import { RenameButton } from "./Rename.js";
 import { GiftMedia } from "./GiftPosts.js";
 import { StaffMark } from "./Cohosts.js";
-import { PlayerEmail } from "./GuestList.js";
+import { PlayerEmail, SendInvitations } from "./GuestList.js";
 import { useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { renderSVG } from "uqr";
@@ -39,12 +39,15 @@ export function LaptopConsole({
   finalRoundPanel,
   staffRole,
   guestOf,
+  guestList,
 }: {
   game: GameView;
   /** Whether a Player is the Host or a Co-host, marked beside their name. */
   staffRole: (playerId: string) => "host" | "cohost" | undefined;
   /** A Player's guest-list email and whether they're in yet (GuestList.tsx). */
   guestOf: (playerId: string) => GuestListEntry | undefined;
+  /** The whole guest list, for Email invitations in the Invite dialog. */
+  guestList: GuestListEntry[];
   send: (command: Command) => Promise<void>;
   error: string | null;
   accept: (game: SharedGame | null, viewer?: Partial<Viewer>) => void;
@@ -284,7 +287,7 @@ export function LaptopConsole({
           }}
         />
       )}
-      {inviting && <InviteDialog game={game} onClose={() => setInviting(false)} />}
+      {inviting && <InviteDialog game={game} guestList={guestList} onClose={() => setInviting(false)} />}
     </div>
   );
 }
@@ -472,7 +475,7 @@ function GiftDialog({
 }
 
 /** The guests' link and its QR code, for the Host to show or send. */
-function InviteDialog({ game, onClose }: { game: GameView; onClose: () => void }) {
+function InviteDialog({ game, guestList, onClose }: { game: GameView; guestList: GuestListEntry[]; onClose: () => void }) {
   const url = `${window.location.origin}/games/${game.id}`;
   const qr = useMemo(() => `data:image/svg+xml;utf8,${encodeURIComponent(renderSVG(url, { border: 2 }))}`, [url]);
   const [copied, setCopied] = useState(false);
@@ -498,6 +501,8 @@ function InviteDialog({ game, onClose }: { game: GameView; onClose: () => void }
           <CopyInvitation game={game} />
           <button onClick={onClose}>Done</button>
         </div>
+        <h3>Personal invitations</h3>
+        <SendInvitations game={game} list={guestList} />
       </section>
     </div>
   );

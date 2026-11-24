@@ -502,6 +502,31 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
       return { ok: false, message: "Something went wrong" };
     },
 
+    /** Emails personal invitations: to these Players, or to everyone listed who isn't in or invited yet. */
+    async sendInvitations(gameId: string, playerIds?: string[]): Promise<{ sent: string[]; notSent: { playerId: string; reason: string }[] } | { error: string }> {
+      const res = await postJson(`/api/games/${encodeURIComponent(gameId)}/invitations`, playerIds ? { playerIds } : {});
+      if (res.ok) return (await res.json()) as { sent: string[]; notSent: { playerId: string; reason: string }[] };
+      return { error: res.status === 409 ? "The Game is over." : "The invitations couldn't be sent just now. Please try again." };
+    },
+
+    /**
+     * Opens a personal invitation: signed in, and which Game; or refused (used already, or a Host's), with a hint of
+     * the address it went to; or "expired".
+     */
+    async openInvitation(token: string): Promise<{ gameId: string } | { refused: "used" | "staff"; gameId: string; hint: string } | "expired"> {
+      const res = await postJson("/api/auth/invitation", { token });
+      if (res.ok) return { gameId: ((await res.json()) as { gameId: string }).gameId };
+      if (res.status === 409) return (await res.json()) as { refused: "used" | "staff"; gameId: string; hint: string };
+      if (res.status === 401 || res.status === 400) return "expired";
+      throw new Error(`opening the invitation failed: ${res.status}`);
+    },
+
+    /** For an invitation already used: a sign-in link to the address it went to. */
+    async invitationLink(token: string): Promise<"sent" | "tooMany" | "expired" | "failed"> {
+      const res = await postJson("/api/auth/invitation/link", { token });
+      return res.status === 202 ? "sent" : res.status === 429 ? "tooMany" : res.status === 401 ? "expired" : "failed";
+    },
+
     /** Gives a Player an email, changes it, or takes it off (null). Says why not, if refused. */
     async setPlayerEmail(gameId: string, playerId: string, email: string | null): Promise<{ ok: true } | { ok: false; message: string }> {
       const res = await sendJson("PUT", `/api/games/${encodeURIComponent(gameId)}/players/${encodeURIComponent(playerId)}/email`, { email });

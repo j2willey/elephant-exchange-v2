@@ -103,6 +103,8 @@ export interface GuestListEntry {
   playerId: string;
   email: string;
   joined: boolean;
+  /** When they were last emailed a personal invitation (ms since 1970); null if never. */
+  invitedAt: number | null;
 }
 
 export interface StaffMember {

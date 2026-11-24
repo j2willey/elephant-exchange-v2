@@ -7,8 +7,8 @@ import { useEffect, useId, useState, type FormEvent } from "react";
 import type { GameView, GuestListEntry } from "./api.js";
 import { useApi } from "./ApiContext.js";
 
-/** Each Player's guest-list entry, by playerId, for the Staff; nothing for anyone else. Reloaded when the Staff's data changes. */
-export function useGuestList(game: GameView | null | "loading", changes: number): (playerId: string) => GuestListEntry | undefined {
+/** The guest list, for the Staff; empty for anyone else. Reloaded when the Staff's data changes. */
+export function useGuestList(game: GameView | null | "loading", changes: number): GuestListEntry[] {
   const api = useApi();
   const [list, setList] = useState<GuestListEntry[]>([]);
   const ready = game !== null && game !== "loading";
@@ -28,8 +28,11 @@ export function useGuestList(game: GameView | null | "loading", changes: number)
     };
   }, [api, id, runs, changes, players]);
 
-  return (playerId) => list.find((e) => e.playerId === playerId);
+  return list;
 }
+
+/** Who on the guest list hasn't opened the Game or been emailed an invitation yet. */
+export const notInvited = (list: GuestListEntry[]) => list.filter((e) => !e.joined && e.invitedAt === null);
 
 /** ✓ in, or ✉ not yet, with the email on hover; then ✉ to edit it. */
 export function PlayerEmail({ gameId, playerId, name, entry }: { gameId: string; playerId: string; name: string; entry: GuestListEntry | undefined }) {
@@ -38,7 +41,7 @@ export function PlayerEmail({ gameId, playerId, name, entry }: { gameId: string;
     <>
       {entry && (
         <span className={entry.joined ? "guest-mark joined" : "guest-mark"} title={entry.email}>
-          {entry.joined ? "✓ in" : "✉ not yet"}
+          {entry.joined ? "✓ in" : entry.invitedAt !== null ? "✉ invited" : "not yet"}
         </span>
       )}{" "}
       <button
@@ -61,6 +64,19 @@ function EmailForm({ gameId, playerId, name, entry, onDone }: { gameId: string; 
   const ids = useId();
   const [email, setEmail] = useState(entry?.email ?? "");
   const [error, setError] = useState<string | null>(null);
+  const [inviting, setInviting] = useState<"idle" | "sending" | "sent">("idle");
+
+  async function invite() {
+    setInviting("sending");
+    const result = await api.sendInvitations(gameId, [playerId]);
+    if ("error" in result) {
+      setInviting("idle");
+      return setError(result.error);
+    }
+    const no = result.notSent[0];
+    setInviting(no ? "idle" : "sent");
+    setError(no ? `${no.reason}.` : null);
+  }
 
   async function save(next: string | null) {
     const result = await api.setPlayerEmail(gameId, playerId, next);
@@ -80,6 +96,17 @@ function EmailForm({ gameId, playerId, name, entry, onDone }: { gameId: string; 
       <label htmlFor={`${ids}-email`}>{name}'s email</label>
       <input id={`${ids}-email`} type="email" required autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} />
       <p className="muted hint">Whoever signs in with it plays as {name}, from their own phone.</p>
+      {entry && !entry.joined && (
+        <p>
+          {inviting === "sent" ? (
+            <span role="status">Invitation sent to {entry.email}.</span>
+          ) : (
+            <button type="button" className="link" disabled={inviting === "sending"} onClick={() => void invite()}>
+              ✉ {entry.invitedAt !== null ? "Send the invitation again" : "Email an invitation"}
+            </button>
+          )}
+        </p>
+      )}
       <div className="inline">
         <button type="submit">Save</button>
         {entry && (
@@ -122,4 +149,69 @@ export function guestFrom(line: string): { name: string; email?: string } {
     .map((cell) => cell.replace(/[<>,;:"()[\]]/g, " ").replace(/\s+/g, " ").trim())
     .find(Boolean);
   return { name: rest || nameFromEmail(email), email: email.toLowerCase() };
+}
+
+/**
+ * "Email invitations": one personal invitation each to everyone on the guest list who isn't in or invited yet. Each
+ * link signs its person in once, as their Player. Says how many it sent, and who it couldn't, and why.
+ */
+export function SendInvitations({ game, list }: { game: GameView; list: GuestListEntry[] }) {
+  const api = useApi();
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [said, setSaid] = useState<string | null>(null);
+  const waiting = notInvited(list);
+  const nameOf = (playerId: string) => game.players.find((p) => p.id === playerId)?.name ?? "?";
+  if (game.phase === "ended") return null;
+
+  async function send() {
+    setBusy(true);
+    const result = await api.sendInvitations(game.id);
+    setBusy(false);
+    setConfirming(false);
+    if ("error" in result) return setSaid(result.error);
+    setSaid(
+      `Sent ${result.sent.length} ${result.sent.length === 1 ? "invitation" : "invitations"}.` +
+        (result.notSent.length ? ` Not sent: ${result.notSent.map((n) => `${nameOf(n.playerId)} (${n.reason})`).join(", ")}.` : ""),
+    );
+  }
+
+  if (list.length === 0)
+    return (
+      <p className="muted hint">
+        Want to email each person their own invitation? Add their emails: ✉ beside a name, or Paste a list with emails.
+      </p>
+    );
+  return (
+    <div className="stack send-invitations">
+      {said && (
+        <p role="status" className="muted">
+          {said}
+        </p>
+      )}
+      {waiting.length === 0 ? (
+        !said && <p className="muted hint">Everyone on the guest list is in or has been invited.</p>
+      ) : confirming ? (
+        <>
+          <p>
+            Email {waiting.length === 1 ? "1 person" : `${waiting.length} people`} their own invitation? Each link signs its
+            person in as their Player, so they're in without typing anything. It comes from Elephant Exchange's address,
+            so it may land in spam.
+          </p>
+          <div className="inline">
+            <button type="button" disabled={busy} onClick={() => void send()}>
+              {busy ? "Sending…" : "Send"}
+            </button>
+            <button type="button" className="secondary" disabled={busy} onClick={() => setConfirming(false)}>
+              Cancel
+            </button>
+          </div>
+        </>
+      ) : (
+        <button type="button" className="secondary" onClick={() => setConfirming(true)}>
+          ✉ Email invitations ({waiting.length} not invited yet)
+        </button>
+      )}
+    </div>
+  );
 }

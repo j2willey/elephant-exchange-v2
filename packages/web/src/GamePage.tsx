@@ -1,7 +1,7 @@
 import { aboutGift, GiftPitch } from "./Pitch.js";
 import { MyName, NamesToApprove, RenameButton } from "./Rename.js";
 import { StaffMark, useStaff } from "./Cohosts.js";
-import { PlayerEmail, useGuestList } from "./GuestList.js";
+import { PlayerEmail, SendInvitations, useGuestList } from "./GuestList.js";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useLocation, useParams } from "react-router";
 import type { Command } from "@elephant/rules";
@@ -28,7 +28,8 @@ export function GamePage({ gameId }: { gameId?: string } = {}) {
   const id = gameId ?? inAddress;
   const [game, accept, feedChanges, staffChanges] = useLiveGame(id);
   const staffRole = useStaff(game, staffChanges);
-  const guestOf = useGuestList(game, staffChanges);
+  const guestList = useGuestList(game, staffChanges);
+  const guestOf = (playerId: string) => guestList.find((e) => e.playerId === playerId);
   const [error, setError] = useState<string | null>(null);
   const stars = useStars(id);
   const [posts, reloadFeed] = useFeed(id, feedChanges);
@@ -78,6 +79,7 @@ export function GamePage({ gameId }: { gameId?: string } = {}) {
       )}
       {runs && game.phase !== "ended" && <AddPlayer onAdd={(name) => send({ type: "AddPlayer", playerId: crypto.randomUUID(), name })} />}
       {runs && game.phase === "setup" && <RosterPaste gameId={game.id} roster={game.players.map((p) => p.name)} onAdd={(name) => send({ type: "AddPlayer", playerId: crypto.randomUUID(), name })} />}
+      {runs && <SendInvitations game={game} list={guestList} />}
       {runs && game.phase === "setup" && (
         <>
           <button disabled={game.players.length < 2} onClick={() => send({ type: "StartGame" })}>
@@ -169,6 +171,7 @@ export function GamePage({ gameId }: { gameId?: string } = {}) {
         reloadFeed={reloadFeed}
         staffRole={staffRole}
         guestOf={guestOf}
+        guestList={guestList}
         resetTimer={async (playerId) => {
           const next = await api.resetTimer(game.id, playerId);
           if (next) accept(next);
@@ -341,6 +344,11 @@ function GuestView({
             {game.phase === "ended" && <HighlightsLink game={game} />}
             {game.phase === "ended" && <VotePanel game={game} accept={accept} />}
             {game.phase === "ended" && <FeedbackCard game={game} />}
+            {game.phase === "setup" && myName && (
+              <p className="card you">
+                You're in as <strong>{myName}</strong>. The Gifts show up here once the Host starts.
+              </p>
+            )}
             {(joinOffered || newcomer) && (
               <button className="secondary" onClick={() => setTab("you")}>
                 {joinOffered ? "Playing? Join the Game" : "Join in to chat and post"}

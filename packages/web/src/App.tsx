@@ -6,6 +6,7 @@ import { useApi } from "./ApiContext.js";
 import { AdminPage } from "./Admin.js";
 import { DemoGame, DemoPage } from "./Demo.js";
 import { GamePage } from "./GamePage.js";
+import { InvitePage } from "./InvitePage.js";
 import { GuidedPage } from "./Guided.js";
 import { GameSettings } from "./GameSettings.js";
 import { ConfirmDelete } from "./ConfirmDelete.js";
@@ -46,6 +47,7 @@ export function AppRoutes() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/sign-in" element={<RedeemLink />} />
+        <Route path="/invite" element={<InvitePage />} />
         <Route path="/login" element={<SignInPage />} />
         <Route path="/guide" element={<Playbook />} />
         {/* Its old name, still on links already shared. */}
