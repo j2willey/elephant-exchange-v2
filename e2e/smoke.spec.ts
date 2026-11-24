@@ -18,7 +18,7 @@ function linkFor(email: string): string {
 /** Asks for a link on the page in view, then follows it from the log, as someone would from their email. */
 async function signIn(page: Page, email: string) {
   await page.getByLabel(/email/i).first().fill(email);
-  await page.getByRole("button", { name: /send.*link/i }).first().click();
+  await page.getByRole("button", { name: /send.*link|email me a link/i }).first().click();
   await expect(page.getByText(/check your email/i)).toBeVisible();
   await expect.poll(() => linkFor(email), { timeout: 5_000 }).toContain("token=");
   await page.goto(linkFor(email));
@@ -50,17 +50,16 @@ test("a Host runs a Game while a guest follows along on their phone", async ({ b
   }
   const gameUrl = host.url();
 
-  // A guest scans the QR code: no sign-in needed to follow, then signs in to join as a Player.
+  // A guest scans the QR code: the welcome screen asks their name, email and whether they brought a gift, and the
+  // emailed link brings them back to the Game as a Player (ADR 0007).
   const guest = await (await browser.newContext()).newPage();
   await guest.goto(gameUrl); // a Game's own address, straight from the server
-  // A phone shows one panel at a time; joining is under You.
-  await guest.getByRole("tab", { name: /^you$/i }).click();
-  const join = guest.getByRole("region", { name: /play in this game/i });
-  await signIn(guest, `guest-${run}@example.com`);
-  await expect(guest).toHaveURL(gameUrl); // back at the Game after signing in
-  await guest.getByRole("tab", { name: /^you$/i }).click();
+  const join = guest.getByRole("form", { name: /join this game/i });
   await join.getByLabel(/your name/i).fill("Cat");
-  await join.getByRole("button", { name: /join as a player/i }).click();
+  await join.getByRole("checkbox", { name: /i brought a gift/i }).check();
+  await signIn(guest, `guest-${run}@example.com`);
+  await expect(guest).toHaveURL(gameUrl); // back at the Game, the address tidied once they've joined
+  await guest.getByRole("tab", { name: /^you$/i }).click();
   await expect(guest.getByText(/you're playing as cat/i)).toBeVisible();
   await expect(host.getByText("Cat", { exact: true })).toBeVisible(); // live, on the Host's phone
 

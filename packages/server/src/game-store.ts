@@ -19,6 +19,8 @@ export interface LoadedGame {
   demo: boolean;
   /** The line under the name; "" for none. */
   tagline: string;
+  /** When and where the party is, in the Host's words; "" for none. */
+  whenWhere: string;
   rosterMode: "host" | "self";
   moderation: "open" | "approval" | "paused";
   approveNames: boolean;
@@ -54,6 +56,7 @@ type Optional<T> = { [K in keyof T]?: T[K] | undefined };
 export type GamePatch = Optional<{
   name: string;
   tagline: string;
+  whenWhere: string;
   rosterMode: LoadedGame["rosterMode"];
   moderation: LoadedGame["moderation"];
   approveNames: boolean;
@@ -73,7 +76,7 @@ type GameRow = typeof games.$inferInsert;
 /** The one place a patch becomes columns of the Game's row: the row and the copy in memory must agree. */
 function columnsOf(patch: GamePatch): Partial<GameRow> {
   const set: Partial<GameRow> = {};
-  const plain = ["name", "tagline", "rosterMode", "moderation", "approveNames", "turnSeconds", "postsPerMinute", "repitchMinutes"] as const;
+  const plain = ["name", "tagline", "whenWhere", "rosterMode", "moderation", "approveNames", "turnSeconds", "postsPerMinute", "repitchMinutes"] as const;
   for (const key of plain) if (patch[key] !== undefined) Object.assign(set, { [key]: patch[key] });
   if (patch.screen !== undefined) set.screenMode = patch.screen;
   if (patch.vote?.status !== undefined) set.voteStatus = patch.vote.status;
@@ -154,6 +157,7 @@ export function createGameStore(deps: {
       },
       name: row.name,
       tagline: row.tagline,
+      whenWhere: row.whenWhere,
       demo: row.demo,
       rosterMode: row.rosterMode,
       moderation: row.moderation,

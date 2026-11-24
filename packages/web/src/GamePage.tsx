@@ -17,6 +17,7 @@ import { ScreenSwitch } from "./WatchScreen.js";
 import { VotePanel } from "./Vote.js";
 import { FeedbackCard } from "./Feedback.js";
 import { HighlightsLink } from "./HighlightsPage.js";
+import { CopyInvitation, knownIn, useWatching, useWelcomeReturn, Welcome, WelcomeForm, WhenWhere } from "./Welcome.js";
 import { GiftPostsViewer, showGift } from "./GiftPosts.js";
 
 /** `gameId`: the Game to show, when it isn't the one in the address (the front page's sample phone). */
@@ -30,6 +31,8 @@ export function GamePage({ gameId }: { gameId?: string } = {}) {
   const stars = useStars(id);
   const [posts, reloadFeed] = useFeed(id, feedChanges);
   const wide = useWideScreen();
+  const signedIn = useSignedIn();
+  const finishing = useWelcomeReturn(game, signedIn, accept);
   useTheme(game && game !== "loading" ? game.theme : undefined);
 
   if (game === "loading") return <p className="muted">Loading…</p>;
@@ -134,7 +137,19 @@ export function GamePage({ gameId }: { gameId?: string } = {}) {
 
   // Someone who doesn't run the Game is on their phone: one panel at a time, picked from a tab bar.
   if (!runs) {
-    return <GuestView game={game} accept={accept} posts={posts} reloadFeed={reloadFeed} stars={stars} joinOffered={joinOffered} players={players} />;
+    return (
+      <GuestView
+        game={game}
+        accept={accept}
+        posts={posts}
+        reloadFeed={reloadFeed}
+        stars={stars}
+        joinOffered={joinOffered}
+        players={players}
+        signedIn={signedIn}
+        welcome={gameId === undefined && !finishing}
+      />
+    );
   }
 
   // A Host on a laptop gets v1's two-column console; on a phone, the single column below.
@@ -179,6 +194,7 @@ export function GamePage({ gameId }: { gameId?: string } = {}) {
           <span className="inline">
             <Link to={`/games/${game.id}`}>🔗 Link for guests</Link>
             <CopyLink path={`/games/${game.id}`} />
+            <CopyInvitation game={game} className="link" />
           </span>
           <Link to={`/games/${game.id}/settings`}>⚙ Settings</Link>
           {game.role === "host" && <Link to={`/games/${game.id}/cohosts`}>🛡 Co-hosts</Link>}
@@ -266,6 +282,8 @@ function GuestView({
   stars,
   joinOffered,
   players,
+  signedIn,
+  welcome,
 }: {
   game: GameView;
   accept: (game: SharedGame | null, viewer?: Partial<Viewer>) => void;
@@ -274,8 +292,12 @@ function GuestView({
   stars: Stars;
   joinOffered: boolean;
   players: ReactNode;
+  signedIn: boolean | "loading";
+  /** Whether a newcomer gets the welcome screen first: not on the front page's sample phone. */
+  welcome: boolean;
 }) {
   const [tab, setTab] = useState<GuestTab>("gifts");
+  const [watching, watch] = useWatching(game.id);
   const unread = useUnreadPosts(game.id, posts, tab === "feed");
   // A Gift to show once the Gifts tab is up: from "about Mug" in the Feed.
   const [showing, setShowing] = useState<string | null>(null);
@@ -293,6 +315,11 @@ function GuestView({
   const myTurn = myId !== undefined && game.active.includes(myId);
   const onDeck = myId !== undefined && game.onDeck.includes(myId);
   const holding = myId !== undefined ? game.gifts.find((g) => g.holderId === myId) : undefined;
+  const newcomer = !knownIn(game) && game.phase !== "ended";
+
+  // Someone new to the Game: who they are and whether they brought a gift, or just watch (ADR 0007).
+  if (welcome && newcomer && !watching && signedIn !== "loading")
+    return <Welcome game={game} signedIn={signedIn} accept={accept} onWatch={watch} />;
 
   return (
     <div className="guest">
@@ -301,6 +328,7 @@ function GuestView({
         <ThemeLogo theme={game.theme} />
         <h2>{game.name}</h2>
         {game.tagline && <p className="game-tagline">{game.tagline}</p>}
+        {game.phase === "setup" && <WhenWhere game={game} />}
       </header>
 
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className="stack">
@@ -309,9 +337,9 @@ function GuestView({
             {game.phase === "ended" && <HighlightsLink game={game} />}
             {game.phase === "ended" && <VotePanel game={game} accept={accept} />}
             {game.phase === "ended" && <FeedbackCard game={game} />}
-            {joinOffered && (
+            {(joinOffered || newcomer) && (
               <button className="secondary" onClick={() => setTab("you")}>
-                Playing? Join the Game
+                {joinOffered ? "Playing? Join the Game" : "Join in to chat and post"}
               </button>
             )}
             {game.gifts.length > 0 ? (
@@ -333,6 +361,8 @@ function GuestView({
                   <p>You're holding: {holding.name}</p>
                 )}
               </section>
+            ) : newcomer && signedIn !== "loading" ? (
+              <WelcomeForm game={game} signedIn={signedIn} accept={accept} />
             ) : joinOffered ? (
               <JoinPanel gameId={game.id} onJoined={accept} />
             ) : (

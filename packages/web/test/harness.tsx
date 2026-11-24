@@ -177,7 +177,13 @@ export function browser(
 }
 
 /** Opens the app at this path in this browser. */
-export function openApp(api: Api, path = "/") {
+/**
+ * Renders the app at `path`. A Game's page skips the welcome screen, as if this phone had already said Just watch,
+ * unless `welcome` (test/welcome.test.tsx): most tests are about what comes after it.
+ */
+export function openApp(api: Api, path = "/", { welcome = false }: { welcome?: boolean } = {}) {
+  const game = /^\/games\/([^/?]+)/.exec(path)?.[1];
+  if (game && !welcome) localStorage.setItem(`ee-watching-${decodeURIComponent(game)}`, "1");
   return render(
     <StrictMode>
       <ApiProvider api={api}>

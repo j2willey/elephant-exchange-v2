@@ -63,6 +63,7 @@ export const gameOrgBody = z.object({ orgId: id.nullable() });
 export const gameOptionsEdit = z.object({
   name: name.optional(),
   tagline: z.string().trim().max(100).optional(),
+  whenWhere: z.string().trim().max(120).optional(),
   turnSeconds: turnSeconds.optional(),
   rosterMode: rosterMode.optional(),
   approveNames: z.boolean().optional(),

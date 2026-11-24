@@ -1,5 +1,5 @@
 import { RECOMMENDED_OPTIONS } from "@elephant/rules";
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { browser, drawInOrder, openApp, startServer } from "./harness.js";
@@ -75,6 +75,20 @@ describe("A Game's options, on its Settings", () => {
     openApp(browser(origin), `/games/${id}/screen`);
     const banner = (await screen.findAllByRole("banner")).at(-1)!;
     await waitFor(() => expect(banner).toHaveTextContent(/gift exchange.*it's going to be a gas!/i));
+  });
+
+  it("has When & where, which guests see on the welcome screen before the Game starts", async () => {
+    const { host, id, user, origin } = await hosting();
+    openApp(host, `/games/${id}/settings`);
+    const card = await options();
+
+    await user.type(within(card).getByLabelText(/when & where/i), "Fri Dec 12, 10 am · Room B");
+    await user.click(within(card).getByRole("button", { name: /save options/i }));
+    expect(await within(card).findByText(/saved/i)).toBeInTheDocument();
+    cleanup();
+
+    openApp(browser(origin), `/games/${id}`, { welcome: true });
+    expect(await screen.findByText(/fri dec 12, 10 am · room b/i)).toBeInTheDocument();
   });
 });
 

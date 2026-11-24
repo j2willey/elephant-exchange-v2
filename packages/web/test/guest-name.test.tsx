@@ -73,8 +73,9 @@ describe("A Guest's name", () => {
     const { id, newGame, phone, user } = await underway();
     const first = openApp(phone, `/games/${id}`);
     await onTab(/^you$/i);
-    const join = await screen.findByRole("region", { name: /play in this game/i });
+    const join = await screen.findByRole("form", { name: /join this game/i });
     await user.type(await within(join).findByLabelText(/your name/i), "Gus");
+    await user.click(within(join).getByRole("checkbox", { name: /i brought a gift/i }));
     await user.click(within(join).getByRole("button", { name: /join as a player/i }));
     await screen.findByText(/you're playing as gus/i);
     first.unmount();

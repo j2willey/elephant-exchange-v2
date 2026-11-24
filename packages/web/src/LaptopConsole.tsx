@@ -16,6 +16,7 @@ import { HighlightsLink } from "./HighlightsPage.js";
 import { FeedbackCard } from "./Feedback.js";
 import { RosterPaste } from "./RosterPaste.js";
 import { ScreenSwitch } from "./WatchScreen.js";
+import { CopyInvitation } from "./Welcome.js";
 
 type Player = GameView["players"][number];
 type Gift = GameView["gifts"][number];
@@ -278,7 +279,7 @@ export function LaptopConsole({
           }}
         />
       )}
-      {inviting && <InviteDialog gameId={game.id} onClose={() => setInviting(false)} />}
+      {inviting && <InviteDialog game={game} onClose={() => setInviting(false)} />}
     </div>
   );
 }
@@ -463,8 +464,8 @@ function GiftDialog({
 }
 
 /** The guests' link and its QR code, for the Host to show or send. */
-function InviteDialog({ gameId, onClose }: { gameId: string; onClose: () => void }) {
-  const url = `${window.location.origin}/games/${gameId}`;
+function InviteDialog({ game, onClose }: { game: GameView; onClose: () => void }) {
+  const url = `${window.location.origin}/games/${game.id}`;
   const qr = useMemo(() => `data:image/svg+xml;utf8,${encodeURIComponent(renderSVG(url, { border: 2 }))}`, [url]);
   const [copied, setCopied] = useState(false);
   return (
@@ -473,6 +474,10 @@ function InviteDialog({ gameId, onClose }: { gameId: string; onClose: () => void
         <h2>Invite guests</h2>
         <img src={qr} alt="QR code to join this Game" width={220} height={220} />
         <p className="select-all">{url}</p>
+        <p className="muted hint">
+          Sending it ahead? Copy invitation gives a few lines with the Game's name, When &amp; where
+          {game.whenWhere ? "" : " (set it in ⚙ Settings)"} and this link, to paste into your own email or team chat.
+        </p>
         <div className="inline">
           {navigator.clipboard && (
             <button
@@ -482,6 +487,7 @@ function InviteDialog({ gameId, onClose }: { gameId: string; onClose: () => void
               {copied ? "Copied!" : "Copy link"}
             </button>
           )}
+          <CopyInvitation game={game} />
           <button onClick={onClose}>Done</button>
         </div>
       </section>

@@ -12,8 +12,10 @@ const rosterNames = () =>
 async function joinAs(name: string) {
   const user = userEvent.setup();
   await onTab(/^you$/i);
-  const panel = await screen.findByRole("region", { name: /play in this game/i });
-  await user.type(await within(panel).findByLabelText(/your name/i), name);
+  const panel = await screen.findByRole("form", { name: /join this game/i });
+  await user.clear(await within(panel).findByLabelText(/your name/i));
+  await user.type(within(panel).getByLabelText(/your name/i), name);
+  await user.click(within(panel).getByRole("checkbox", { name: /i brought a gift/i }));
   await user.click(within(panel).getByRole("button", { name: /join as a player/i }));
   return user;
 }
@@ -46,7 +48,7 @@ describe("Joining a Game from a phone", () => {
     await joinAs("Dan");
 
     expect(await screen.findByText(/you're playing as dan/i)).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: /play in this game/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("form", { name: /join this game/i })).not.toBeInTheDocument();
     danScreen.unmount();
 
     openApp(host, `/games/${id}`);
@@ -67,7 +69,7 @@ describe("Joining a Game from a phone", () => {
     await onTab(/^you$/i);
 
     expect(await screen.findByText(/you're playing as dan/i)).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: /play in this game/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("form", { name: /join this game/i })).not.toBeInTheDocument();
   });
 
   it("signs in someone who arrived from the QR code and brings them back to the Game", async () => {
@@ -78,18 +80,21 @@ describe("Joining a Game from a phone", () => {
     const first = openApp(phone, `/games/${id}`);
     const user = userEvent.setup();
     await onTab(/^you$/i);
-    const panel = await screen.findByRole("region", { name: /play in this game/i });
+    const panel = await screen.findByRole("form", { name: /join this game/i });
 
-    await user.type(await within(panel).findByLabelText(/email/i), "eve@example.com");
-    await user.click(within(panel).getByRole("button", { name: /send.*link/i }));
+    await user.type(await within(panel).findByLabelText(/your name/i), "Eve");
+    await user.type(within(panel).getByLabelText(/email/i), "eve@example.com");
+    await user.click(within(panel).getByRole("checkbox", { name: /i brought a gift/i }));
+    await user.click(within(panel).getByRole("button", { name: /email me a link/i }));
     expect(await screen.findByText(/check your email/i)).toBeInTheDocument();
     first.unmount();
 
+    // The link brings them back to the Game, and they're in as a Player without asking again.
     openApp(phone, linkFor("eve@example.com"));
-
     expect(await screen.findByRole("heading", { name: "Troop swap" })).toBeInTheDocument();
-    await joinAs("Eve");
+    await onTab(/^you$/i);
     expect(await screen.findByText(/you're playing as eve/i)).toBeInTheDocument();
+    expect(screen.queryByRole("form", { name: /join this game/i })).not.toBeInTheDocument();
   });
 
   it("lets someone join after the Game has started, as a Late Arrival", async () => {
@@ -106,7 +111,7 @@ describe("Joining a Game from a phone", () => {
     expect(rosterNames()).toEqual(["Ann", "Bob", "Dan"]);
   });
 
-  it("isn't offered when the Host enters the Players", async () => {
+  it("isn't offered as a Player when the Host enters the Players: they join as a Guest", async () => {
     const { signedIn } = await startServer();
     const host = await signedIn("host@example.com");
     const id = await host.createGame({ name: "Office swap", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
@@ -116,6 +121,9 @@ describe("Joining a Game from a phone", () => {
     await onTab(/^you$/i);
 
     await screen.findByText("Ann");
-    expect(screen.queryByRole("region", { name: /play in this game/i })).not.toBeInTheDocument();
+    const panel = await screen.findByRole("form", { name: /join this game/i });
+    expect(within(panel).queryByRole("checkbox", { name: /i brought a gift/i })).not.toBeInTheDocument();
+    expect(within(panel).getByText(/the host adds the players/i)).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: /join as a guest/i })).toBeInTheDocument();
   });
 });

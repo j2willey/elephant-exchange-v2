@@ -54,6 +54,7 @@ function GameOptions({ game, onSaved }: { game: GameView; onSaved: (game: Shared
   const api = useApi();
   const [name, setName] = useState(game.name);
   const [tagline, setTagline] = useState(game.tagline);
+  const [whenWhere, setWhenWhere] = useState(game.whenWhere);
   const [slots, setSlots] = useState(String(game.settings.activeSlots));
   const [steals, setSteals] = useState(String(game.settings.maxSteals));
   const [turnSeconds, setTurnSeconds] = useState(String(game.clock.turnSeconds));
@@ -76,6 +77,7 @@ function GameOptions({ game, onSaved }: { game: GameView; onSaved: (game: Shared
     const options = {
       ...(name.trim() !== game.name ? { name: name.trim() } : {}),
       ...(tagline.trim() !== game.tagline ? { tagline: tagline.trim() } : {}),
+      ...(whenWhere.trim() !== game.whenWhere ? { whenWhere: whenWhere.trim() } : {}),
       ...(Number(turnSeconds) !== game.clock.turnSeconds ? { turnSeconds: Number(turnSeconds) } : {}),
       ...(rosterMode !== game.rosterMode ? { rosterMode } : {}),
       ...(approveNames !== game.approveNames ? { approveNames } : {}),
@@ -106,6 +108,19 @@ function GameOptions({ game, onSaved }: { game: GameView; onSaved: (game: Shared
         />
         <p id="opt-tagline-hint" className="muted hint">
           A line under the name on the big screen and everyone's phone.
+        </p>
+        <label htmlFor="opt-when-where">When &amp; where (optional)</label>
+        <input
+          id="opt-when-where"
+          maxLength={120}
+          autoComplete="off"
+          placeholder="Fri Dec 12, 10 am · Conference room B"
+          aria-describedby="opt-when-where-hint"
+          value={whenWhere}
+          onChange={(e) => setWhenWhere(e.target.value)}
+        />
+        <p id="opt-when-where-hint" className="muted hint">
+          Shown to guests who open the Game's link before it starts, and in the invitation you copy from 🔗 Invite.
         </p>
         <label htmlFor="opt-slots">Players taking a turn at once</label>
         <input id="opt-slots" type="number" inputMode="numeric" min={1} max={10} required value={slots} onChange={(e) => setSlots(e.target.value)} />

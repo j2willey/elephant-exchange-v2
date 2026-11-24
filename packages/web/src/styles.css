@@ -3451,3 +3451,18 @@ kbd {
 .guided .demo-phone iframe {
   height: min(760px, max(460px, calc(100vh - 360px)));
 }
+
+/* The welcome screen on a Game's link (Welcome.tsx): no tab bar under it, so no room kept for one. */
+.guest.welcome {
+  padding-bottom: 24px;
+}
+
+.welcome-intro {
+  margin: 0;
+}
+
+.when-where {
+  flex-basis: 100%;
+  margin: -4px 0 0;
+  font-weight: 600;
+}
