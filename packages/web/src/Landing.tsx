@@ -122,7 +122,7 @@ export function Landing() {
             <strong>Put the scoreboard on the big screen</strong> (a TV or projector). Guests who'd like to can scan its QR code to follow along and post from their phones.
           </li>
           <li>
-            <strong>Call names, open gifts and make steals</strong> from the Host console on your laptop. The room sees it all, live.
+            <strong>Call names, open gifts and make steals</strong> from the Host console on your laptop. The scoreboard keeps up, so nobody loses track.
           </li>
         </ol>
         <p className="muted">
