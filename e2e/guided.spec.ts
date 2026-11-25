@@ -29,3 +29,13 @@ test("the guided tour walks through the happy path, and Back undoes a step", asy
   await expect(blanket).toContainText("Ann", { timeout: 15_000 });
   await expect(blanket).not.toContainText("Cat");
 });
+
+test("?autoplay starts the tour playing by itself, and Pause stops it", async ({ page }) => {
+  await page.goto("/guided/happy-path?autoplay");
+  const count = page.locator(".guided-count");
+  const pause = page.getByRole("button", { name: /pause/i });
+  await expect(pause).toBeVisible({ timeout: 15_000 });
+  await expect(count).toContainText("2 / 50", { timeout: 30_000 }); // nobody pressed Next
+  await pause.click();
+  await expect(page.getByRole("button", { name: /autoplay/i })).toBeVisible();
+});

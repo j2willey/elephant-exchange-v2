@@ -10,6 +10,9 @@ import party from "./assets/landing-party.webp";
 import { TipList } from "./HostTips.js";
 import { HowItWorksSketch } from "./HowItWorksSketch.js";
 
+/** The guided tour, playing by itself: the quickest way to see a whole swap. */
+const TOUR = "/guided/happy-path?autoplay";
+
 /** Each "sound familiar?" moment, and what the app does about it: problem on the left, answer on the right. */
 const PAIRS = [
   {
@@ -78,6 +81,12 @@ export function Landing() {
             <span aria-hidden="true">▶ </span>Try a Demo
           </Link>
         </div>
+        <p className="landing-watch">
+          <Link to={TOUR}>
+            <span aria-hidden="true">▶ </span>Watch a swap play out
+          </Link>{" "}
+          <span className="muted">(about five minutes, pause any time)</span>
+        </p>
         <p className="landing-party-link">
           Going to a party? <Link to="/join">Enter your code</Link>
         </p>
@@ -114,6 +123,13 @@ export function Landing() {
       <section className="card" aria-label="How it works">
         <h2>How it works</h2>
         <HowItWorksSketch />
+        <p className="landing-watch">
+          See it for yourself:{" "}
+          <Link to={TOUR}>
+            <span aria-hidden="true">▶ </span>Watch a swap play out
+          </Link>
+          , eight friends from the first gift to the last.
+        </p>
         <ol className="landing-steps">
           <li>
             <strong>Create a Game</strong> and paste in your guest list, or let guests sign themselves up on their phones.

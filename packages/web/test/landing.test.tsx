@@ -39,6 +39,16 @@ describe("The landing page", () => {
     expect(sketch.compareDocumentPosition(steps) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it("links to the guided tour playing by itself, under the start buttons and in How it works", async () => {
+    const { origin } = await startServer();
+    openApp(browser(origin));
+
+    const hero = await screen.findByRole("region", { name: /what it is/i });
+    expect(within(hero).getByRole("link", { name: /watch a swap play out/i })).toHaveAttribute("href", "/guided/happy-path?autoplay");
+    const how = screen.getByRole("region", { name: /how it works/i });
+    expect(within(how).getByRole("link", { name: /watch a swap play out/i })).toHaveAttribute("href", "/guided/happy-path?autoplay");
+  });
+
   it("leaves the rest to other pages: no sample scoreboard, sign-in form, code box or note from Jim on it", async () => {
     const { origin } = await startServer();
     openApp(browser(origin));

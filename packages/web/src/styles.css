@@ -3674,3 +3674,12 @@ kbd {
   display: block;
   text-align: center;
 }
+
+/* The front page's link to the guided tour, playing by itself. */
+.landing-watch {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.landing-watch a {
+  font-weight: 600;
+}
