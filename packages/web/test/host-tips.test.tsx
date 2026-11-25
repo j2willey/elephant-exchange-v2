@@ -9,18 +9,15 @@ beforeEach(() => localStorage.clear());
 const THREE = [/set up the game ahead of time/i, /send the link/i, /bring 2 to 5 extra gifts/i];
 
 describe("The three things to do before the party", () => {
-  it("are on the front page and in the Host's Guide", async () => {
+  it("are in the Host's Guide, linked from the front page", async () => {
     const { origin } = await startServer();
     openApp(browser(origin));
-    const card = await screen.findByRole("region", { name: /three things to do before the party/i });
+    await userEvent.setup().click(await screen.findByRole("link", { name: /three things to do before the party/i }));
+
+    const card = (await screen.findByRole("heading", { name: /before the party/i })).closest("section")!;
     for (const thing of THREE) expect(within(card).getByText(thing)).toBeInTheDocument();
     expect(card).toHaveTextContent(/worst gift vote/i);
     expect(card).not.toHaveTextContent(/needs? a phone|must/i);
-    cleanup();
-
-    openApp(browser(origin), "/guide");
-    await screen.findByRole("heading", { name: /before the party/i });
-    for (const thing of THREE) expect(screen.getByText(thing)).toBeInTheDocument();
     expect(screen.getByText(/email invitations/i)).toBeInTheDocument();
     expect(screen.getByText(/the extra gifts/i)).toBeInTheDocument();
   });

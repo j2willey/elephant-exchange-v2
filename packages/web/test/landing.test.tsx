@@ -5,31 +5,49 @@ import { describe, expect, it } from "vitest";
 import { browser, openApp, startServer } from "./harness.js";
 
 describe("The landing page", () => {
-  it("tells a visitor what the app is, the problem it solves and how, with the demo, sign-in and the Guide", async () => {
+  it("tells a visitor what the app is, each problem it helps with beside how, and how it works, with the ways in", async () => {
     const { origin } = await startServer();
     openApp(browser(origin));
 
     const hero = await screen.findByRole("region", { name: /what it is/i });
     expect(hero).toHaveTextContent(/white elephant gift swap/i);
-    expect(within(hero).getByRole("img", { name: /scoreboard on the party's big screen/i })).toBeInTheDocument();
     expect(within(hero).getByRole("link", { name: /try the demo/i })).toHaveAttribute("href", "/try");
-    expect(within(hero).getByRole("link", { name: /host a game/i })).toHaveAttribute("href", "#host");
-    expect(screen.getByRole("region", { name: /sound familiar/i })).toHaveTextContent(/wanders the room/i);
-    for (const point of [/turns move faster/i, /the whole room stays in it/i, /the app keeps track of the rules/i, /nothing to install/i]) {
-      expect(screen.getByRole("heading", { name: point })).toBeInTheDocument();
-    }
+    expect(within(hero).getByRole("link", { name: /host a game/i })).toHaveAttribute("href", "/login");
+    expect(within(hero).getByRole("link", { name: /enter your code/i })).toHaveAttribute("href", "/join");
+
+    // Each problem in the same row as its answer.
+    const rows = within(screen.getByRole("region", { name: /sound familiar/i })).getAllByRole("listitem");
+    expect(rows.map((r) => r.textContent)).toEqual([
+      expect.stringMatching(/wanders the room.*turns move faster/i),
+      expect.stringMatching(/from the back.*photos and chatter/i),
+      expect.stringMatching(/stolen twice.*keeps track of the rules/i),
+      expect.stringMatching(/drifted off.*whole room stays in it/i),
+    ]);
+    expect(screen.getByRole("region", { name: /sound familiar/i })).toHaveTextContent(/nothing to install/i);
     expect(screen.getByRole("region", { name: /how it works/i })).toHaveTextContent(/create a game.*scoreboard on the big screen.*call names/i);
-    expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /host's guide/i })).toHaveAttribute("href", "/guide");
+    expect(screen.getByRole("link", { name: /read the host's guide/i })).toHaveAttribute("href", "/guide");
+    expect(screen.getByRole("link", { name: /three things to do before the party/i })).toHaveAttribute("href", "/guide#before-the-party");
   });
 
-  it("is there for a signed-in Host too, at /about, pointing them back to their Games", async () => {
-    const { signedIn } = await startServer();
-    openApp(await signedIn("host@example.com"), "/about");
+  it("leaves the rest to other pages: no sample scoreboard, sign-in form, code box or note from Jim on it", async () => {
+    const { origin } = await startServer();
+    openApp(browser(origin));
+    await screen.findByRole("region", { name: /what it is/i });
 
-    const hero = await screen.findByRole("region", { name: /what it is/i });
-    expect(within(hero).getByRole("link", { name: /your games/i })).toHaveAttribute("href", "/");
+    expect(screen.queryByRole("img", { name: /scoreboard on the party's big screen/i })).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/email/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("form", { name: /open a game/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /a note from jim/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /about elephant exchange/i })).toHaveAttribute("href", "/about");
+  });
+
+  it("sends Host a Game to signing in", async () => {
+    const { origin } = await startServer();
+    openApp(browser(origin));
+    await userEvent.setup().click(await screen.findByRole("link", { name: /host a game/i }));
+
+    expect(await screen.findByRole("heading", { name: /sign in to host a game/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/email address/i)).toBeInTheDocument();
   });
 
   for (const [what, typed] of [
@@ -43,6 +61,7 @@ describe("The landing page", () => {
       const user = userEvent.setup();
       openApp(browser(origin));
 
+      await user.click(await screen.findByRole("link", { name: /enter your code/i }));
       const join = await screen.findByRole("form", { name: /open a game/i });
       await user.type(within(join).getByLabelText(/game link or code/i), typed("http://localhost:3000", id));
       await user.click(within(join).getByRole("button", { name: /open/i }));
@@ -77,10 +96,10 @@ describe("The Host's Guide", () => {
 describe("The tip jar", () => {
   const tipLink = () => within(screen.getByRole("region", { name: /a note from jim/i })).getByRole("link", { name: /leave a tip/i });
 
-  it("asks, with no strings, on the landing page, the Guide and the Host's home, linking to Ko-fi in a new tab", async () => {
+  it("asks, with no strings, on the About page, the Guide and the Host's home, linking to Ko-fi in a new tab", async () => {
     const { origin, signedIn } = await startServer();
-    openApp(browser(origin));
-    await screen.findByRole("region", { name: /what it is/i });
+    openApp(browser(origin), "/about");
+    await screen.findByRole("heading", { name: /about elephant exchange/i });
     expect(screen.getByRole("region", { name: /a note from jim/i })).toHaveTextContent(/100 sign-in emails a day.*no strings/i);
     expect(tipLink()).toHaveAttribute("href", "https://ko-fi.com/jimwilley");
     expect(tipLink()).toHaveAttribute("target", "_blank");

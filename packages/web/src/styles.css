@@ -2087,30 +2087,11 @@ a.button.secondary-button {
   font-size: 0.95rem;
 }
 
-.landing-shot {
-  margin: 8px 0 0;
-}
-
-.landing-shot img {
-  display: block;
-  width: 100%;
-  height: auto;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: 0 8px 28px rgb(0 0 0 / 12%);
-}
-
-.landing-shot figcaption {
-  margin-top: 6px;
-  font-size: 0.85rem;
-}
-
 .landing-section-title {
   margin: 8px 0 12px;
   text-align: center;
 }
 
-.landing-problem ul,
 .landing-steps {
   display: grid;
   gap: 8px;
@@ -2124,12 +2105,77 @@ a.button.secondary-button {
   line-height: 1.5;
 }
 
-.landing-again {
-  text-align: center;
+/*
+ * Sound familiar? beside How Elephant Exchange helps: each problem on the left with its answer on the right, a row
+ * apiece. On a phone, each problem sits above its answer, and the column headings give way to one heading.
+ */
+.landing-pairs-head {
+  display: grid;
+  grid-template-columns: 2fr 3fr;
+  gap: 20px;
 }
 
-.landing-again p {
+.landing-pairs-head h2 {
+  margin: 8px 0 0;
+}
+
+.landing-pairs {
+  display: grid;
   margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.landing-pairs li {
+  display: grid;
+  grid-template-columns: 2fr 3fr;
+  gap: 20px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+
+.landing-pain {
+  font-style: italic;
+  color: color-mix(in srgb, var(--ink) 75%, var(--surface));
+}
+
+.landing-pain::before {
+  content: "“";
+}
+
+.landing-pain::after {
+  content: "”";
+}
+
+.landing-help h3 {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+}
+
+.landing-help p,
+.landing-install {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.landing-install {
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+@media (max-width: 40rem) {
+  .landing-pairs-head {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-pairs-head h2:last-child {
+    display: none;
+  }
+
+  .landing-pairs li {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
 }
 
 .landing-privacy {
@@ -2149,8 +2195,7 @@ a.button.secondary-button {
   background: color-mix(in srgb, var(--surface) 88%, transparent);
 }
 
-.landing-points,
-.landing-ways {
+.landing-points {
   display: grid;
   gap: 16px;
 }
@@ -2168,11 +2213,6 @@ a.button.secondary-button {
 @media (min-width: 48rem) {
   .landing-points {
     grid-template-columns: repeat(2, 1fr);
-  }
-
-  .landing-ways {
-    grid-template-columns: 1fr 1fr;
-    align-items: start;
   }
 }
 

@@ -30,6 +30,7 @@ const run = Date.now().toString(36);
 test("a Host runs a Game while a guest follows along on their phone", async ({ browser }) => {
   const host = await (await browser.newContext()).newPage();
   await host.goto("/");
+  await host.getByRole("link", { name: /host a game/i }).click(); // from the front page
   await signIn(host, `host-${run}@example.com`);
 
   // A new Host first sees Jim's tip note; ticking it means the next New Game goes straight to the form.
@@ -145,7 +146,7 @@ test("a reload anywhere in the app still works, and the build's files are cached
 
 test("an Organizer themes their Organization, and a Game in it shows that Theme", async ({ browser }) => {
   const page = await (await browser.newContext()).newPage();
-  await page.goto("/");
+  await page.goto("/login");
   await signIn(page, `organizer-${run}@example.com`);
 
   // Folded away under Your Games, since most Hosts never need one.
