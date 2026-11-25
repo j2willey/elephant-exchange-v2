@@ -1,4 +1,5 @@
 import { aboutGift, GiftPitch } from "./Pitch.js";
+import { LAPTOP_WIDE } from "./screen-size.js";
 import { MyName, NamesToApprove, RenameButton } from "./Rename.js";
 import { StaffMark, useStaff } from "./Cohosts.js";
 import { PlayerEmail, SendInvitations, useGuestList } from "./GuestList.js";
@@ -617,12 +618,11 @@ function FinalRoundPanel({ game, send }: { game: GameView; send: (c: Command) =>
 }
 
 /** Whether the screen is laptop-wide (the two-column Host console); follows the window as it's resized. */
-const WIDE = "(min-width: 1000px)";
 function useWideScreen(): boolean {
-  const [wide, setWide] = useState(() => (typeof window.matchMedia === "function" ? window.matchMedia(WIDE).matches : false));
+  const [wide, setWide] = useState(() => (typeof window.matchMedia === "function" ? window.matchMedia(LAPTOP_WIDE).matches : false));
   useEffect(() => {
     if (typeof window.matchMedia !== "function") return;
-    const query = window.matchMedia(WIDE);
+    const query = window.matchMedia(LAPTOP_WIDE);
     const changed = () => setWide(query.matches);
     query.addEventListener?.("change", changed);
     return () => query.removeEventListener?.("change", changed);

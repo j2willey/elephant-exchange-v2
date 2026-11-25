@@ -1,4 +1,5 @@
 import { RECOMMENDED_OPTIONS } from "@elephant/rules";
+import { LAPTOP_WIDE } from "./screen-size.js";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { BUSY_MESSAGE, ServerBusy, type Api, type Emoji } from "./api.js";
@@ -51,7 +52,7 @@ export function DemoGame({ startOpen = false }: { startOpen?: boolean }) {
       }
       await chatter(api, id, playerIds);
       // On a screen wide enough for it, the demo page shows the Host console, the scoreboard and a phone together.
-      navigate(window.matchMedia?.(WIDE_ENOUGH).matches ? `/games/${id}/demo` : `/games/${id}`);
+      navigate(window.matchMedia?.(LAPTOP_WIDE).matches ? `/games/${id}/demo` : `/games/${id}`);
     } catch (e) {
       setFailed(e instanceof ServerBusy ? BUSY_MESSAGE : "The demo couldn't be created. Please try again.");
       setBusy(false);
@@ -123,7 +124,6 @@ async function chatter(api: Api, gameId: string, playerIds: string[]) {
 }
 
 /** Wide enough for the demo page's console beside its sample phone. */
-const WIDE_ENOUGH = "(min-width: 1000px)";
 
 type DemoTab = "console" | "screen";
 
@@ -194,7 +194,7 @@ export function DemoPage() {
   );
 }
 
-/** How wide the Host console is drawn in the demo: a laptop's, so it's the two-column console (GamePage's WIDE). */
+/** How wide the Host console is drawn in the demo: a laptop's, so it's the two-column console (LAPTOP_WIDE in screen-size.ts). */
 export const LAPTOP_WIDTH = 1060;
 /** How wide the scoreboard is drawn in the demo: a TV's proportions. */
 export const TV_WIDTH = 1280;
