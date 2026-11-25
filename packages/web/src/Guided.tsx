@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useParams, useSearchParams } from "react-router";
 import { BUSY_MESSAGE, ServerBusy, type GameView } from "./api.js";
 import { useApi } from "./ApiContext.js";
 import { LAPTOP_WIDTH, ScaledFrame, TV_WIDTH } from "./Demo.js";
@@ -42,7 +42,9 @@ function Guided({ script }: { script: DemoScript }) {
   const [ready, setReady] = useState(false);
   const [broken, setBroken] = useState<string | null>(null);
   const [drift, setDrift] = useState<string | null>(null);
-  const [autoplay, setAutoplay] = useState(false);
+  // A link with ?autoplay (the front page's "Watch a swap play out", a post's link) starts it playing by itself.
+  const [searchParams] = useSearchParams();
+  const [autoplay, setAutoplay] = useState(() => searchParams.has("autoplay"));
   const [tab, setTab] = useState<Tab>("console");
   const busyRef = useRef(true);
 
