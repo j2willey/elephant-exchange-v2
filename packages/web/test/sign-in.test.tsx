@@ -13,7 +13,7 @@ async function askForLink(email: string) {
 describe("Signing in", () => {
   it("asks a signed-out visitor for their email, then tells them to check it", async () => {
     const { origin, sent } = await startServer();
-    openApp(browser(origin));
+    openApp(browser(origin), "/login");
 
     await askForLink("ann@example.com");
 
@@ -23,7 +23,7 @@ describe("Signing in", () => {
 
   it("says to look in the spam folder, and lets them send the link again", async () => {
     const { origin, sent } = await startServer();
-    openApp(browser(origin));
+    openApp(browser(origin), "/login");
     expect(await screen.findByText(/look in your spam folder/i)).toBeInTheDocument(); // before asking
     await askForLink("ann@example.com");
 
@@ -38,7 +38,7 @@ describe("Signing in", () => {
   it("signs the Host in from the emailed link, and they stay signed in", async () => {
     const { origin, linkFor } = await startServer();
     const ann = browser(origin);
-    openApp(ann);
+    openApp(ann, "/login");
     await askForLink("ann@example.com");
     await screen.findByText(/check your email/i);
 
@@ -57,7 +57,7 @@ describe("Signing in", () => {
   it("says when a link has already been used, and offers to send a new one", async () => {
     const { origin, linkFor } = await startServer();
     const ann = browser(origin);
-    openApp(ann);
+    openApp(ann, "/login");
     await askForLink("ann@example.com");
     await screen.findByText(/check your email/i);
     const link = linkFor("ann@example.com");
@@ -80,14 +80,14 @@ describe("Signing in", () => {
   it("explains when too many links have been asked for", async () => {
     const { origin } = await startServer();
     for (let i = 0; i < 3; i++) await browser(origin).requestLink("ann@example.com");
-    openApp(browser(origin));
+    openApp(browser(origin), "/login");
 
     await askForLink("ann@example.com");
 
     expect(await screen.findByText(/too many/i)).toBeInTheDocument();
   });
 
-  it("signs out, back to the sign-in form", async () => {
+  it("signs out, back to the front page, with Sign in at the top", async () => {
     const { origin, linkFor } = await startServer();
     const ann = browser(origin);
     await ann.requestLink("ann@example.com");
@@ -96,7 +96,8 @@ describe("Signing in", () => {
 
     await userEvent.setup().click(screen.getByRole("button", { name: /sign out/i }));
 
-    expect(await screen.findByLabelText(/email/i)).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: /what it is/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^sign in$/i })).toHaveAttribute("href", "/login");
     expect(await ann.session()).toBeUndefined();
   });
 });

@@ -14,7 +14,7 @@ import { StatsPage } from "./Stats.js";
 import { SystemPage } from "./System.js";
 import { SAMPLE_GAME_ID, SamplePhone } from "./SamplePhone.js";
 import { ContactForm, ContactPage, FeedbackPage } from "./Feedback.js";
-import { Landing, Playbook, TipLine } from "./Landing.js";
+import { AboutPage, JoinPage, Landing, Playbook, TipLine } from "./Landing.js";
 import { NewGame } from "./NewGame.js";
 import { MyOrgs, OrgPage } from "./Orgs.js";
 import { SignInForm, useSignedIn } from "./SignIn.js";
@@ -44,7 +44,8 @@ export function AppRoutes() {
         <Route path="/guide" element={<Playbook />} />
         {/* Its old name, still on links already shared. */}
         <Route path="/playbook" element={<Playbook />} />
-        <Route path="/about" element={<About />} />
+        <Route path="/about" element={<AboutPage />} />
+        <Route path="/join" element={<JoinPage />} />
         <Route path="/try" element={<TryDemo />} />
         <Route path="/guided/:scriptId" element={<GuidedPage />} />
         <Route path={`/games/${SAMPLE_GAME_ID}`} element={<SamplePhone />} />
@@ -158,21 +159,6 @@ function SignOutButton() {
       Sign out
     </button>
   );
-}
-
-/** The front page for anyone, signed in or not (a signed-out visitor also gets it at /). */
-function About() {
-  const api = useApi();
-  const [signedIn, setSignedIn] = useState<boolean | null>(null);
-  useEffect(() => {
-    let current = true;
-    api.session().then((s) => current && setSignedIn(Boolean(s)));
-    return () => {
-      current = false;
-    };
-  }, [api]);
-  if (signedIn === null) return <p className="muted">Loading…</p>;
-  return <Landing signedIn={signedIn} />;
 }
 
 /**
@@ -406,7 +392,7 @@ function MyGames({ children }: { children?: ReactNode }) {
 }
 
 /** Where emailed links land: uses the link up once, then goes back where the person started (home if nowhere). */
-/** Signing back in, from the top bar's Sign in: the same emailed link as hosting a Game. */
+/** Signing in to host, from the front page's Host a Game and the top bar's Sign in: no password, an emailed link. */
 function SignInPage() {
   const signedIn = useSignedIn();
   const navigate = useNavigate();
@@ -417,11 +403,11 @@ function SignInPage() {
   return (
     <div className="stack">
       <Backdrop />
-      <SignInForm heading="Sign in" next="/" />
+      <SignInForm heading="Sign in to host a Game" next="/" />
       <section className="card">
         <p className="muted">
           New here? Signing in is all it takes to host a Game: no password, nothing to install. Going to a party
-          instead? <Link to="/#join">Enter your code</Link>.
+          instead? <Link to="/join">Enter your code</Link>.
         </p>
       </section>
     </div>

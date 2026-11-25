@@ -1,7 +1,7 @@
 /**
  * Jim's three things that make a gift swap go well, done before the party: set the Game up ahead of time, send the
- * link, and bring a few extra gifts. On the front page and in the Host's Guide for Hosts to come, and on a new Game's
- * console (BeforeTheParty) where a Host can act on them. Wording: the app adds to the party; phones are optional.
+ * link, and bring a few extra gifts. In the Host's Guide (linked from the front page) for Hosts to come, and on a new
+ * Game's console (BeforeTheParty) where a Host can act on them. Wording: the app adds to the party; phones are optional.
  */
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router";
@@ -42,16 +42,6 @@ export function TipList({ actions = {} }: { actions?: Partial<Record<number, Rea
         </li>
       ))}
     </ol>
-  );
-}
-
-/** For Hosts to come, on the front page, under How it works (which links the Host's Guide). */
-export function ThreeThings() {
-  return (
-    <section className="card" aria-label="Three things to do before the party">
-      <h2>Three things to do before the party</h2>
-      <TipList />
-    </section>
   );
 }
 

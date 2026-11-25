@@ -85,7 +85,7 @@ describe("Saying a feedback email is OK", () => {
   it("can be ticked when asking for a sign-in link", async () => {
     const { origin, linkFor } = await startServer();
     const phone = browser(origin);
-    openApp(phone);
+    openApp(phone, "/login");
     const user = userEvent.setup();
 
     await user.type(await screen.findByLabelText(/email address/i), "ann@willey.test");

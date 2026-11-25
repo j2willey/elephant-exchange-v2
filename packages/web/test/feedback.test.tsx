@@ -144,14 +144,14 @@ describe("Testimonials", () => {
     await within(item).findByRole("button", { name: /take it off the website/i });
     expect(await admin.testimonials()).toEqual([{ quote: "Best party in years", name: "Ann R.", kind: "host", rating: 5 }]);
 
-    openApp(browser(origin), "/about");
+    openApp(browser(origin));
     const shown = await screen.findByRole("region", { name: /what people say/i });
     expect(shown).toHaveTextContent(/“best party in years”.*ann r\., host/i);
   });
 
   it("aren't on the front page until one is published", async () => {
     const { origin } = await startServer();
-    openApp(browser(origin), "/about");
+    openApp(browser(origin));
     await screen.findByRole("region", { name: /how it works/i });
     expect(screen.queryByRole("region", { name: /what people say/i })).not.toBeInTheDocument();
   });

@@ -7,38 +7,45 @@ import { Link, useLocation, useNavigate } from "react-router";
 import medallion from "./assets/medallion.webp";
 import { Backdrop } from "./Backdrop.js";
 import party from "./assets/landing-party.webp";
-import scoreboard from "./assets/scoreboard.webp";
-import { SignInForm } from "./SignIn.js";
-import { ThreeThings, TipList } from "./HostTips.js";
+import { TipList } from "./HostTips.js";
+
+/** Each "sound familiar?" moment, and what the app does about it: problem on the left, answer on the right. */
+const PAIRS = [
+  {
+    problem: "Every turn, someone wanders the room asking who has what before they decide whether to steal.",
+    icon: "⚡",
+    title: "Turns move faster",
+    answer:
+      "Every opened gift is on the big screen with its holder and how many steals it has left. People decide from their seats, and the next name is already on deck.",
+  },
+  {
+    problem: "From the back, nobody can see what that gift card was for, or what was in the box that just got opened.",
+    icon: "📸",
+    title: "Photos and chatter, not just a scoreboard",
+    answer:
+      "Guests can post photos and comments from their phones, and a photo attaches to the gift it shows: anyone can tap a gift and see what it is, and who's grinning about it. Friendly emoji too (yes, there's a leg lamp).",
+  },
+  {
+    problem: "Was that one stolen twice or three times? Cue the argument.",
+    icon: "⚖️",
+    title: "The app keeps track of the rules",
+    answer:
+      "Steal limits, frozen gifts, no take-backs and a final round for the first few players: the app tracks them all and won't allow a move that breaks one. Fewer debates.",
+  },
+  {
+    problem: "By the end, part of the room has drifted off to the snacks.",
+    icon: "⭐",
+    title: "The whole room stays in it",
+    answer: "On their phones, guests can star the gifts they're after, see who's on deck, and vote for the Worst Gift at the end.",
+  },
+] as const;
 
 /**
- * The front page: what Elephant Exchange is, the problem it solves, how it helps and how it works, with the ways
- * in at the top and again at the end. A signed-out visitor sees it at /; anyone can open it at /about, where a
- * signed-in Host is pointed back to their Games instead of asked to sign in.
+ * The front page, for a signed-out visitor: what Elephant Exchange is and the ways in (the demo, hosting, a guest's
+ * code), each problem it helps with beside how, and how it works. Kept short on purpose (Tirth found the old one too
+ * much): the three things before the party live in the Host's Guide, and Jim's note on the About page.
  */
-export function Landing({ signedIn = false }: { signedIn?: boolean }) {
-  // Arriving at /#join or /#host (as from the Sign in page): the browser looked for it before it was drawn.
-  const { hash } = useLocation();
-  useEffect(() => {
-    if (hash) document.getElementById(hash.slice(1))?.scrollIntoView?.();
-  }, [hash]);
-  const ways = (
-    <div className="landing-ctas">
-      <Link to="/try" className="button">
-        ▶ Try the demo
-      </Link>
-      {signedIn ? (
-        <Link to="/" className="button secondary-button">
-          Your Games →
-        </Link>
-      ) : (
-        <a href="#host" className="button secondary-button">
-          Host a Game
-        </a>
-      )}
-    </div>
-  );
-
+export function Landing() {
   return (
     <div className="stack landing">
       {/* The party itself, softened, behind the whole page: what the app is for, before a word is read. */}
@@ -60,67 +67,45 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
           their own phones too, keeping up with the gifts and sharing photos and comments. No phone? No problem: the big
           screen shows everyone everything.
         </p>
-        {ways}
+        <div className="landing-ctas">
+          <Link to="/try" className="button">
+            ▶ Try the demo
+          </Link>
+          <Link to="/login" className="button secondary-button">
+            Host a Game
+          </Link>
+        </div>
         <p className="landing-party-link">
-          Going to a party? <a href="#join">Enter your code</a>
+          Going to a party? <Link to="/join">Enter your code</Link>
         </p>
-        <figure className="landing-shot">
-          <img src={scoreboard} width={1280} height={720} alt="The scoreboard on the party's big screen: who's up now and on deck, every gift with its holder and steals, the latest posts, and a QR code for guests" />
-          <figcaption className="muted">The scoreboard on the party's big screen.</figcaption>
-        </figure>
       </section>
 
       <section className="card landing-problem" aria-label="Sound familiar?">
-        <h2>Sound familiar?</h2>
         <p>
           White Elephant swaps are a great tradition. With fifty people, a pile of wrapped gifts and a rule everyone
           remembers a little differently, they can also start to drag.
         </p>
-        <ul>
-          <li>Every turn, someone wanders the room asking who has what before they decide whether to steal.</li>
-          <li>From the back, nobody can see what that gift card was for, or what was in the box that just got opened.</li>
-          <li>Was that one stolen twice or three times? Cue the argument.</li>
-          <li>By the end, part of the room has drifted off to the snacks.</li>
-        </ul>
-      </section>
-
-      <section aria-label="How it helps">
-        <h2 className="landing-section-title">How Elephant Exchange helps</h2>
-        <div className="landing-points">
-          <section className="card">
-            <h3>⚡ Turns move faster</h3>
-            <p>
-              Every opened gift is on the big screen with its holder and how many steals it has left. People can decide from
-              their seats, and the next name is already on deck.
-            </p>
-          </section>
-          <section className="card">
-            <h3>📸 Photos and chatter, not just a scoreboard</h3>
-            <p>
-              Guests can share photos and comments from their phones in the party's own social stream, reply to each other and
-              react with friendly emoji (yes, there's a leg lamp). Photos attach to the gift they show, so anyone can tap a gift
-              and see what it is, and who's grinning about it.
-            </p>
-          </section>
-          <section className="card">
-            <h3>⭐ The whole room stays in it</h3>
-            <p>On their phones, guests can star the gifts they're after, see who's on deck, and vote for the Worst Gift at the end.</p>
-          </section>
-          <section className="card">
-            <h3>⚖️ The app keeps track of the rules</h3>
-            <p>
-              Steal limits, frozen gifts, no take-backs and a final round for the first few players: the app tracks them
-              all and won't allow a move that breaks one. Fewer debates.
-            </p>
-          </section>
-          <section className="card">
-            <h3>📱 Nothing to install</h3>
-            <p>
-              It runs in the browser. You run it from a laptop; guests who'd like to follow along scan the QR code on the big
-              screen with their phones. Nobody needs a phone to play. Free.
-            </p>
-          </section>
+        <div className="landing-pairs-head" aria-hidden="true">
+          <h2>Sound familiar?</h2>
+          <h2>How Elephant Exchange helps</h2>
         </div>
+        <ul className="landing-pairs">
+          {PAIRS.map((p) => (
+            <li key={p.title}>
+              <p className="landing-pain">{p.problem}</p>
+              <div className="landing-help">
+                <h3>
+                  {p.icon} {p.title}
+                </h3>
+                <p>{p.answer}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+        <p className="landing-install">
+          <strong>📱 Nothing to install.</strong> It runs in the browser: you run it from a laptop, and guests who'd like
+          to follow along scan the QR code on the big screen. Nobody needs a phone to play. Free.
+        </p>
       </section>
 
       <section className="card" aria-label="How it works">
@@ -138,37 +123,69 @@ export function Landing({ signedIn = false }: { signedIn?: boolean }) {
         </ol>
         <p className="muted">
           Made for big parties of 25 or more: office holiday parties, family reunions, troops and clubs.{" "}
-          <Link to="/guide">Read the Host's Guide</Link> for running a smooth one.
+          <Link to="/guide">Read the Host's Guide</Link> for running a smooth one, starting with the{" "}
+          <Link to="/guide#before-the-party">three things to do before the party</Link>.
         </p>
       </section>
 
-      <ThreeThings />
-
       <Testimonials />
 
-      <section className="card landing-again" aria-label="Try it">
-        <h2>See it in two minutes</h2>
-        <p>The demo sets up a whole party with made-up guests, ready to start. Open gifts, steal, and watch the big screen keep up. No sign-up needed.</p>
-        {ways}
-      </section>
-
-      <div className="landing-ways">
-        {signedIn ? null : (
-          <div id="host">
-            <SignInForm heading="Host a Game" />
-          </div>
-        )}
-        <div id="join">
-          <OpenGame />
-        </div>
-      </div>
-
-      <TipJar />
       <p className="muted hint landing-privacy">
         We count how the app is used (how many Games, how long they run) to keep it working well. We never sell or share
-        anything about you.
+        anything about you. <Link to="/about">About Elephant Exchange</Link>
       </p>
     </div>
+  );
+}
+
+/** A guest with the Host's link or code but not the QR code: from "Going to a party?" on the front page. */
+export function JoinPage() {
+  return (
+    <div className="stack">
+      <Backdrop />
+      <OpenGame />
+    </div>
+  );
+}
+
+/**
+ * About Elephant Exchange: who made it and why, Jim's note and the tip jar, and what's counted. Linked from the front
+ * page and the Host's home.
+ */
+export function AboutPage() {
+  return (
+    <article className="stack about">
+      <Backdrop />
+      <header className="card home-welcome">
+        <img className="home-medallion" src={medallion} width={640} height={640} alt="" />
+        <div>
+          <Link to="/" className="back">
+            ← Home
+          </Link>
+          <h2>About Elephant Exchange</h2>
+          <p className="muted">
+            A big screen, and phones for whoever would like one, for a party's own White Elephant gift swap. Free, and
+            nothing to install.
+          </p>
+        </div>
+      </header>
+      <TipJar />
+      <section className="card" aria-label="What's counted">
+        <h3>What's counted</h3>
+        <p>
+          We count how the app is used (how many Games, how long they run) to keep it working well. We never sell or
+          share anything about you.
+        </p>
+      </section>
+      <p className="inline">
+        <Link to="/try" className="button">
+          ▶ Try the demo
+        </Link>
+        <Link to="/guide" className="button secondary-button">
+          📖 The Host's Guide
+        </Link>
+      </p>
+    </article>
   );
 }
 
@@ -332,6 +349,11 @@ const RECOMMENDED_WORDS: Record<keyof GameOptions, string> = {
 
 /** v1's Host's Guide, brought up to date: how to run a smooth 20+ person exchange with this app. */
 export function Playbook() {
+  // Arriving at a section (as /guide#before-the-party, from the front page): the browser looked for it before it was drawn.
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (hash) document.getElementById(hash.slice(1))?.scrollIntoView?.();
+  }, [hash]);
   return (
     <article className="stack playbook">
       <Backdrop />
@@ -371,7 +393,7 @@ export function Playbook() {
         </p>
       </section>
 
-      <section className="card">
+      <section className="card" id="before-the-party">
         <h3>📋 Before the party</h3>
         <p>Three things make the biggest difference, and they all happen before anyone arrives:</p>
         <TipList />
