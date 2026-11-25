@@ -29,6 +29,16 @@ describe("The landing page", () => {
     expect(screen.getByRole("link", { name: /three things to do before the party/i })).toHaveAttribute("href", "/guide#before-the-party");
   });
 
+  it("opens How it works with a sketch of the laptop, the big screen and the phones, before the steps", async () => {
+    const { origin } = await startServer();
+    openApp(browser(origin));
+
+    const how = await screen.findByRole("region", { name: /how it works/i });
+    const sketch = within(how).getByRole("img", { name: /host.*laptop.*big screen.*phones.*optional/i });
+    const steps = within(how).getByRole("list");
+    expect(sketch.compareDocumentPosition(steps) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("leaves the rest to other pages: no sample scoreboard, sign-in form, code box or note from Jim on it", async () => {
     const { origin } = await startServer();
     openApp(browser(origin));
