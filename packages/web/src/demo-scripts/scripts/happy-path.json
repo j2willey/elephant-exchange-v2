@@ -91,44 +91,8 @@
   },
   "steps": [
     {
-      "id": "s01-welcome",
+      "id": "s01-start",
       "chapter": "Getting started",
-      "bubble": {
-        "text": "This is the Host's console for a White Elephant swap with 8 players. Press Next to play it through, one move at a time.",
-        "target": "center"
-      }
-    },
-    {
-      "id": "s02-gift-table",
-      "actions": [
-        {
-          "do": "post",
-          "as": "Hana",
-          "text": "The gift table is getting serious 👀",
-          "photo": "table",
-          "ref": "table"
-        },
-        {
-          "do": "react",
-          "as": "Ben",
-          "post": "table",
-          "emoji": "😂"
-        },
-        {
-          "do": "react",
-          "as": "Eve",
-          "post": "table",
-          "emoji": "🔥"
-        }
-      ],
-      "bubble": {
-        "text": "Guests can follow along on their phones if they like, and post to the 💬 Chat. Hana shares the gift table.",
-        "target": "post:table",
-        "placement": "left"
-      }
-    },
-    {
-      "id": "s03-start",
       "run": "next",
       "actions": [
         {
@@ -136,15 +100,15 @@
         }
       ],
       "bubble": {
-        "text": "Everyone's here. The Host presses Start game, and the app draws who goes first.",
+        "text": "This is the Host's console for a swap with 8 players. Everyone's here, so the Host presses Start game and the app draws who goes first. Press Next to play it through, one move at a time.",
         "target": "start-game",
         "placement": "below"
       }
     },
     {
-      "id": "s04-ann-up",
+      "id": "s02-ann-up",
       "bubble": {
-        "text": "Ann is up first. Ben is On Deck, so he gets a heads-up before his turn.",
+        "text": "Ann is up first. Nothing's been opened yet, so she has to pick a wrapped gift. Ben is On Deck, so he gets a heads-up before his turn.",
         "target": "player-row:Ann",
         "placement": "right"
       },
@@ -155,8 +119,8 @@
       }
     },
     {
-      "id": "s05-ann-opens",
-      "chapter": "Opening and stealing",
+      "id": "s03-ann-opens",
+      "chapter": "Opening gifts",
       "run": "next",
       "actions": [
         {
@@ -166,15 +130,15 @@
         }
       ],
       "bubble": {
-        "text": "Ann picks a wrapped gift from the table. The Host presses 🎁 and types what's inside.",
+        "text": "Ann unwraps her gift. The Host presses 🎁 and types in what it is.",
         "target": "open:Ann",
         "placement": "right"
       }
     },
     {
-      "id": "s06-blanket",
+      "id": "s04-blanket",
       "bubble": {
-        "text": "A heated blanket! It's on the Gift Tracker now, and on the big screen.",
+        "text": "A heated blanket! It's on the Gift Tracker now, and on the scoreboard for anyone who looks up.",
         "target": "gift-row:blanket",
         "placement": "left"
       },
@@ -187,31 +151,7 @@
       }
     },
     {
-      "id": "s07-ann-photo",
-      "actions": [
-        {
-          "do": "post",
-          "as": "Ann",
-          "text": "Already wrapped up in it 😌",
-          "photo": "blanket",
-          "gift": "blanket",
-          "ref": "ann-blanket"
-        },
-        {
-          "do": "react",
-          "as": "Gus",
-          "post": "ann-blanket",
-          "emoji": "❤️"
-        }
-      ],
-      "bubble": {
-        "text": "Ann adds a photo from her phone. It shows under the gift, and in the Chat.",
-        "target": "gift-row:blanket",
-        "placement": "left"
-      }
-    },
-    {
-      "id": "s08-ben-opens",
+      "id": "s05-ben-opens",
       "run": "next",
       "actions": [
         {
@@ -221,13 +161,83 @@
         }
       ],
       "bubble": {
-        "text": "Ben's turn. He opens a gift too.",
+        "text": "Ben's turn. He could steal the blanket, but he opens a new gift. The Host records it the same way.",
         "target": "open:Ben",
         "placement": "right"
       }
     },
     {
-      "id": "s09-fish",
+      "id": "s06-fish",
+      "bubble": {
+        "text": "A singing fish plaque. Two gifts are out, and the Gift Tracker shows who has each.",
+        "target": "gift-row:fish",
+        "placement": "left"
+      },
+      "expect": {
+        "holders": {
+          "blanket": "Ann",
+          "fish": "Ben"
+        },
+        "up": "Cat",
+        "onDeck": "Dev"
+      }
+    },
+    {
+      "id": "s07-gus-warns",
+      "chapter": "Following along",
+      "actions": [
+        {
+          "do": "post",
+          "as": "Gus",
+          "text": "Ann, don't get too attached to that blanket 👀",
+          "ref": "gus-warns"
+        },
+        {
+          "do": "react",
+          "as": "Cat",
+          "post": "gus-warns",
+          "emoji": "😂"
+        },
+        {
+          "do": "react",
+          "as": "Eve",
+          "post": "gus-warns",
+          "emoji": "🔥"
+        }
+      ],
+      "bubble": {
+        "text": "Guests can follow along on their phones if they like, and post to the 💬 Chat. Gus warns Ann not to get attached.",
+        "target": "post:gus-warns",
+        "placement": "left"
+      }
+    },
+    {
+      "id": "s08-ann-photo",
+      "actions": [
+        {
+          "do": "post",
+          "as": "Ann",
+          "text": "Already wrapped up in it 😌",
+          "photo": "blanket",
+          "gift": "blanket",
+          "ref": "ann-blanket",
+          "replyTo": "gus-warns"
+        },
+        {
+          "do": "react",
+          "as": "Gus",
+          "post": "ann-blanket",
+          "emoji": "❤️"
+        }
+      ],
+      "bubble": {
+        "text": "Ann answers with a photo from her phone. It shows under the gift, and in the Chat.",
+        "target": "gift-row:blanket",
+        "placement": "left"
+      }
+    },
+    {
+      "id": "s09-fish-pitch",
       "actions": [
         {
           "do": "pitch",
@@ -238,20 +248,14 @@
         }
       ],
       "bubble": {
-        "text": "A singing fish plaque. Ben writes a Pitch to tempt someone into stealing it. His story stays with the gift all night.",
+        "text": "Ben writes a Pitch for his fish, to tempt someone into stealing it. His story stays with the gift all night.",
         "target": "gift-row:fish",
         "placement": "left"
-      },
-      "expect": {
-        "holders": {
-          "fish": "Ben"
-        },
-        "up": "Cat",
-        "onDeck": "Dev"
       }
     },
     {
       "id": "s10-cat-steal-press",
+      "chapter": "The first steal",
       "bubble": {
         "text": "Cat's up. Instead of opening a gift, she can steal one. The Host presses 😈…",
         "target": "steal:Cat",

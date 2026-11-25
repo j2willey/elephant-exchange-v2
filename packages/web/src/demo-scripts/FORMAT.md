@@ -82,7 +82,7 @@ The server doesn't say which Post was just made, so after a `post` the replay fi
 
 ## Targets
 
-What a bubble points at, on the Host console's laptop layout (`LaptopConsole.tsx`, used at 1000 px and wider). Player names and Gift keys are the script's own; the replay turns a Gift key into the Gift's label as it stands now (`gifts()` in the rules: its name, or "Finn's gift" while unnamed).
+What a bubble points at, on the Host console's laptop layout (`LaptopConsole.tsx`, used at 700 px and wider). Player names and Gift keys are the script's own; the replay turns a Gift key into the Gift's label as it stands now (`gifts()` in the rules: its name, or "Finn's gift" while unnamed).
 
 | Target | Element today |
 |---|---|
