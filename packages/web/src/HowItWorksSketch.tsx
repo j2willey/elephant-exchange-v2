@@ -12,7 +12,7 @@ const SKIN = "#2f2f36";
 const PAPER = "#fff4c2";
 const PINK = "#fde2e2";
 
-const LABEL = "Sketch: the Host runs the swap from a laptop; every gift and steal shows live on the big screen for the room, and on guests' phones, which are optional, along with 💬 Chat and photos.";
+const LABEL = "Sketch: the Host runs the swap from a laptop; a scoreboard on the big screen keeps track of every gift and steal, so anyone who missed one can look up and see; guests can also follow along on their phones, which are optional, with 💬 Chat and photos.";
 
 export function HowItWorksSketch() {
   return (
@@ -22,15 +22,15 @@ export function HowItWorksSketch() {
         <Laptop f="hw" />
         <Caption x={250} y={572} anchor="middle" title={["The Host runs it from a laptop"]} lines={["types in each gift as it's opened,", "and who steals what from whom"]} />
         <Tv f="hw" />
-        <Caption x={1080} y={170} title={["The room", "watches a TV"]} lines={["every gift, who", "has it, and every", "steal, as it happens"]} />
+        <Caption x={1080} y={170} title={["A scoreboard", "keeps track"]} lines={["of every gift and", "who has it, so anyone", "who missed a steal", "can look up and see"]} />
         <Phones f="hw" />
-        <Caption x={995} y={480} title={["Guests can", "follow along"]} note="(phones optional)" lines={["see the gifts and steals,", "trade jokes in 💬 Chat,", "and share photos"]} />
+        <Caption x={995} y={480} title={["Guests can also", "follow along"]} note="(phones optional)" lines={["see the gifts and steals,", "trade jokes in 💬 Chat,", "and share photos"]} />
         <Arrow f="hw" d="M458 290 C 520 230, 570 210, 628 225" />
         <Arrow f="hw" d="M458 420 C 530 470, 580 540, 643 560" />
         <ArrowLabel x={530} y={208} angle={-12} text="shows up live" />
         <ArrowLabel x={572} y={478} angle={33} text="and on phones" />
       </svg>
-      <svg className="how-sketch-tall" viewBox="0 0 560 1375" aria-hidden="true" {...SVG_PROPS}>
+      <svg className="how-sketch-tall" viewBox="0 0 560 1405" aria-hidden="true" {...SVG_PROPS}>
         <Defs id="ht" />
         <g transform="translate(30 -205)">
           <Laptop f="ht" />
@@ -41,13 +41,13 @@ export function HowItWorksSketch() {
         <g transform="translate(-570 390)">
           <Tv f="ht" />
         </g>
-        <Caption x={280} y={830} anchor="middle" big title={["The room watches a TV"]} lines={["every gift, who has it, and every steal"]} />
-        <Arrow f="ht" d="M280 880 C 270 900, 290 915, 280 935" />
-        <ArrowLabel x={300} y={915} text="and on phones" anchor="start" />
-        <g transform="translate(-530 505)">
+        <Caption x={280} y={830} anchor="middle" big title={["A scoreboard keeps track"]} lines={["of every gift and who has it, so anyone", "who missed a steal can look up and see"]} />
+        <Arrow f="ht" d="M280 912 C 270 932, 290 947, 280 967" />
+        <ArrowLabel x={300} y={947} text="and on phones" anchor="start" />
+        <g transform="translate(-530 537)">
           <Phones f="ht" />
         </g>
-        <Caption x={280} y={1258} anchor="middle" big title={["Guests can follow along"]} note="(phones optional)" lines={["see the gifts and steals,", "trade jokes in 💬 Chat, and share photos"]} />
+        <Caption x={280} y={1290} anchor="middle" big title={["Guests can also follow along"]} note="(phones optional)" lines={["see the gifts and steals,", "trade jokes in 💬 Chat, and share photos"]} />
       </svg>
     </div>
   );
