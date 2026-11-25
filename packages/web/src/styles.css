@@ -3668,3 +3668,9 @@ kbd {
     display: block !important;
   }
 }
+
+/* Try a Demo: the guided tour's link, a full-width button like the demo game's below it. */
+.demo-tour .button {
+  display: block;
+  text-align: center;
+}

@@ -1,10 +1,10 @@
 import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { screen, within } from "@testing-library/react";
+import { cleanup, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { openApp, startServer } from "./harness.js";
+import { browser, openApp, startServer } from "./harness.js";
 
 const rosterNames = () => within(screen.getByRole("list", { name: /players/i })).getAllByRole("listitem").map((li) => li.querySelector("[data-name]")?.textContent);
 
@@ -36,6 +36,21 @@ describe("A demo Game", () => {
     await user.click(screen.getByRole("button", { name: /create demo game/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/very busy right now.*try again in a few minutes/i);
+  });
+
+  it("comes after the guided tour, which a visitor is offered first", async () => {
+    const { origin, signedIn } = await startServer();
+    openApp(browser(origin), "/try");
+    const tour = await screen.findByRole("link", { name: /watch the guided tour/i });
+    expect(tour).toHaveAttribute("href", "/guided/happy-path");
+    const create = screen.getByRole("button", { name: /create demo game/i });
+    expect(tour.compareDocumentPosition(create) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    cleanup();
+
+    // The same from a signed-in Host's home.
+    openApp(await signedIn("host@example.com"));
+    await userEvent.setup().click(await screen.findByRole("button", { name: /try a demo/i }));
+    expect(await screen.findByRole("link", { name: /watch the guided tour/i })).toHaveAttribute("href", "/guided/happy-path");
   });
 
   it("asks for at least 2 Players", async () => {

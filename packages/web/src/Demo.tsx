@@ -58,30 +58,44 @@ export function DemoGame({ startOpen = false }: { startOpen?: boolean }) {
     }
   }
 
+  // The guided tour first: a visitor who's never seen the app watches a swap played for them before running one.
   return (
-    <form className="card" onSubmit={submit}>
-      <h2>Demo game</h2>
-      <p className="muted">A practice Game with made-up Players, ready to start. Type in any gifts you like.</p>
-      <label htmlFor="demo-players">How many players?</label>
-      <input
-        id="demo-players"
-        type="number"
-        inputMode="numeric"
-        min={2}
-        max={MAX_DEMO_PLAYERS}
-        required
-        value={players}
-        onChange={(e) => setPlayers(e.target.value)}
-      />
-      {failed && (
-        <p className="error" role="alert">
-          {failed}
+    <>
+      <section className="card demo-tour" aria-label="Guided tour">
+        <h2>Watch a swap, step by step</h2>
+        <p className="muted">
+          Eight friends play a whole White Elephant swap. Speech bubbles point out what the Host presses and what
+          everyone sees, on the Host console, the scoreboard and a guest's phone. Go at your own pace with Next, or press
+          Autoplay and watch.
         </p>
-      )}
-      <button type="submit" disabled={busy}>
-        {busy ? "Creating…" : "Create demo game"}
-      </button>
-    </form>
+        <Link className="button" to="/guided/happy-path">
+          <span aria-hidden="true">▶ </span>Watch the guided tour
+        </Link>
+      </section>
+      <form className="card" onSubmit={submit}>
+        <h2>Or run a demo game yourself</h2>
+        <p className="muted">A practice Game with made-up Players, ready to start. Type in any gifts you like.</p>
+        <label htmlFor="demo-players">How many players?</label>
+        <input
+          id="demo-players"
+          type="number"
+          inputMode="numeric"
+          min={2}
+          max={MAX_DEMO_PLAYERS}
+          required
+          value={players}
+          onChange={(e) => setPlayers(e.target.value)}
+        />
+        {failed && (
+          <p className="error" role="alert">
+            {failed}
+          </p>
+        )}
+        <button type="submit" className="secondary" disabled={busy}>
+          {busy ? "Creating…" : "Create demo game"}
+        </button>
+      </form>
+    </>
   );
 }
 
