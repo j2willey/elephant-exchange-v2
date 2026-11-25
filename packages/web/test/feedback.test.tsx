@@ -64,11 +64,12 @@ describe("Asking how it went", () => {
     });
   });
 
-  it("takes a message from the Host's home screen, and shows it all on the admin's Feedback page", async () => {
+  it("takes a message from a signed-in Host, via the link at the foot of their home, and shows it all on the admin's Feedback page", async () => {
     const { signedIn } = await startServer({ adminEmails: ["boss@example.org"] });
     const user = userEvent.setup();
     openApp(await signedIn("ann@example.org"));
 
+    await user.click(await screen.findByRole("link", { name: /questions\? contact jim/i }));
     const box = await screen.findByRole("form", { name: /contact jim/i });
     expect(box).toHaveTextContent(/jim can reply to the email you signed in with/i);
     expect(box).not.toHaveTextContent(/ann@example.org/); // never printed: it would be in every screenshot

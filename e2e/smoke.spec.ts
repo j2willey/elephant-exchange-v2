@@ -148,6 +148,8 @@ test("an Organizer themes their Organization, and a Game in it shows that Theme"
   await page.goto("/");
   await signIn(page, `organizer-${run}@example.com`);
 
+  // Folded away under Your Games, since most Hosts never need one.
+  await page.getByText(/organizations \(optional\)/i).click();
   const orgs = page.getByRole("region", { name: /your organizations/i });
   await orgs.getByLabel(/new organization/i).fill(`Lodge ${run}`);
   await orgs.getByRole("button", { name: /create/i }).click();

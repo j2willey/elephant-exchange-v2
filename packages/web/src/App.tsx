@@ -1,5 +1,5 @@
 import { CohostsPage } from "./Cohosts.js";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Link, Route, Routes, useLocation, useNavigate, useSearchParams } from "react-router";
 import { isReturnPath, type MyGame, type Session } from "./api.js";
 import { useApi } from "./ApiContext.js";
@@ -14,7 +14,7 @@ import { StatsPage } from "./Stats.js";
 import { SystemPage } from "./System.js";
 import { SAMPLE_GAME_ID, SamplePhone } from "./SamplePhone.js";
 import { ContactForm, ContactPage, FeedbackPage } from "./Feedback.js";
-import { Landing, Playbook, TipJar } from "./Landing.js";
+import { Landing, Playbook, TipLine } from "./Landing.js";
 import { NewGame } from "./NewGame.js";
 import { MyOrgs, OrgPage } from "./Orgs.js";
 import { SignInForm, useSignedIn } from "./SignIn.js";
@@ -34,15 +34,7 @@ export function AppRoutes() {
   }, [api]);
   return (
     <main className="page">
-      <div className="top-bar">
-        <h1 className="brand">
-          <Link to="/">
-            <img className="brand-mark" src={mark} width={128} height={128} alt="" />
-            Elephant Exchange
-          </Link>
-        </h1>
-        <SignOutLink />
-      </div>
+      <TopBar />
       <NewVersionNotice />
       <Routes>
         <Route path="/" element={<Home />} />
@@ -109,44 +101,60 @@ function NewVersionNotice() {
 }
 
 /**
- * Sign out, at the top of every page for someone signed in, except inside a Game: there a guest could tap it by
- * mistake mid-party, and the TV's scoreboard has no business signing out. (The home screen has its own button too.)
+ * The app's name, with Sign in or Sign out at the far end. Sign out is on every page for someone signed in, except
+ * inside a Game: there a guest could tap it by mistake mid-party, and the TV's scoreboard has no business signing out.
+ * A signed-in Host's home has its own heading with the name and Sign out in it, so there's no bar above it.
  */
-function SignOutLink() {
+function TopBar() {
   const api = useApi();
-  const navigate = useNavigate();
-  const { pathname } = useLocation();
-  const [signedIn, setSignedIn] = useState(false);
+  const { pathname, key } = useLocation();
+  const [session, setSession] = useState<Session | null | "loading">("loading");
   const inGame = pathname.startsWith("/games/");
 
   useEffect(() => {
     if (inGame) return;
     let current = true;
-    api.session().then((s) => current && setSignedIn(Boolean(s)), () => {});
+    api.session().then(
+      (s) => current && setSession(s ?? null),
+      () => current && setSession(null),
+    );
     return () => {
       current = false;
     };
-  }, [api, pathname, inGame]);
+    // `key`: checked again on every visit, such as straight after signing out.
+  }, [api, key, inGame]);
 
-  if (inGame) return null;
-  // Signed out: the way back in, from any page (the front page's Host a Game form is the same thing, further down).
-  if (!signedIn) {
-    return pathname === "/sign-in" || pathname === "/login" ? null : (
-      <Link to="/login" className="sign-out">
-        Sign in
-      </Link>
-    );
-  }
+  if (pathname === "/" && (session === "loading" || (session && !session.visitor))) return null;
+  const signedIn = session !== null && session !== "loading";
   return (
-    <button
-      className="link sign-out"
-      onClick={() =>
-        void api.signOut().then(() => {
-          setSignedIn(false);
-          navigate("/"); // the home screen checks again who's signed in, so it shows the front page
-        })
-      }
-    >
+    <div className="top-bar">
+      <h1 className="brand">
+        <Link to="/">
+          <img className="brand-mark" src={mark} width={128} height={128} alt="" />
+          Elephant Exchange
+        </Link>
+      </h1>
+      {inGame ? null : signedIn ? (
+        <SignOutButton />
+      ) : (
+        // Signed out: the way back in, from any page (the front page's Host a Game form is the same thing, further down).
+        pathname !== "/sign-in" &&
+        pathname !== "/login" && (
+          <Link to="/login" className="sign-out">
+            Sign in
+          </Link>
+        )
+      )}
+    </div>
+  );
+}
+
+/** Signs out and goes home, where the front page shows (each page checks again who's signed in on a new visit). */
+function SignOutButton() {
+  const api = useApi();
+  const navigate = useNavigate();
+  return (
+    <button className="link sign-out" onClick={() => void api.signOut().then(() => navigate("/"))}>
       Sign out
     </button>
   );
@@ -262,77 +270,62 @@ function Home() {
     );
   }
 
-  // On a laptop, two columns: hosting on the left (New Game, Your Games, Your Organizations), the rest beside them. On a phone,
-  // one column in the order of the slots' numbers, as before (styles.css: .home-wide).
+  // One column, few boxes (Tirth found the old two-column home too busy): the greeting with the app's name, the two
+  // ways to start side by side, Your Games (with Organizations folded away inside it), and the small things at the foot.
   return (
-    <div className="stack home home-wide">
+    <div className="stack home">
       <Backdrop />
-      <section className="card home-welcome" aria-label="Welcome">
+      <header className="card home-hero">
         <img className="home-medallion" src={medallion} width={640} height={640} alt="" />
         <div>
-          <h2>Happy holidays!</h2>
-          <p className="muted">Ready to get this year's gift swap going? Start a Game, or take the demo for a spin first.</p>
+          <h1 className="home-title">Elephant Exchange</h1>
+          <p className="muted">Happy holidays! Ready to get this year's gift swap going? Start a Game, or take the demo for a spin first.</p>
         </div>
-      </section>
-      <div className="home-main">
-        <div className="home-slot" style={{ order: 1 }}>
-          <NewGame
-            session={session}
-            onTipNoteRead={() => setSession({ ...session, tipNoteRead: true })}
-            onOptionsSaved={(myOptions, alwaysMyOptions) => setSession({ ...session, myOptions, alwaysMyOptions })}
-          />
-        </div>
-        <div className="home-slot" style={{ order: 4 }}>
-          <MyGames />
-        </div>
-        <div className="home-slot" style={{ order: 5 }}>
-          <MyOrgs />
-        </div>
+        <SignOutButton />
+      </header>
+      <div className="home-actions">
+        <NewGame
+          session={session}
+          onTipNoteRead={() => setSession({ ...session, tipNoteRead: true })}
+          onOptionsSaved={(myOptions, alwaysMyOptions) => setSession({ ...session, myOptions, alwaysMyOptions })}
+        />
+        <DemoGame />
       </div>
-      <div className="home-side">
-        <section className="card playbook-card" style={{ order: 2 }}>
-          <h2>📖 Host's Guide</h2>
-          <p>
-            How the game works and how to run a smooth party: why several Players can go at once, how to use the turn
-            timer, the rules, and what every setting is for. A five-minute read, worth it before your first party.
-          </p>
-          <Link to="/guide">Read the Host's Guide</Link>
-        </section>
-        <div className="home-slot" style={{ order: 3 }}>
-          <DemoGame />
-        </div>
-        <div className="home-slot" style={{ order: 6 }}>
-          <TipJar />
-        </div>
-        <div className="home-slot" style={{ order: 7 }}>
-          <ContactForm email={session.email} />
-        </div>
-        <section className="card" style={{ order: 8 }}>
-          <SignedInAs email={session.email} />
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={session.feedbackOk}
-              onChange={(e) => {
-                const ok = e.target.checked;
-                setSession({ ...session, feedbackOk: ok });
-                void api.setFeedbackOk(ok);
-              }}
-            />
-            OK to contact me to ask how it went
-          </label>
+      <p className="home-guide">
+        📖 New to hosting? <Link to="/guide">Read the Host's Guide</Link>: how the game works and how to run a smooth
+        party, in five minutes.
+      </p>
+      <MyGames>
+        <MyOrgs />
+      </MyGames>
+      <footer className="home-foot" aria-label="About you">
+        <SignedInAs email={session.email} />
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={session.feedbackOk}
+            onChange={(e) => {
+              const ok = e.target.checked;
+              setSession({ ...session, feedbackOk: ok });
+              void api.setFeedbackOk(ok);
+            }}
+          />
+          OK to contact me to ask how it went
+        </label>
+        <p className="inline">
           <Link to="/about">About Elephant Exchange</Link>
           {session.admin && <Link to="/admin">Admin</Link>}
-        </section>
-      </div>
+        </p>
+        <TipLine />
+      </footer>
     </div>
   );
 }
 
 const phaseWords = { setup: "Not started", playing: "In progress", finalRound: "In progress", ended: "Finished" } as const;
 
-/** The Games this person runs, as Host or Co-host, newest first. */
-function MyGames() {
+/** The Games this person runs, as Host or Co-host, newest first; `children` go at the foot of the box. */
+function MyGames({ children }: { children?: ReactNode }) {
   const api = useApi();
   const [mine, setMine] = useState<MyGame[] | "loading" | "failed">("loading");
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -407,6 +400,7 @@ function MyGames() {
           ))}
         </ul>
       )}
+      {children}
     </section>
   );
 }

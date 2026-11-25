@@ -139,8 +139,7 @@ describe("The Host's Guide, up front", () => {
     const { signedIn } = await startServer();
     openApp(await signedIn("host@example.com"));
 
-    const card = await screen.findByRole("heading", { name: /host's guide/i });
-    expect(within(card.closest("section")!).getByRole("link", { name: /read the host's guide/i })).toHaveAttribute("href", "/guide");
+    expect(await screen.findByRole("link", { name: /read the host's guide/i })).toHaveAttribute("href", "/guide");
     await newGame();
     expect(within(screen.getByRole("heading", { name: /new game/i }).closest("form")!).getByRole("link", { name: /host's guide/i })).toBeInTheDocument();
   });
