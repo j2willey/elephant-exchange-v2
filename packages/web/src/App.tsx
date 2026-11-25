@@ -183,8 +183,8 @@ function TryDemo() {
         <section className="card">
           <h2>Try the demo</h2>
           <p className="muted">
-            A practice party of your own, with made-up guests, ready to start. No sign-up, nothing to install: pick how
-            many guests and go.
+            See how a swap runs with Elephant Exchange: watch the guided tour, or run a practice party of your own
+            with made-up guests. No sign-up, nothing to install.
           </p>
         </section>
       )}
