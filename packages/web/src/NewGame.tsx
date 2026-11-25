@@ -50,7 +50,10 @@ export function NewGame({
   if (!open)
     return (
       <>
-        <button onClick={() => (session.tipNoteRead ? setOpen(true) : setNoting(true))}>New Game</button>
+        {/* The same two buttons, in the same order and colors, as the front page's; signed in, the ▶ is on this one. */}
+        <button onClick={() => (session.tipNoteRead ? setOpen(true) : setNoting(true))}>
+          <span aria-hidden="true">▶ </span>Create a New Game
+        </button>
         {noting && (
           <TipNoteDialog
             onClose={() => setNoting(false)}

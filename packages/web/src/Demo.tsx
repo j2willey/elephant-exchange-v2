@@ -31,7 +31,7 @@ export function DemoGame({ startOpen = false }: { startOpen?: boolean }) {
   if (!open) {
     return (
       <button className="secondary" onClick={() => setOpen(true)}>
-        Try a demo game
+        Try a Demo
       </button>
     );
   }

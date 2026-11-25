@@ -11,8 +11,8 @@ describe("The landing page", () => {
 
     const hero = await screen.findByRole("region", { name: /what it is/i });
     expect(hero).toHaveTextContent(/white elephant gift swap/i);
-    expect(within(hero).getByRole("link", { name: /try the demo/i })).toHaveAttribute("href", "/try");
-    expect(within(hero).getByRole("link", { name: /host a game/i })).toHaveAttribute("href", "/login");
+    expect(within(hero).getByRole("link", { name: /^try a demo$/i })).toHaveAttribute("href", "/try");
+    expect(within(hero).getByRole("link", { name: /^create a new game$/i })).toHaveAttribute("href", "/login");
     expect(within(hero).getByRole("link", { name: /enter your code/i })).toHaveAttribute("href", "/join");
 
     // Each problem in the same row as its answer.
@@ -41,10 +41,29 @@ describe("The landing page", () => {
     expect(screen.getByRole("link", { name: /about elephant exchange/i })).toHaveAttribute("href", "/about");
   });
 
-  it("sends Host a Game to signing in", async () => {
+  it("has the same two start buttons as a signed-in Host's home, in the same order and colors; only the ▶ moves", async () => {
+    const { origin, signedIn } = await startServer();
+    openApp(browser(origin));
+    const signedOut = within(await screen.findByRole("region", { name: /what it is/i })).getAllByRole("link", { name: /new game|demo/i });
+    expect(signedOut.map((b) => [b.textContent, b.classList.contains("secondary-button")])).toEqual([
+      ["Create a New Game", false],
+      ["▶ Try a Demo", true],
+    ]);
+    cleanup();
+
+    openApp(await signedIn("host@example.com"));
+    await screen.findByRole("button", { name: /^create a new game$/i });
+    const home = screen.getAllByRole("button", { name: /^(create a new game|try a demo)$/i });
+    expect(home.map((b) => [b.textContent, b.classList.contains("secondary")])).toEqual([
+      ["▶ Create a New Game", false],
+      ["Try a Demo", true],
+    ]);
+  });
+
+  it("sends Create a New Game to signing in", async () => {
     const { origin } = await startServer();
     openApp(browser(origin));
-    await userEvent.setup().click(await screen.findByRole("link", { name: /host a game/i }));
+    await userEvent.setup().click(await screen.findByRole("link", { name: /^create a new game$/i }));
 
     expect(await screen.findByRole("heading", { name: /sign in to host a game/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/email address/i)).toBeInTheDocument();

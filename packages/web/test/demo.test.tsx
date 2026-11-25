@@ -14,7 +14,7 @@ describe("A demo Game", () => {
     openApp(await signedIn("host@example.com"));
     const user = userEvent.setup();
 
-    await user.click(await screen.findByRole("button", { name: /try a demo game/i }));
+    await user.click(await screen.findByRole("button", { name: /try a demo/i }));
     const players = screen.getByLabelText(/how many players/i);
     await user.clear(players);
     await user.type(players, "6");
@@ -32,7 +32,7 @@ describe("A demo Game", () => {
     openApp(await signedIn("host@example.com"));
     const user = userEvent.setup();
 
-    await user.click(await screen.findByRole("button", { name: /try a demo game/i }));
+    await user.click(await screen.findByRole("button", { name: /try a demo/i }));
     await user.click(screen.getByRole("button", { name: /create demo game/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/very busy right now.*try again in a few minutes/i);
@@ -43,7 +43,7 @@ describe("A demo Game", () => {
     openApp(await signedIn("host@example.com"));
     const user = userEvent.setup();
 
-    await user.click(await screen.findByRole("button", { name: /try a demo game/i }));
+    await user.click(await screen.findByRole("button", { name: /try a demo/i }));
     const players = screen.getByLabelText(/how many players/i);
     expect(players).toHaveAttribute("min", "2");
     expect(players).toHaveAttribute("max", "50");
@@ -123,7 +123,7 @@ async function demoWith(count: number) {
   const host = await server.signedIn("host@example.com");
   openApp(host);
   const user = userEvent.setup();
-  await user.click(await screen.findByRole("button", { name: /try a demo game/i }));
+  await user.click(await screen.findByRole("button", { name: /try a demo/i }));
   await user.clear(screen.getByLabelText(/how many players/i));
   await user.type(screen.getByLabelText(/how many players/i), String(count));
   await user.click(screen.getByRole("button", { name: /create demo game/i }));

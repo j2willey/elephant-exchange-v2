@@ -3291,7 +3291,7 @@ kbd {
   white-space: nowrap;
 }
 
-/* New Game and Try a demo game: side by side, the same size. Whichever is opened takes the whole row for its form. */
+/* Create a New Game and Try a Demo: side by side, the same size. Whichever is opened takes the whole row for its form. */
 .home-actions {
   display: flex;
   flex-wrap: wrap;

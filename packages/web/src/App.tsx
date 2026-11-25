@@ -138,7 +138,7 @@ function TopBar() {
       {inGame ? null : signedIn ? (
         <SignOutButton />
       ) : (
-        // Signed out: the way back in, from any page (the front page's Host a Game form is the same thing, further down).
+        // Signed out: the way back in, from any page (the front page's Create a New Game leads to the same place).
         pathname !== "/sign-in" &&
         pathname !== "/login" && (
           <Link to="/login" className="sign-out">
@@ -392,7 +392,7 @@ function MyGames({ children }: { children?: ReactNode }) {
 }
 
 /** Where emailed links land: uses the link up once, then goes back where the person started (home if nowhere). */
-/** Signing in to host, from the front page's Host a Game and the top bar's Sign in: no password, an emailed link. */
+/** Signing in to host, from the front page's Create a New Game and the top bar's Sign in: no password, an emailed link. */
 function SignInPage() {
   const signedIn = useSignedIn();
   const navigate = useNavigate();

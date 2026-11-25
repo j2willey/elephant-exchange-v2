@@ -117,7 +117,7 @@ describe("A demo Game", () => {
     const ann = await signedIn("ann@willey.test");
     openApp(ann);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: /try a demo game/i }));
+    await user.click(await screen.findByRole("button", { name: /try a demo/i }));
     await user.click(screen.getByRole("button", { name: /create demo game/i }));
     await screen.findByRole("button", { name: /start game/i });
 
