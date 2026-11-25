@@ -9,7 +9,10 @@ import { LOOKS, type Look } from "./looks.js";
 /** The app's own colors, shown in a color picker when a Theme leaves that part unset. Kept in step with styles.css. */
 export const APP_COLORS = { color: "#b3202e", page: "#f6f4f1" };
 
-/** The Organizations this person is the Organizer of, and a way to create one; on the home screen. */
+/**
+ * The Organizations this person is the Organizer of, and a way to create one: tucked inside Your Games on the home
+ * screen, folded away, since most Hosts just run a Game and never need one. Open from the start for anyone who has one.
+ */
 export function MyOrgs() {
   const api = useApi();
   const navigate = useNavigate();
@@ -17,10 +20,15 @@ export function MyOrgs() {
   const [name, setName] = useState("");
   const [failed, setFailed] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     let current = true;
-    api.myOrgs().then((loaded) => current && setOrgs(loaded));
+    api.myOrgs().then((loaded) => {
+      if (!current) return;
+      setOrgs(loaded);
+      if (loaded.length > 0) setOpen(true);
+    });
     return () => {
       current = false;
     };
@@ -36,56 +44,58 @@ export function MyOrgs() {
   }
 
   return (
-    <section className="card" aria-label="Your Organizations">
-      <h2>Your Organizations</h2>
-      <p className="muted hint">
-        Optional. An Organization is a saved look (colors, logo, background) that dresses up every Game you run for it. To
-        start a Game, use New Game above.
-      </p>
-      {orgs && orgs.length > 0 && (
-        <ul className="my-games">
-          {orgs.map((o) => (
-            <li key={o.id} aria-label={o.name}>
-              <span className="row-with-delete">
-                <Link to={`/orgs/${o.id}`}>{o.name}</Link>
-                {deleting !== o.id && (
-                  <button className="link danger" aria-label={`Delete ${o.name}`} onClick={() => setDeleting(o.id)}>
-                    Delete
-                  </button>
+    <details className="my-orgs" open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
+      <summary>🎨 Organizations {orgs && orgs.length > 0 ? `(${orgs.length})` : "(optional)"}</summary>
+      <section aria-label="Your Organizations">
+        <p className="muted hint">
+          Optional, for Hosts of more than one group: an Organization is a saved look (colors, logo, background) that dresses
+          up every Game you run for it, say one for work and one for the neighborhood. To start a Game, use New Game above.
+        </p>
+        {orgs && orgs.length > 0 && (
+          <ul className="my-games">
+            {orgs.map((o) => (
+              <li key={o.id} aria-label={o.name}>
+                <span className="row-with-delete">
+                  <Link to={`/orgs/${o.id}`}>{o.name}</Link>
+                  {deleting !== o.id && (
+                    <button className="link danger" aria-label={`Delete ${o.name}`} onClick={() => setDeleting(o.id)}>
+                      Delete
+                    </button>
+                  )}
+                </span>
+                {deleting === o.id && (
+                  <ConfirmDelete
+                    question={`Delete ${o.name} and its colors, logo and background? Games that used its look keep going, in the app's own colors. This can't be undone.`}
+                    yes={`Yes, delete ${o.name}`}
+                    onNo={() => setDeleting(null)}
+                    onYes={async () => {
+                      const ok = await api.deleteOrg(o.id);
+                      if (ok) {
+                        setDeleting(null);
+                        setOrgs((list) => list && list.filter((x) => x.id !== o.id));
+                      }
+                      return ok;
+                    }}
+                  />
                 )}
-              </span>
-              {deleting === o.id && (
-                <ConfirmDelete
-                  question={`Delete ${o.name} and its colors, logo and background? Games that used its look keep going, in the app's own colors. This can't be undone.`}
-                  yes={`Yes, delete ${o.name}`}
-                  onNo={() => setDeleting(null)}
-                  onYes={async () => {
-                    const ok = await api.deleteOrg(o.id);
-                    if (ok) {
-                      setDeleting(null);
-                      setOrgs((list) => list && list.filter((x) => x.id !== o.id));
-                    }
-                    return ok;
-                  }}
-                />
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-      <form className="stack" onSubmit={create}>
-        <label htmlFor="new-org">New Organization's name</label>
-        <input id="new-org" required maxLength={100} placeholder="Troop 7" value={name} onChange={(e) => setName(e.target.value)} />
-        <button type="submit" className="secondary" disabled={!name.trim()}>
-          Create Organization
-        </button>
-        {failed && (
-          <p className="error" role="alert">
-            That didn't work. Please try again.
-          </p>
+              </li>
+            ))}
+          </ul>
         )}
-      </form>
-    </section>
+        <form className="stack" onSubmit={create}>
+          <label htmlFor="new-org">New Organization's name</label>
+          <input id="new-org" required maxLength={100} placeholder="Troop 7" value={name} onChange={(e) => setName(e.target.value)} />
+          <button type="submit" className="secondary" disabled={!name.trim()}>
+            Create Organization
+          </button>
+          {failed && (
+            <p className="error" role="alert">
+              That didn't work. Please try again.
+            </p>
+          )}
+        </form>
+      </section>
+    </details>
   );
 }
 

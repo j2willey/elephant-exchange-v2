@@ -2248,6 +2248,19 @@ a.button.secondary-button {
   justify-self: start;
 }
 
+/* The tip note on New Game: Continue, Not now, and the tip at the far end. */
+.tip-note-actions {
+  flex-wrap: wrap;
+}
+
+.tip-note-actions > * {
+  white-space: nowrap;
+}
+
+.tip-note-actions .tip-link {
+  margin-left: auto;
+}
+
 /* A row on the home screen: its name, and Delete at the far end. */
 .row-with-delete {
   display: flex;
@@ -3191,43 +3204,108 @@ kbd {
 }
 
 /*
- * The signed-in home screen. On a phone, one column: the two column boxes step aside (display: contents) and their
- * cards fall into one list, in the order of their slots' numbers. On a laptop, the welcome across the top, then
- * running Games (New Game, Your Games) in a wide column with everything else beside it.
+ * The signed-in home screen: one column, a little wider than the other pages on a laptop. Its heading carries the
+ * app's name and Sign out, in place of the bar the other pages have.
  */
-.home-wide > .home-main,
-.home-wide > .home-side {
-  display: contents;
+.page:has(.home-hero) {
+  max-width: 44rem;
 }
 
-.home-slot {
+.home-hero {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.home-hero > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.home-title {
+  margin: 0 0 4px;
+  font-size: clamp(1.15rem, 5vw, 1.9rem);
+  color: var(--page-heading);
+}
+
+.home-hero p {
+  margin: 0;
+}
+
+/* On a phone, a smaller medallion leaves room for the name and the hello. */
+@media (max-width: 30rem) {
+  .home-hero {
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .home-hero .home-medallion {
+    width: 56px;
+    align-self: flex-start;
+  }
+}
+
+.home-hero .sign-out {
+  align-self: flex-start;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+/* New Game and Try a demo game: side by side, the same size. Whichever is opened takes the whole row for its form. */
+.home-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.home-actions > * {
+  flex: 1 1 12rem;
+}
+
+.home-actions > form {
+  flex-basis: 100%;
+}
+
+.home-actions > button {
+  padding-block: 14px;
+  font-size: 1.05rem;
+}
+
+.home-guide,
+.home-foot {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+}
+
+.home-foot {
   display: grid;
+  gap: 8px;
+  font-size: 0.95rem;
 }
 
-.home-slot:empty {
-  display: none;
+.home-foot p,
+.home-foot .signed-in-as {
+  margin: 0;
 }
 
-@media (min-width: 60rem) {
-  .page:has(.home-wide) {
-    max-width: 76rem;
-  }
+/* Organizations, folded away at the foot of Your Games. */
+.my-orgs {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
 
-  .home-wide {
-    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-    align-items: start;
-  }
+.my-orgs summary {
+  cursor: pointer;
+  font-weight: 600;
+}
 
-  .home-wide > .home-welcome {
-    grid-column: 1 / -1;
-  }
-
-  .home-wide > .home-main,
-  .home-wide > .home-side {
-    display: grid;
-    gap: 16px;
-    align-content: start;
-  }
+.my-orgs > section {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
 }
 
 /* The admin's Stats page: unique visitors a day (Visitors.tsx). One series in the accent color, recessive grid. */

@@ -92,9 +92,13 @@ describe("The tip jar", () => {
     expect(tipLink()).toHaveAttribute("href", "https://ko-fi.com/jimwilley");
     cleanup();
 
+    // On the Host's home, just the link, at the foot by itself: the note itself comes with their first New Game.
     openApp(await signedIn("host@example.com"));
     await screen.findByRole("button", { name: /new game/i });
-    expect(tipLink()).toHaveAttribute("href", "https://ko-fi.com/jimwilley");
+    expect(screen.queryByRole("region", { name: /a note from jim/i })).not.toBeInTheDocument();
+    const homeTip = within(screen.getByRole("contentinfo", { name: /about you/i })).getByRole("link", { name: /leave a tip/i });
+    expect(homeTip).toHaveAttribute("href", "https://ko-fi.com/jimwilley");
+    expect(homeTip).toHaveAttribute("target", "_blank");
   });
 
   it("is never shown in a Game", async () => {

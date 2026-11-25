@@ -200,9 +200,21 @@ function TipNoteText() {
   );
 }
 
+/** On the Host's home, at the foot, by itself: for a Host who'd like to leave a tip after all. */
+export function TipLine() {
+  return (
+    <p className="tip-line">
+      Enjoying Elephant Exchange?{" "}
+      <a href={TIP_URL} target="_blank" rel="noopener noreferrer">
+        ☕ Leave a tip
+      </a>
+    </p>
+  );
+}
+
 function TipLink() {
   return (
-    <a className="button" href={TIP_URL} target="_blank" rel="noopener noreferrer">
+    <a className="button tip-link" href={TIP_URL} target="_blank" rel="noopener noreferrer">
       ☕ Leave a tip
     </a>
   );
@@ -219,18 +231,19 @@ export function TipNoteDialog({ onContinue, onClose }: { onContinue: (read: bool
       <div role="dialog" aria-modal="true" aria-label="A note from Jim" className="card lc-dialog tip-jar" onClick={(e) => e.stopPropagation()}>
         <h2>A note from Jim</h2>
         <TipNoteText />
-        <TipLink />
         <label className="check">
           <input type="checkbox" checked={read} onChange={(e) => setRead(e.target.checked)} />
           I've read and considered this <span className="muted">(this note won't show again)</span>
         </label>
-        <div className="inline">
-          <button type="button" className="secondary" onClick={onClose}>
-            Not now
-          </button>
+        {/* Continue first, where the eye lands; the tip last, on its own, for whoever wants it. */}
+        <div className="inline tip-note-actions">
           <button type="button" onClick={() => onContinue(read)}>
             Continue
           </button>
+          <button type="button" className="secondary" onClick={onClose}>
+            Not now
+          </button>
+          <TipLink />
         </div>
       </div>
     </div>
