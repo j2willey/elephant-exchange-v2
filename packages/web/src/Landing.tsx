@@ -126,7 +126,8 @@ export function Landing() {
           </li>
         </ol>
         <p className="muted">
-          Made for big parties of 25 or more: office holiday parties, family reunions, troops and clubs.{" "}
+          Made for big parties of 25 or more: office holiday parties, family reunions, troops and clubs. (The bigger the
+          party, the more it helps keep the fun going and the whole room in it.){" "}
           <Link to="/guide">Read the Host's Guide</Link> for running a smooth one, starting with the{" "}
           <Link to="/guide#before-the-party">three things to do before the party</Link>.
         </p>
