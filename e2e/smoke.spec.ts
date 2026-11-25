@@ -30,7 +30,7 @@ const run = Date.now().toString(36);
 test("a Host runs a Game while a guest follows along on their phone", async ({ browser }) => {
   const host = await (await browser.newContext()).newPage();
   await host.goto("/");
-  await host.getByRole("link", { name: /host a game/i }).click(); // from the front page
+  await host.getByRole("link", { name: /create a new game/i }).click(); // from the front page
   await signIn(host, `host-${run}@example.com`);
 
   // A new Host first sees Jim's tip note; ticking it means the next New Game goes straight to the form.

@@ -69,11 +69,12 @@ export function Landing() {
           screen shows everyone everything.
         </p>
         <div className="landing-ctas">
-          <Link to="/try" className="button">
-            ▶ Try the demo
+          {/* The same two buttons, in the same order and colors, as a signed-in Host's home; here the ▶ is on the demo. */}
+          <Link to="/login" className="button">
+            Create a New Game
           </Link>
-          <Link to="/login" className="button secondary-button">
-            Host a Game
+          <Link to="/try" className="button secondary-button">
+            <span aria-hidden="true">▶ </span>Try a Demo
           </Link>
         </div>
         <p className="landing-party-link">
@@ -180,7 +181,7 @@ export function AboutPage() {
       </section>
       <p className="inline">
         <Link to="/try" className="button">
-          ▶ Try the demo
+          <span aria-hidden="true">▶ </span>Try a Demo
         </Link>
         <Link to="/guide" className="button secondary-button">
           📖 The Host's Guide
