@@ -56,7 +56,8 @@ describe("A Game's Theme", () => {
     const phone = openApp(browser(origin), `/games/${id}`);
     const logo = await screen.findByRole("img", { name: /lodge 22 logo/i });
     expect(logo.getAttribute("src")).toMatch(new RegExp(`^/api/orgs/${org}/logo\\?v=`));
-    expect(cssVar("--page-image")).toMatch(new RegExp(`url\\("/api/orgs/${org}/background\\?v=[^"]+"\\)`));
+    // The background is set a moment after the page draws (failed once in CI, read too soon).
+    await waitFor(() => expect(cssVar("--page-image")).toMatch(new RegExp(`url\\("/api/orgs/${org}/background\\?v=[^"]+"\\)`)));
     phone.unmount();
 
     openApp(browser(origin), `/games/${id}/screen`);
