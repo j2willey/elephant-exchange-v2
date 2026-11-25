@@ -8,6 +8,7 @@ import medallion from "./assets/medallion.webp";
 import { Backdrop } from "./Backdrop.js";
 import party from "./assets/landing-party.webp";
 import { TipList } from "./HostTips.js";
+import { HowItWorksSketch } from "./HowItWorksSketch.js";
 
 /** Each "sound familiar?" moment, and what the app does about it: problem on the left, answer on the right. */
 const PAIRS = [
@@ -112,6 +113,7 @@ export function Landing() {
 
       <section className="card" aria-label="How it works">
         <h2>How it works</h2>
+        <HowItWorksSketch />
         <ol className="landing-steps">
           <li>
             <strong>Create a Game</strong> and paste in your guest list, or let guests sign themselves up on their phones.

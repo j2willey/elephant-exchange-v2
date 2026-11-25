@@ -171,7 +171,7 @@ label {
 
 input {
   width: 100%;
-  padding: 12px;
+  padding: 8px;
   font: inherit; /* 16px or more stops iPhones zooming in on focus */
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -397,7 +397,7 @@ button.link {
 textarea,
 select {
   width: 100%;
-  padding: 12px;
+  padding: 8px;
   font: inherit;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -1646,7 +1646,7 @@ label.check input {
 }
 
 .lc-players li.lc-up {
-  padding: 12px;
+  padding: 8px;
   background: color-mix(in srgb, var(--brand) 9%, var(--surface));
   border-left: 5px solid var(--brand);
 }
@@ -1871,7 +1871,7 @@ label.check input {
 .catalog-card {
   align-content: start;
   gap: 8px;
-  padding: 12px;
+  padding: 8px;
 }
 
 .catalog-card.frozen {
@@ -3176,7 +3176,7 @@ button.info {
   display: grid;
   grid-template-rows: auto 1fr;
   gap: 12px;
-  padding: 12px;
+  padding: 8px;
   background-color: var(--page);
   background-image: var(--page-image, none);
   background-size: cover;
@@ -3624,4 +3624,47 @@ kbd {
 
 .host-tip-actions {
   margin-top: 6px;
+}
+
+/*
+ * How it works sketch (HowItWorksSketch.tsx): hand-drawn, in Kalam (SIL Open Font License, assets/fonts/Kalam-OFL.txt,
+ * cut down to Latin). Wide layout side by side; on a phone, the stacked one.
+ */
+@font-face {
+  font-family: "EE Sketch";
+  src: url("./assets/fonts/kalam-regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "EE Sketch";
+  src: url("./assets/fonts/kalam-bold.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+.how-sketch {
+  margin: 4px 0 16px;
+  padding: 8px;
+  background: #fffdf7;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font-family: "EE Sketch", "Comic Sans MS", cursive;
+}
+.how-sketch svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.how-sketch-tall {
+  display: none !important;
+  max-width: 460px;
+  margin: 0 auto;
+}
+@media (max-width: 640px) {
+  .how-sketch-wide {
+    display: none !important;
+  }
+  .how-sketch-tall {
+    display: block !important;
+  }
 }
