@@ -36,7 +36,8 @@ const PAIRS = [
     problem: "By the end, part of the room has drifted off to the snacks.",
     icon: "⭐",
     title: "The whole room stays in it",
-    answer: "On their phones, guests can star the gifts they're after, see who's on deck, and vote for the Worst Gift at the end.",
+    answer:
+      "Guests stay engaged from the first gift to the last: following along on their phones, they can star the gifts they're after, see who's on deck, and vote for the Worst Gift at the end.",
   },
 ] as const;
 
