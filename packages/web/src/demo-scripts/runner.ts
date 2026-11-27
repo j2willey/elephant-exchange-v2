@@ -48,6 +48,8 @@ export function createRunner(api: Api, script: DemoScript, { onDrift }: RunnerOp
   let current: Game | null = null;
   let at = 0;
   let closed = false;
+  /** Whether this tour has made its first Game: only that one counts as a demo started (Back and Restart make more). */
+  let started = false;
 
   /** One demo Game, and the script's names, Gift keys and Post refs in it. */
   interface Game {
@@ -61,7 +63,8 @@ export function createRunner(api: Api, script: DemoScript, { onDrift }: RunnerOp
 
   async function create(): Promise<Game> {
     await api.startVisitor();
-    const id = await api.createGame({ name: script.game.name, options: script.game.options, demo: true });
+    const id = await api.createGame({ name: script.game.name, options: script.game.options, demo: true, ...(started ? {} : { demoStart: "guided" as const }) });
+    started = true;
     await api.setGameOptions(id, {
       ...(script.game.tagline ? { tagline: script.game.tagline } : {}),
       postsPerMinute: script.game.postsPerMinute ?? 0,

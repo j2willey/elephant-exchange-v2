@@ -26,6 +26,18 @@ describe("The guided tour's runner", () => {
     expect((await api.posts(runner.gameId()!)).length).toBeGreaterThan(5);
   });
 
+  it("counts as one demo started, however often Back and Restart build a fresh Game", async () => {
+    const { signedIn } = await startServer({ adminEmails: ["boss@example.org"] });
+    const api = await signedIn("host@example.com");
+    const runner = createRunner(api, script);
+    await runner.show(3);
+    await runner.show(1); // Back
+    await runner.show(0); // Restart
+
+    const stats = await (await signedIn("boss@example.org")).adminStats();
+    expect(stats !== "notFound" && stats.insights.demosStarted).toEqual([{ day: expect.any(String), self: 0, guided: 1 }]);
+  });
+
   it("goes back by building a fresh Game up to that step, and deletes the one before", async () => {
     const { signedIn } = await startServer();
     const api = await signedIn("host@example.com");

@@ -6,8 +6,9 @@ import { monitorEventLoopDelay } from "node:perf_hooks";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { and, asc, desc, eq, inArray, isNotNull, like, lte, sql } from "drizzle-orm";
+import { basename, join } from "node:path";
+import { backup } from "./backup.js";
+import { and, asc, count, desc, eq, inArray, isNotNull, like, lte, sql } from "drizzle-orm";
 import { Hono, type Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import {
@@ -142,6 +143,9 @@ export const buildOf = (indexHtml: string) => /\/assets\/index-([\w-]+)\.js/.exe
 
 /** Contact-form messages one address may send in an hour, and how many are emailed to Jim a day (the rest wait on the Feedback page). */
 export const CONTACTS_PER_HOUR = 5;
+/** A demo visitor this new may be in the middle of their demo: Delete demo data leaves them be. */
+const DEMO_IN_PROGRESS_MS = 60 * 60_000;
+
 /** Demo visitors (trying it without signing in) one address may start in an hour: a party's worth of curious phones. */
 export const DEMO_VISITORS_PER_HOUR = 20;
 export const CONTACT_EMAILS_PER_DAY = 50;
@@ -658,6 +662,8 @@ export function createServer({
       if (remember === false) tx.update(users).set({ alwaysMyOptions: false }).where(eq(users.email, email)).run();
     });
     stats.gameCreated(id, { choice: start ?? null, looked, options });
+    // A durable count, so deleting demo Games never changes it (ADR-0005).
+    if (body.data.demo && body.data.demoStart) stats.countToday(`demosStarted:${body.data.demoStart}`);
     return c.json({ id }, 201);
   });
 
@@ -1038,7 +1044,7 @@ export function createServer({
   }
 
   // The admin pages' routes (admin-routes.ts); only for ADMIN_EMAILS, checked just above.
-  app.route("/", adminRoutes({ db, now, load: (id) => load(id)!, stats, said, health, signInEmailCap: linkLimits.perDay, photoBytes: () => photos.bytes(), deleteGame, visitorDays: visitors.lastDays, store, themeImages }));
+  app.route("/", adminRoutes({ db, now, load: (id) => load(id)!, stats, said, health, signInEmailCap: linkLimits.perDay, photoBytes: () => photos.bytes(), deleteGame, visitorDays: visitors.lastDays, store, themeImages, demoData: { preview: previewDemoData, remove: removeDemoData } }));
 
   // Anything else under /api is a mistake, never a page of the app.
   app.all("/api/*", (c) => c.json({ error: "Not found" }, 404));
@@ -1107,21 +1113,59 @@ export function createServer({
     return lifecycle.forgetIdle(before, (id) => (io?.sockets.adapter.rooms.get(id)?.size ?? 0) > 0);
   }
 
-  /** Lets go of demo visitors (and their demo Games) after VISITOR_DAYS. Returns how many visitors went. */
-  function sweepVisitors(): number {
-    const cutoff = new Date(now().getTime() - VISITOR_DAYS * 24 * 60 * 60_000);
-    const gone = db
+  /**
+   * The demo visitors (stand-in accounts, see VISITOR_DOMAIN) made at `cutoff` or before, the demo Games they host,
+   * and the Photos in those Games. A real signed-in Host's Games, demo or not, are never among them.
+   */
+  function visitorDemoData(cutoff: Date) {
+    const visitorRows = db
       .select({ id: users.id, email: users.email })
       .from(users)
       .where(and(like(users.email, `%@${VISITOR_DOMAIN}`), lte(users.createdAt, cutoff)))
       .all();
-    for (const visitor of gone) {
-      const hosted = db.select({ gameId: gameHosts.gameId }).from(gameHosts).where(eq(gameHosts.email, visitor.email)).all();
-      for (const { gameId } of hosted) deleteGame(gameId);
+    const emails = visitorRows.map((v) => v.email);
+    const gameIds = emails.length
+      ? db
+          .selectDistinct({ id: gameHosts.gameId })
+          .from(gameHosts)
+          .innerJoin(games, eq(games.id, gameHosts.gameId))
+          .where(and(eq(gameHosts.role, "host"), eq(games.demo, true), inArray(gameHosts.email, emails)))
+          .all()
+          .map((g) => g.id)
+      : [];
+    const photos = gameIds.length ? db.select({ n: count() }).from(posts).where(and(inArray(posts.gameId, gameIds), isNotNull(posts.photoWidth))).get()!.n : 0;
+    return { visitorRows, gameIds, photos };
+  }
+
+  /** Deletes what visitorDemoData found: the Games (with their Players, Gifts, Posts, Photos, votes), then the visitors. */
+  function removeVisitorDemoData({ visitorRows, gameIds }: ReturnType<typeof visitorDemoData>) {
+    for (const id of gameIds) deleteGame(id);
+    for (const visitor of visitorRows) {
       db.delete(sessions).where(eq(sessions.userId, visitor.id)).run();
       db.delete(users).where(eq(users.id, visitor.id)).run();
     }
-    return gone.length;
+  }
+
+  /** Lets go of demo visitors (and their demo Games) after VISITOR_DAYS. Returns how many visitors went. */
+  function sweepVisitors(): number {
+    const found = visitorDemoData(new Date(now().getTime() - VISITOR_DAYS * 24 * 60 * 60_000));
+    removeVisitorDemoData(found);
+    return found.visitorRows.length;
+  }
+
+  /**
+   * The admin's Delete demo data: every demo visitor and their demo Games now, not after VISITOR_DAYS, except a
+   * visitor less than DEMO_IN_PROGRESS_MS old, whose demo may be under way. A backup first; if it fails, nothing goes.
+   */
+  function previewDemoData() {
+    const { visitorRows, gameIds, photos } = visitorDemoData(new Date(now().getTime() - DEMO_IN_PROGRESS_MS));
+    return { games: gameIds.length, visitors: visitorRows.length, photos };
+  }
+  async function removeDemoData() {
+    const saved = dbPath === ":memory:" || !backupsDir ? null : await backup({ dbPath, dir: backupsDir, now: now() });
+    const found = visitorDemoData(new Date(now().getTime() - DEMO_IN_PROGRESS_MS));
+    removeVisitorDemoData(found);
+    return { games: found.gameIds.length, visitors: found.visitorRows.length, photos: found.photos, backup: saved ? basename(saved) : null };
   }
 
   /** Clears out what's kept only for a while: old sign-in records, Photos past their time, demo visitors, Games nobody's using. */

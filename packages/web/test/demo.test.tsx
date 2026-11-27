@@ -53,6 +53,18 @@ describe("A demo Game", () => {
     expect(await screen.findByRole("link", { name: /watch the guided tour/i })).toHaveAttribute("href", "/guided/happy-path");
   });
 
+  it("counts as a demo started, in the admin's statistics", async () => {
+    const { signedIn } = await startServer({ adminEmails: ["boss@example.org"] });
+    openApp(await signedIn("host@example.com"));
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /try a demo/i }));
+    await user.click(screen.getByRole("button", { name: /create demo game/i }));
+    await screen.findByRole("button", { name: /start game/i });
+
+    const stats = await (await signedIn("boss@example.org")).adminStats();
+    expect(stats !== "notFound" && stats.insights.demosStarted).toEqual([{ day: expect.any(String), self: 1, guided: 0 }]);
+  });
+
   it("asks for at least 2 Players", async () => {
     const { signedIn } = await startServer();
     openApp(await signedIn("host@example.com"));

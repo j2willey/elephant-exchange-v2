@@ -39,6 +39,11 @@ export const createGameBody = z.object({
   /** Made with "Try a demo game". */
   demo: z.boolean().default(false),
   /**
+   * A demo someone started, for the statistics' Demos started: from Create demo game ("self"), or a guided tour's
+   * first Game ("guided"; its Back and Restart make more, which don't say so).
+   */
+  demoStart: z.enum(["self", "guided"]).optional(),
+  /**
    * How the Host chose the options, for the statistics: the recommended ones, their own this time ("customized"), or
    * their saved ones. `looked`: they opened the full list of options, whatever they chose.
    */

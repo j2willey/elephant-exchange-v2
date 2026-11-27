@@ -69,6 +69,8 @@ export interface NewGameRequest {
   /** "Always start with these settings", ticked (true) or not (false); left out when the list wasn't shown. */
   remember?: boolean;
   demo?: boolean;
+  /** A demo someone started, for the statistics: Create demo game, or a guided tour's first Game. */
+  demoStart?: "self" | "guided";
 }
 
 
@@ -431,11 +433,24 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
       return res.ok ? ((await res.json()) as { people: number; games: number; organizations: number }) : undefined;
     },
 
+    /** What Delete demo data would delete: demo visitors' demo Games, their accounts, and the Photos in those Games. */
+    async adminDemoData(): Promise<{ games: number; visitors: number; photos: number } | undefined> {
+      const res = await fetchFn("/api/admin/demo-data");
+      return res.ok ? ((await res.json()) as { games: number; visitors: number; photos: number }) : undefined;
+    },
+
+    /** Deletes it, after a backup (its file name comes back); an error says why, when nothing was deleted. */
+    async adminDeleteDemoData(): Promise<{ games: number; visitors: number; photos: number; backup: string | null } | { error: string }> {
+      const res = await postJson("/api/admin/demo-data/delete", {});
+      if (res.ok) return (await res.json()) as { games: number; visitors: number; photos: number; backup: string | null };
+      return { error: ((await res.json().catch(() => ({}))) as { error?: string }).error ?? `Deleting failed: ${res.status}` };
+    },
+
     async signOut(): Promise<void> {
       await postJson("/api/auth/sign-out");
     },
 
-    async createGame({ name, orgId, options, start, looked, remember, demo }: NewGameRequest): Promise<string> {
+    async createGame({ name, orgId, options, start, looked, remember, demo, demoStart }: NewGameRequest): Promise<string> {
       const { activeSlots, maxSteals, ...rest } = options;
       const res = await postJson("/api/games", {
         settings: { activeSlots, maxSteals },
@@ -446,6 +461,7 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
         ...(looked ? { looked } : {}),
         ...(remember === undefined ? {} : { remember }),
         ...(demo ? { demo } : {}),
+        ...(demo && demoStart ? { demoStart } : {}),
       });
       if (res.status === 503) throw new ServerBusy();
       if (res.status !== 201) throw new Error(`creating a Game failed: ${res.status}`);

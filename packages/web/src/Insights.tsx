@@ -72,7 +72,8 @@ function weekOf(at: Date): Date {
  * the Game plays, which features get used, and when Games happen. Over played Games unless it says otherwise.
  */
 export function Insights({ insights, now = new Date() }: { insights: StatsInsights; now?: Date }) {
-  const { funnel, engagement, gameplay, features, returningHosts, startTimes, costs, demoVisitors } = insights;
+  const { funnel, engagement, gameplay, features, returningHosts, startTimes, costs, demoVisitors, demosStarted } = insights;
+  const demosOn = (d: { self: number; guided: number }) => d.self + d.guided;
   const starts = startTimes.map((t) => new Date(t));
   const played = starts.length;
 
@@ -95,6 +96,10 @@ export function Insights({ insights, now = new Date() }: { insights: StatsInsigh
   const today = now.toISOString().slice(0, 10);
   const emailsToday = costs.signInEmails.find((d) => d.day === today)?.count ?? 0;
   const busiestEmailDay = Math.max(0, ...costs.signInEmails.map((d) => d.count));
+  const fortnightAgo = new Date(now.getTime() - 13 * 24 * 60 * 60_000).toISOString().slice(0, 10);
+  const demosToday = demosOn(demosStarted.find((d) => d.day === today) ?? { self: 0, guided: 0 });
+  const demos14 = demosStarted.filter((d) => d.day >= fortnightAgo).reduce((n, d) => n + demosOn(d), 0);
+  const demosAll = demosStarted.reduce((n, d) => n + demosOn(d), 0);
 
   return (
     <>
@@ -186,6 +191,16 @@ export function Insights({ insights, now = new Date() }: { insights: StatsInsigh
             <dt>Demo tries without signing in, today · last 14 days</dt>
             <dd>
               {demoVisitors.find((d) => d.day === today)?.count ?? 0} · {demoVisitors.reduce((n, d) => n + d.count, 0)}
+            </dd>
+          </div>
+          <div>
+            <dt>Demos started, today · last 14 days · all</dt>
+            <dd>
+              {demosToday} · {demos14} · {demosAll}{" "}
+              <span className="muted small">
+                ({demosStarted.reduce((n, d) => n + d.self, 0)} demo games, {demosStarted.reduce((n, d) => n + d.guided, 0)} guided tours
+                {demosStarted.length > 0 && `, since ${demosStarted.at(-1)!.day}`})
+              </span>
             </dd>
           </div>
           <div>

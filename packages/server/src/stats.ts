@@ -1,6 +1,6 @@
 import type { VisitorDay } from "./visitors.js";
 import { createHmac, randomBytes } from "node:crypto";
-import { and, asc, count, desc, eq, gte, isNotNull, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, isNotNull, like, sql } from "drizzle-orm";
 import { activePlayers, evolve, newGame, OPTION_NAMES, RECOMMENDED_OPTIONS, type Event, type GameOptions, type GameSettings } from "@elephant/rules";
 import {
   appKeys,
@@ -70,6 +70,8 @@ export interface Insights {
   costs: { signInEmails: { day: string; count: number }[]; signInEmailCap: number; photoBytes: number };
   /** Demo visitors (people trying the demo without signing in), per day for the last 14 days. */
   demoVisitors: { day: string; count: number }[];
+  /** Demos started (Create demo game, and guided tours), per day since counting began, newest first. */
+  demosStarted: { day: string; self: number; guided: number }[];
   setup: SetupInsights;
 }
 
@@ -466,6 +468,19 @@ export function createStats(db: Db, now: () => Date) {
       .orderBy(desc(dailyCounts.day))
       .all();
 
+    const started = db
+      .select({ day: dailyCounts.day, name: dailyCounts.name, count: dailyCounts.count })
+      .from(dailyCounts)
+      .where(like(dailyCounts.name, "demosStarted:%"))
+      .all();
+    const demosStarted = [...new Set(started.map((r) => r.day))]
+      .sort()
+      .reverse()
+      .map((day) => {
+        const of = (kind: string) => started.find((r) => r.day === day && r.name === `demosStarted:${kind}`)?.count ?? 0;
+        return { day, self: of("self"), guided: of("guided") };
+      });
+
     const insights: Insights = {
       funnel: [
         { step: "signedIn", people: people.length },
@@ -507,6 +522,7 @@ export function createStats(db: Db, now: () => Date) {
       startTimes: counted.map((s) => s.g.firstPickAt!.toISOString()),
       costs: { signInEmails: emails, signInEmailCap, photoBytes },
       demoVisitors,
+      demosStarted,
       setup: setupInsights(real, counted, used, share),
     };
 
