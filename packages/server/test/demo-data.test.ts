@@ -34,7 +34,7 @@ async function setup() {
   };
   const admin = (path: string, init: RequestInit = {}) => app.request(path, { ...init, headers: { cookie: jim } });
   const later = (ms: number) => (at += ms);
-  return { app, sent, backupsDir, newGame, visitor, postPhoto, admin, later };
+  return { app, sent, backupsDir, newGame, visitor, postPhoto, admin, later, sweep: server.sweep };
 }
 
 describe("Delete demo data", () => {
@@ -99,5 +99,33 @@ describe("Demos started", () => {
     later(2 * HOUR);
     await admin("/api/admin/demo-data/delete", { method: "POST" });
     expect(await started()).toEqual([{ day: "2026-11-25", self: 1, guided: 1 }]);
+  });
+});
+
+describe("A visitor's demo Game", () => {
+  it("is deleted 48 hours after its last move or Post; the visitor stays, and a signed-in Host's demo is kept", async () => {
+    const { app, sent, newGame, visitor, later, sweep } = await setup();
+    const ted = await signIn(app, sent, "ted@novuz.example");
+    const tedsDemo = await newGame(ted, { name: "Demo game", demo: true });
+    const ann = await visitor();
+    const idle = await newGame(ann, { name: "Demo game", demo: true });
+    const bob = await visitor();
+    const played = await newGame(bob, { name: "Demo game", demo: true });
+    const chatty = await newGame(bob, { name: "Demo game", demo: true });
+    const opens = async (id: string) => (await app.request(`/api/games/${id}`, { headers: { cookie: ted } })).status;
+
+    later(40 * HOUR);
+    await app.request(`/api/games/${played}/commands`, post({ type: "AddPlayer", playerId: "p1", name: "Pia" }, bob)); // a move
+    await app.request(`/api/games/${chatty}/posts`, post({ text: "Still here", name: "Host" }, bob)); // a Post
+    later(9 * HOUR); // 49 hours in
+    expect(sweep().demoGamesExpired).toBe(1);
+    expect(await opens(idle)).toBe(404);
+    expect([await opens(played), await opens(chatty), await opens(tedsDemo)]).toEqual([200, 200, 200]);
+    // Ann's still a visitor: she can start another demo.
+    expect((await app.request("/api/games", post({ settings: { activeSlots: 1, maxSteals: 3 }, demo: true }, ann))).status).toBe(201);
+
+    later(40 * HOUR); // 49 hours after the move and the Post
+    sweep();
+    expect([await opens(played), await opens(chatty), await opens(tedsDemo)]).toEqual([404, 404, 200]);
   });
 });
