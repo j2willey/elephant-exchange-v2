@@ -143,6 +143,12 @@ export const buildOf = (indexHtml: string) => /\/assets\/index-([\w-]+)\.js/.exe
 
 /** Contact-form messages one address may send in an hour, and how many are emailed to Jim a day (the rest wait on the Feedback page). */
 export const CONTACTS_PER_HOUR = 5;
+/**
+ * A visitor's demo Game is deleted this long after its last move (or Post), so demos don't pile up. The visitor
+ * stays (their home still offers to host a real one) until VISITOR_DAYS.
+ */
+export const DEMO_GAME_HOURS = 48;
+
 /** A demo visitor this new may be in the middle of their demo: Delete demo data leaves them be. */
 const DEMO_IN_PROGRESS_MS = 60 * 60_000;
 
@@ -1149,6 +1155,29 @@ export function createServer({
     }
   }
 
+  /**
+   * Deletes visitors' demo Games DEMO_GAME_HOURS after their last move or Post (or their creation, if neither).
+   * A signed-in Host's own demos are theirs to keep. Returns how many went.
+   */
+  function expireDemoGames(): number {
+    const cutoff = now().getTime() - DEMO_GAME_HOURS * 60 * 60_000;
+    const demos = db
+      .selectDistinct({ id: games.id, createdAt: games.createdAt })
+      .from(games)
+      .innerJoin(gameHosts, and(eq(gameHosts.gameId, games.id), eq(gameHosts.role, "host")))
+      .where(and(eq(games.demo, true), like(gameHosts.email, `%@${VISITOR_DOMAIN}`)))
+      .all();
+    let expired = 0;
+    for (const { id, createdAt } of demos) {
+      const lastMove = db.select({ at: sql<number | null>`max(${gameEvents.createdAt})` }).from(gameEvents).where(eq(gameEvents.gameId, id)).get()?.at ?? 0;
+      const lastPost = db.select({ at: sql<number | null>`max(${posts.createdAt})` }).from(posts).where(eq(posts.gameId, id)).get()?.at ?? 0;
+      if (Math.max(createdAt.getTime(), lastMove, lastPost) > cutoff) continue;
+      deleteGame(id);
+      expired++;
+    }
+    return expired;
+  }
+
   /** Lets go of demo visitors (and their demo Games) after VISITOR_DAYS. Returns how many visitors went. */
   function sweepVisitors(): number {
     const found = visitorDemoData(new Date(now().getTime() - VISITOR_DAYS * 24 * 60 * 60_000));
@@ -1173,7 +1202,7 @@ export function createServer({
 
   /** Clears out what's kept only for a while: old sign-in records, Photos past their time, demo visitors, Games nobody's using. */
   function sweep() {
-    return { ...auth.sweep(), photos: sweepPhotos(), visitors: sweepVisitors(), visitorDays: visitors.sweep(), gamesForgotten: forgetIdleGames() };
+    return { ...auth.sweep(), photos: sweepPhotos(), visitors: sweepVisitors(), demoGamesExpired: expireDemoGames(), visitorDays: visitors.sweep(), gamesForgotten: forgetIdleGames() };
   }
 
   /** Serves HTTP and live updates on one port (0 picks a free one). Screens only listen; moves go over HTTP. */

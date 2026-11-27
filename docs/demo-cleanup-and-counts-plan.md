@@ -97,6 +97,10 @@ already counted today, since the address and browser are the same).
 
 ## #4: should demo games expire? (Jim's decision)
 
+**Decided 2026-11-27: a visitor's demo Game is deleted 48 hours after its last move or Post** (`DEMO_GAME_HOURS`,
+`expireDemoGames` in the hourly sweep). The visitor stays until `VISITOR_DAYS` (7), so their home still offers to
+host a real one. A signed-in Host's own demos aren't expired. What follows is the question as it was put.
+
 **They already do.** The server's hourly sweep (`sweepVisitors` in server.ts) deletes every demo visitor more than
 `VISITOR_DAYS` = 7 days old, with the demo Games they host. The 11/23 visitor goes on 11/30, by itself. So the pile
 is never more than a week deep; #1 clears it now rather than on a rolling 7 days.
