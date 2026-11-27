@@ -104,6 +104,8 @@ What a bubble points at, on the Host console's laptop layout (`LaptopConsole.tsx
 | `screen-switch` | `[role="group"][aria-label="Scoreboard shows"]` |
 | `invite` | the **🔗 Invite** button |
 
+`placement` (above, below, left, right, or auto) is the side the bubble prefers; if it doesn't fit, it takes the first that does (below, above, right, left). Wherever it goes, it keeps off the row of the Player who's up, since their 🎁 😈 buttons are what the viewer watches next: first by sliding along its side (the arrow still reaching the target), then by trying the next side. Only when no side is clear does it cover that row.
+
 If a target isn't on the page when its bubble shows (scrolled away, or a typo), the replay scrolls it into view; failing that it shows the bubble at the center and logs a warning in development.
 
 **Steals point at the Gift row, not "Select gift".** On the console a Steal is two presses: 😈 on the Player, then **Select gift** on the Gift. The Select gift buttons only appear after a real 😈 press (it's the console's own state), and the replay sends the Steal through the API, so a script points at `steal:Cat` for the first bubble and at `gift-row:blanket` for the second.

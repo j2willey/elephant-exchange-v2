@@ -319,9 +319,13 @@ function BubbleLayer({ bubble, onConsole, names }: { bubble: Bubble; onConsole: 
       scrolled = true;
       const frame = iframe.getBoundingClientRect();
       const scale = iframe.offsetWidth > 0 ? frame.width / iframe.offsetWidth : 1;
-      const box: Box = { left: frame.left - stage.left + r.left * scale, top: frame.top - stage.top + r.top * scale, width: r.width * scale, height: r.height * scale };
+      const toStage = (b: DOMRect): Box => ({ left: frame.left - stage.left + b.left * scale, top: frame.top - stage.top + b.top * scale, width: b.width * scale, height: b.height * scale });
+      const box = toStage(r);
+      // The player who's up: their row and its 🎁 😈 buttons are what the viewer watches next, so the bubble keeps off it.
+      const up = doc?.querySelector(".lc-players li.lc-up");
+      const avoid = up && up.getClientRects().length > 0 ? [toStage(up.getBoundingClientRect())] : [];
       setRing(box);
-      setSpot(placeBubble(box, size, { width: stage.width, height: stage.height }, bubble.placement ?? "auto"));
+      setSpot(placeBubble(box, size, { width: stage.width, height: stage.height }, bubble.placement ?? "auto", avoid));
     }
 
     place();
@@ -357,8 +361,14 @@ function BubbleLayer({ bubble, onConsole, names }: { bubble: Bubble; onConsole: 
 const GAP = 14;
 const MARGIN = 8;
 
-/** Where the bubble goes beside its target: the side asked for if it fits, else the first that does; and its arrow. */
-export function placeBubble(target: Box, size: { w: number; h: number }, stage: { width: number; height: number }, placement: "auto" | Side) {
+const overlaps = (a: Box, b: Box) => a.left < b.left + b.width && b.left < a.left + a.width && a.top < b.top + b.height && b.top < a.top + a.height;
+
+/**
+ * Where the bubble goes beside its target, and its arrow: the side asked for, else the first that fits (below, above,
+ * right, left). It keeps off the boxes in `avoid` (the row of the player who's up) when it can, sliding along its side
+ * first, then trying the next side; when nowhere is clear, it goes where it would have anyway.
+ */
+export function placeBubble(target: Box, size: { w: number; h: number }, stage: { width: number; height: number }, placement: "auto" | Side, avoid: Box[] = []) {
   const cx = target.left + target.width / 2;
   const cy = target.top + target.height / 2;
   const clampX = (x: number) => Math.max(MARGIN, Math.min(stage.width - size.w - MARGIN, x));
@@ -370,8 +380,36 @@ export function placeBubble(target: Box, size: { w: number; h: number }, stage: 
     left: { left: target.left - GAP - size.w, top: clampY(cy - size.h / 2), fits: target.left - GAP - size.w >= MARGIN },
   };
   const order: Side[] = [...(placement === "auto" ? [] : [placement]), "below", "above", "right", "left"];
-  const side = order.find((s) => at[s].fits) ?? "below";
-  const { left, top } = at[side];
+
+  /** Spots along this side, sliding past each box to avoid, so long as the arrow can still reach the target. */
+  function along(side: Side) {
+    const { left, top } = at[side];
+    const spots = [{ left, top }];
+    for (const a of avoid) {
+      if (side === "left" || side === "right") {
+        for (const y of [a.top - GAP / 2 - size.h, a.top + a.height + GAP / 2]) {
+          if (y >= MARGIN && y + size.h <= stage.height - MARGIN && y + 14 <= target.top + target.height && y + size.h - 14 >= target.top) spots.push({ left, top: y });
+        }
+      } else {
+        for (const x of [a.left - GAP / 2 - size.w, a.left + a.width + GAP / 2]) {
+          if (x >= MARGIN && x + size.w <= stage.width - MARGIN && x + 16 <= target.left + target.width && x + size.w - 16 >= target.left) spots.push({ left: x, top });
+        }
+      }
+    }
+    return spots.find((s) => !avoid.some((a) => overlaps({ ...s, width: size.w, height: size.h }, a)));
+  }
+
+  const fitting = order.filter((s) => at[s].fits);
+  let side: Side = fitting[0] ?? "below";
+  let { left, top } = at[side];
+  for (const s of fitting) {
+    const clear = along(s);
+    if (clear) {
+      side = s;
+      ({ left, top } = clear);
+      break;
+    }
+  }
   const y = Math.max(MARGIN, Math.min(stage.height - size.h - MARGIN, top));
   // The arrow sits on the edge facing the target, as near its middle as the bubble allows.
   const arrow = side === "below" || side === "above" ? Math.max(16, Math.min(size.w - 16, cx - left)) : Math.max(14, Math.min(size.h - 14, cy - y));
