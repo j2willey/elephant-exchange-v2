@@ -22,6 +22,7 @@ import { HighlightsLink } from "./HighlightsPage.js";
 import { BeforeTheParty } from "./HostTips.js";
 import { AskingToPlayPanel, AskToPlay, CopyInvitation, knownIn, useWatching, useWelcomeReturn, Welcome, WelcomeForm, WhenWhere } from "./Welcome.js";
 import { GiftPostsViewer, showGift } from "./GiftPosts.js";
+import { DemoHint } from "./Demo.js";
 
 /** `gameId`: the Game to show, when it isn't the one in the address (the front page's sample phone). */
 export function GamePage({ gameId }: { gameId?: string } = {}) {
@@ -163,6 +164,7 @@ export function GamePage({ gameId }: { gameId?: string } = {}) {
   if (wide) {
     return (
       <>
+      <DemoHint game={game} />
       <NamesToApprove game={game} changes={staffChanges} />
       <AskingToPlayPanel game={game} changes={staffChanges} />
       <LaptopConsole
@@ -188,6 +190,7 @@ export function GamePage({ gameId }: { gameId?: string } = {}) {
 
   return (
     <div className="stack">
+      <DemoHint game={game} />
       <section className="card">
         <ThemeLogo theme={game.theme} />
         <p className="eyebrow">Host console</p>

@@ -101,6 +101,33 @@ describe("The demo page", () => {
   });
 });
 
+describe("A demo Game's hint", () => {
+  const hint = () => screen.findByRole("note", { name: /how to run the demo/i });
+
+  it("tells the visitor they're the Host and what to press for the turn at hand, with the guided tour to watch instead", async () => {
+    const { signedIn } = await startServer();
+    const host = await signedIn("host@example.com");
+    const id = await host.createGame({ name: "Demo game", demo: true, options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3, rosterMode: "self", turnSeconds: 60 } });
+    for (const [playerId, name] of [["ann", "Ann"], ["bob", "Bob"]] as const) await host.command(id, { type: "AddPlayer", playerId, name });
+    openApp(host, `/games/${id}`);
+
+    expect(await hint()).toHaveTextContent(/you're the host.*press start game/i);
+    expect(within(await hint()).getByRole("link", { name: /watch the guided tour/i })).toHaveAttribute("href", "/guided/happy-path?autoplay");
+
+    await host.command(id, { type: "StartGame" });
+    await expect.poll(async () => (await hint()).textContent).toMatch(/it's (ann|bob)'s turn.*press 🎁.*press 😈/i);
+  });
+
+  it("isn't on a real Game", async () => {
+    const { signedIn } = await startServer();
+    const host = await signedIn("host@example.com");
+    const id = await host.createGame({ name: "Acme Holiday Party", options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3 } });
+    openApp(host, `/games/${id}`);
+    await screen.findByText(/acme holiday party/i);
+    expect(screen.queryByRole("note", { name: /how to run the demo/i })).not.toBeInTheDocument();
+  });
+});
+
 describe("A demo page's sample phone", () => {
   it("is that made-up Player's phone: the guest's view, posting as them", async () => {
     const { signedIn } = await startServer();

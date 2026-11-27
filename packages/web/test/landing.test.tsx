@@ -180,7 +180,7 @@ describe("Trying the demo from the front page", () => {
     expect(await screen.findByText(/no sign-up/i)).toBeInTheDocument();
     await user.click(await screen.findByRole("button", { name: /create demo game/i }));
     expect(await screen.findByRole("heading", { name: "Demo game" }, { timeout: 5000 })).toBeInTheDocument();
-    expect(await screen.findByText(/start game/i)).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /start game/i })).toBeInTheDocument();
 
     cleanup();
     openApp(visitor, "/");
