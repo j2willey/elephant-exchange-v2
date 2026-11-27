@@ -3683,3 +3683,18 @@ kbd {
 .landing-watch a {
   font-weight: 600;
 }
+
+/* Atop a demo Game the visitor runs: they're the Host, and what to press now. One flowing line, not the card's grid. */
+.demo-hint {
+  display: block;
+  margin: 0 0 12px;
+  padding: 12px 16px;
+  border-left: 4px solid var(--brand);
+  line-height: 1.5;
+}
+.demo-hint-watch {
+  white-space: nowrap;
+}
+.demo-hint-watch a {
+  font-weight: 600;
+}

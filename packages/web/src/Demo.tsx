@@ -2,7 +2,7 @@ import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { LAPTOP_WIDE } from "./screen-size.js";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { BUSY_MESSAGE, ServerBusy, type Api, type Emoji } from "./api.js";
+import { BUSY_MESSAGE, ServerBusy, type Api, type Emoji, type GameView } from "./api.js";
 import { useApi } from "./ApiContext.js";
 import giftTable from "./assets/demo-gift-table.webp";
 import { useLiveGame } from "./useLiveGame.js";
@@ -146,6 +146,31 @@ type DemoTab = "console" | "screen";
  * a phone that is one of the made-up Players. Each is the real page in a frame, so everything on it works; the phone
  * acts as its Player (the server allows that only in a demo Game, and only for its Hosts).
  */
+/** The guided tour, playing by itself: for a visitor who'd rather watch than run the demo. */
+export const WATCH_TOUR = "/guided/happy-path?autoplay";
+
+/**
+ * A line atop a demo Game the visitor runs themselves: they're the Host, and what to press for the turn at hand. Not
+ * in a frame (the guided tour and the demo page's own frames), where it would only repeat what's around it.
+ */
+export function DemoHint({ game }: { game: GameView }) {
+  if (!game.demo || game.role === null || window.self !== window.top) return null;
+  const name = (id: string) => game.players.find((p) => p.id === id)?.name ?? "a Player";
+  const up = game.active.map(name);
+  const who = up.length === 0 ? "" : up.length === 1 ? up[0]! : `${up.slice(0, -1).join(", ")} or ${up.at(-1)}`;
+  let what: string;
+  if (game.phase === "setup") what = "Press Start game to draw who goes first.";
+  else if (game.phase === "ended") what = "That's the whole swap. Try another, or host a real one for your party.";
+  else if (up.length === 0) what = "Every gift is opened: on to the Final Round.";
+  else if (game.phase === "finalRound") what = `Final Round: ${who} can keep their gift, or press 😈 to steal one.`;
+  else what = `It's ${who}'s turn. When they open a wrapped gift, press 🎁 and type in what it is; to steal one, press 😈, then pick the gift.`;
+  return (
+    <p className="card demo-hint" role="note" aria-label="How to run the demo">
+      <strong>You're the Host of this practice party.</strong> {what} <span className="demo-hint-watch">Rather watch? <Link to={WATCH_TOUR}>▶ Watch the guided tour</Link></span>
+    </p>
+  );
+}
+
 export function DemoPage() {
   const { id = "" } = useParams();
   const [game] = useLiveGame(id);
@@ -164,6 +189,8 @@ export function DemoPage() {
   ];
 
   return (
+    <>
+    <DemoHint game={game} />
     <div className="demo">
       <section className="demo-main" aria-label="Host">
         <div className="demo-tabs" role="tablist">
@@ -179,7 +206,7 @@ export function DemoPage() {
         ))}
         <p className="muted hint">
           Run the game here; the scoreboard and the phone follow along. <Link to={`/games/${id}`}>Open the Host console on its own</Link> ·{" "}
-          <Link to="/guided/happy-path">▶ Guided tour</Link>
+          <Link to={WATCH_TOUR}>▶ Guided tour</Link>
         </p>
       </section>
 
@@ -205,6 +232,7 @@ export function DemoPage() {
         )}
       </section>
     </div>
+    </>
   );
 }
 
