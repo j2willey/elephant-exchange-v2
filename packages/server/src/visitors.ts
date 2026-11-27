@@ -1,6 +1,6 @@
 import { createHmac, randomBytes } from "node:crypto";
 import { and, eq, gte, lt, sql } from "drizzle-orm";
-import { dailyCounts, visitorDays, visitorsSeen, type Db } from "./db.js";
+import { dailyCounts, refVisits, visitorDays, visitorsSeen, type Db } from "./db.js";
 
 /** Where a visitor first landed on a day. */
 export type Landing = "front" | "demo" | "game" | "other";
@@ -16,7 +16,9 @@ export interface VisitorDay {
   demo: number;
   game: number;
   other: number;
-  /** Visitors whose first page that day came from a ?ref= link (a post). */
+  /** Visitors who reached the demo that day (the demo, the guided tour), wherever they landed. */
+  triedDemo: number;
+  /** Visitors who came from a ?ref= link (a post) that day, on whichever page. */
   fromLinks: number;
   /** Link previews and crawlers (LinkedIn, Facebook, Slack, search engines, uptime checks): not visitors. */
   previews: number;
@@ -31,7 +33,7 @@ const ROBOT = /bot\b|bot\/|crawl|spider|slurp|externalhit|facebookcatalog|whatsa
 
 function landingOf(path: string): Landing {
   if (path === "/" || path === "/about" || path === "/guide" || path === "/playbook") return "front";
-  if (path === "/try" || path === "/sample" || /^\/games\/[^/]+\/demo$/.test(path)) return "demo";
+  if (path === "/try" || path === "/sample" || path.startsWith("/guided/") || /^\/games\/[^/]+\/demo$/.test(path)) return "demo";
   if (path.startsWith("/games/")) return "game";
   return "other";
 }
@@ -64,23 +66,58 @@ export function createVisitors(deps: { db: Db; now: () => Date }) {
       .run();
   }
 
+  const isRobot = (userAgent: string) => !userAgent.trim() || ROBOT.test(userAgent);
+  const fingerprintOf = (day: string, ip: string, userAgent: string) => createHmac("sha256", secretOf(day)).update(`${ip}\n${userAgent}`).digest("base64url");
+
+  /** True the first time today this visitor does `what` ("" for being here at all). Kept with the day's fingerprints. */
+  function firstToday(day: string, fingerprint: string, what: string): boolean {
+    const key = what ? `${fingerprint}|${what}` : fingerprint;
+    return db.insert(visitorsSeen).values({ day, fingerprint: key }).onConflictDoNothing().run().changes > 0;
+  }
+
+  /** Counted once a visitor a day, on whichever page it happens: reaching the demo, coming from a ?ref= link. */
+  function note(day: string, fingerprint: string, what: { demo?: boolean | undefined; ref?: string | undefined }) {
+    if (what.demo && firstToday(day, fingerprint, "demo")) add(day, "visitors:triedDemo");
+    if (what.ref) {
+      if (firstToday(day, fingerprint, "link")) add(day, "visitors:fromLinks");
+      // Each source once: someone who comes from LinkedIn and then Facebook counts for both.
+      if (firstToday(day, fingerprint, `ref:${what.ref}`))
+        db.insert(refVisits)
+          .values({ day, ref: what.ref, visits: 1 })
+          .onConflictDoUpdate({ target: [refVisits.day, refVisits.ref], set: { visits: sql`${refVisits.visits} + 1` } })
+          .run();
+    }
+  }
+
   /**
    * A browser loaded one of the app's pages. Says whether it was a new visitor today, one already counted, or a
-   * robot (a link preview or crawler, counted apart).
+   * robot (a link preview or crawler, counted apart). The first page of the day is where they landed; reaching the
+   * demo and a ?ref= count on any page.
    */
   function arrived(visit: { ip: string; userAgent: string; path: string; ref?: string | undefined }): "visitor" | "again" | "preview" {
     const day = dayOf(now());
-    if (!visit.userAgent.trim() || ROBOT.test(visit.userAgent)) {
+    if (isRobot(visit.userAgent)) {
       add(day, "previews");
       return "preview";
     }
-    const fingerprint = createHmac("sha256", secretOf(day)).update(`${visit.ip}\n${visit.userAgent}`).digest("base64url");
-    const isNew = db.insert(visitorsSeen).values({ day, fingerprint }).onConflictDoNothing().run().changes > 0;
-    if (!isNew) return "again";
-    add(day, "visitors");
-    add(day, `visitors:${landingOf(visit.path)}`);
-    if (visit.ref) add(day, "visitors:fromLinks");
-    return "visitor";
+    const fingerprint = fingerprintOf(day, visit.ip, visit.userAgent);
+    const isNew = firstToday(day, fingerprint, "");
+    if (isNew) {
+      add(day, "visitors");
+      add(day, `visitors:${landingOf(visit.path)}`);
+    }
+    note(day, fingerprint, { demo: landingOf(visit.path) === "demo", ref: visit.ref });
+    return isNew ? "visitor" : "again";
+  }
+
+  /**
+   * What the browser says happened inside the app, where the server sees no page load: it moved to the demo, or it
+   * arrived with a ?ref=. The same rules as a page load: once a visitor a day, robots not at all.
+   */
+  function told(visit: { ip: string; userAgent: string; demo?: boolean | undefined; ref?: string | undefined }) {
+    if (isRobot(visit.userAgent)) return;
+    const day = dayOf(now());
+    note(day, fingerprintOf(day, visit.ip, visit.userAgent), visit);
   }
 
   /** The last `n` days, oldest first, one row a day (zeros on a day nobody came). */
@@ -100,6 +137,7 @@ export function createVisitors(deps: { db: Db; now: () => Date }) {
       demo: count(day, "visitors:demo"),
       game: count(day, "visitors:game"),
       other: count(day, "visitors:other"),
+      triedDemo: count(day, "visitors:triedDemo"),
       fromLinks: count(day, "visitors:fromLinks"),
       previews: count(day, "previews"),
     }));
@@ -112,7 +150,7 @@ export function createVisitors(deps: { db: Db; now: () => Date }) {
     return db.delete(visitorDays).where(lt(visitorDays.day, today)).run().changes;
   }
 
-  return { arrived, lastDays, sweep };
+  return { arrived, told, lastDays, sweep };
 }
 
 export type Visitors = ReturnType<typeof createVisitors>;

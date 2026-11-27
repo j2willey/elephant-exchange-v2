@@ -24,14 +24,25 @@ import { Backdrop } from "./Backdrop.js";
 import { HighlightsPage } from "./HighlightsPage.js";
 import { WatchScreen } from "./WatchScreen.js";
 
+/** The demo's pages, as the statistics count them (landingOf in the server's visitors.ts). */
+export const isDemoPath = (path: string) => path === "/try" || path === "/sample" || path.startsWith("/guided/") || /^\/games\/[^/]+\/demo$/.test(path);
+
 export function AppRoutes() {
   const api = useApi();
-  const { search } = useLocation();
+  const { search, pathname } = useLocation();
   // Where this visitor came from (?ref=linkedin on a shared link): noted on arrival, not on every page after.
   const arrivedWith = useRef(search);
   useEffect(() => {
     api.noteArrival(arrivedWith.current);
   }, [api]);
+  // Reaching the demo, wherever they landed (the front page's Try a Demo, say): once a page load is enough, since
+  // the server counts it once a visitor a day.
+  const toldDemo = useRef(false);
+  useEffect(() => {
+    if (toldDemo.current || !isDemoPath(pathname)) return;
+    toldDemo.current = true;
+    api.noteDemo();
+  }, [api, pathname]);
   return (
     <main className="page">
       <TopBar />

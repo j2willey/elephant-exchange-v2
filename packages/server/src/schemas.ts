@@ -132,7 +132,8 @@ const email = z.string().trim().toLowerCase().pipe(z.email().max(254));
 
 /** `ref`: where they came from (?ref= on the link they followed), kept for the statistics if it's a plain word. */
 export const linkRequest = z.object({ email, next: returnPath.optional(), feedbackOk: z.boolean().default(false), ref: z.string().max(64).optional() });
-export const visitBody = z.object({ ref: z.string().max(64) });
+/** What the browser says happened where the server sees no page load: it arrived with ?ref=, or moved to the demo. */
+export const visitBody = z.object({ ref: z.string().max(64).optional(), demo: z.boolean().optional() });
 export const excludeBody = z.object({ excluded: z.boolean() });
 /** The features the browser reports itself (the server sees the rest); anything else sent is refused. */
 export const featureBody = z.object({ feature: z.enum(["rosterPaste", "share"]) });

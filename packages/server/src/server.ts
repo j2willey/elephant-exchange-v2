@@ -546,12 +546,15 @@ export function createServer({
     return c.body(null, 204);
   });
 
-  /** A browser that arrived from a ?ref= link (it says so once per source): for the statistics. */
+  /**
+   * For the statistics, what the browser saw that the server didn't: it arrived from a ?ref= link, or moved to the
+   * demo inside the app (visitors.ts counts each once a visitor a day). Not an admin checking.
+   */
   app.post("/api/stats/visit", async (c) => {
     const body = await parseBody(c, visitBody);
     if (!body.ok) return body.res;
-    const ref = cleanRef(body.data.ref);
-    if (ref) stats.recordVisit(ref);
+    if (!isAdmin(signedInAs(c)))
+      visitors.told({ ip: clientIp(c), userAgent: c.req.header("user-agent") ?? "", demo: body.data.demo, ref: cleanRef(body.data.ref) ?? undefined });
     return c.body(null, 204);
   });
 

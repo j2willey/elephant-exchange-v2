@@ -130,9 +130,15 @@ describe("Usage statistics", () => {
 
   it("credit visits and sign-ups to where they came from", async () => {
     const { app, stats, signInFrom } = await setup();
-    for (let i = 0; i < 3; i++) await app.request("/api/stats/visit", post({ ref: "LinkedIn" }));
-    await app.request("/api/stats/visit", post({ ref: "facebook" }));
-    await app.request("/api/stats/visit", post({ ref: "<script>" }));
+    // Three visitors from LinkedIn (three browsers), one from Facebook, and a ref that isn't a plain word.
+    const from = (ref: string, browser: string) => {
+      const req = post({ ref });
+      return app.request("/api/stats/visit", { ...req, headers: { ...(req.headers as Record<string, string>), "user-agent": `Mozilla/5.0 ${browser}` } });
+    };
+    for (const browser of ["A", "B", "C"]) await from("LinkedIn", browser);
+    await from("linkedin", "A"); // the first again, the same day: once
+    await from("facebook", "A");
+    await from("<script>", "A");
     await signInFrom("linkedin", "ann@willey.test");
     await signInFrom("facebook", "ann@willey.test"); // her second sign-in: she still came from LinkedIn
 
