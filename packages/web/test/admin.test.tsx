@@ -2,7 +2,7 @@ import { RECOMMENDED_OPTIONS } from "@elephant/rules";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { browser, openApp, startServer } from "./harness.js";
+import { browser, clock, openApp, startServer } from "./harness.js";
 
 const admin = "boss@willey.test";
 
@@ -78,6 +78,27 @@ describe("The admin page", () => {
 
     expect(await screen.findByText(/deleted 1 person, 1 game and 0 organizations/i)).toBeInTheDocument();
     await waitFor(() => expect(gameRows().some((r) => r.textContent!.includes("Smoke test game"))).toBe(false));
+  });
+});
+
+describe("Deleting demo data", () => {
+  it("says how much first, then deletes the visitors' demos and keeps the real Games", async () => {
+    const { me, origin, user } = await withPeople();
+    const visitor = browser(origin);
+    await visitor.startVisitor();
+    await visitor.createGame({ name: "Visitor's demo", demo: true, options: { ...RECOMMENDED_OPTIONS, activeSlots: 1, maxSteals: 3, rosterMode: "self", turnSeconds: 60 } });
+    clock.advance(2 * 60 * 60); // no longer in the middle of it
+    openApp(me, "/admin");
+    await screen.findByRole("table", { name: /games/i });
+
+    await user.click(screen.getByRole("button", { name: /delete demo data/i }));
+    expect(await screen.findByRole("region", { name: /confirm/i })).toHaveTextContent(/1 demo game, 1 visitor account, 0 photos\. delete them\?/i);
+    await user.click(screen.getByRole("button", { name: /yes, delete demo data/i }));
+
+    expect(await screen.findByText(/deleted 1 demo game, 1 visitor account and 0 photos/i)).toBeInTheDocument();
+    await waitFor(() => expect(gameRows().some((r) => r.textContent!.includes("Visitor's demo"))).toBe(false));
+    expect(gameRows().some((r) => r.textContent!.includes("Ann's party"))).toBe(true);
+    expect(gameRows().some((r) => r.textContent!.includes("Demo game"))).toBe(true); // a signed-in Host's own demo
   });
 });
 

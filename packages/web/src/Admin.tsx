@@ -15,12 +15,16 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
  * For the app's admins (ADMIN_EMAILS) only: who has signed in and what they've made, every Game, and deleting a
  * Game or the smoke test's leftovers. To anyone else it's an empty page.
  */
+/** What Delete demo data would delete, counted before it's confirmed. */
+type DemoData = { games: number; visitors: number; photos: number };
+const isDemoData = (d: unknown): d is DemoData => typeof d === "object" && d !== null && "visitors" in d && "photos" in d;
+
 export function AdminPage() {
   const api = useApi();
   const [people, setPeople] = useState<AdminPerson[] | "loading" | "notFound">("loading");
   const [games, setGames] = useState<AdminGame[]>([]);
   const [showTests, setShowTests] = useState(false);
-  const [deleting, setDeleting] = useState<AdminGame | "test data" | null>(null);
+  const [deleting, setDeleting] = useState<AdminGame | "test data" | DemoData | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
   /** The commit the server is running; undefined until known. */
@@ -51,7 +55,14 @@ export function AdminPage() {
   const okToAsk = people.filter((p) => p.feedbackOk && !isTestAccount(p.email));
 
   async function confirmDelete() {
-    if (deleting === "test data") {
+    if (isDemoData(deleting)) {
+      const result = await api.adminDeleteDemoData();
+      setDone(
+        "error" in result
+          ? result.error
+          : `${result.backup ? `Backed up to ${result.backup}. ` : ""}Deleted ${plural(result.games, "demo game")}, ${plural(result.visitors, "visitor account")} and ${plural(result.photos, "photo")}.`,
+      );
+    } else if (deleting === "test data") {
       const result = await api.adminDeleteTestData();
       if (result) {
         setDone(
@@ -98,14 +109,16 @@ export function AdminPage() {
       {deleting && (
         <section className="card" aria-label="Confirm">
           <p>
-            {deleting === "test data"
-              ? "Delete every @example.com account, with the Games they host and the Organizations they run?"
-              : `Delete ${deleting.name} (${deleting.host}), with its Players, Posts, Photos and votes?`}{" "}
+            {isDemoData(deleting)
+              ? `${plural(deleting.games, "demo game")}, ${plural(deleting.visitors, "visitor account")}, ${plural(deleting.photos, "photo")}. Delete them? Real Games, and anyone's demo started in the last hour, stay. A backup is taken first.`
+              : deleting === "test data"
+                ? "Delete every @example.com account, with the Games they host and the Organizations they run?"
+                : `Delete ${deleting.name} (${deleting.host}), with its Players, Posts, Photos and votes?`}{" "}
             This can't be undone, except from a backup.
           </p>
           <div className="inline">
             <button className="danger-solid" onClick={() => void confirmDelete()}>
-              {deleting === "test data" ? "Yes, delete test data" : `Yes, delete ${deleting.name}`}
+              {isDemoData(deleting) ? "Yes, delete demo data" : deleting === "test data" ? "Yes, delete test data" : `Yes, delete ${deleting.name}`}
             </button>
             <button className="secondary" onClick={() => setDeleting(null)}>
               Keep it
@@ -188,9 +201,22 @@ export function AdminPage() {
             </tbody>
           </table>
         </div>
-        <button className="secondary" onClick={() => setDeleting("test data")}>
-          Delete test data
-        </button>
+        <div className="inline">
+          <button className="secondary" onClick={() => setDeleting("test data")}>
+            Delete test data
+          </button>
+          {/* Counted first: the confirm says how many. */}
+          <button
+            className="secondary"
+            onClick={() =>
+              void api.adminDemoData().then((counts) => {
+                if (counts) setDeleting(counts);
+              })
+            }
+          >
+            Delete demo data
+          </button>
+        </div>
       </section>
     </div>
   );

@@ -34,8 +34,13 @@ export function adminRoutes(deps: {
   visitorDays: (n: number) => VisitorDay[];
   store: Pick<GameStore, "clear">;
   themeImages: ReturnType<typeof themeStore>;
+  /** Demo visitors' accounts and demo Games (server.ts): what Delete demo data would delete, and deleting it after a backup. */
+  demoData: {
+    preview: () => { games: number; visitors: number; photos: number };
+    remove: () => Promise<{ games: number; visitors: number; photos: number; backup: string | null }>;
+  };
 }) {
-  const { db, now, load, stats, said, health, signInEmailCap, photoBytes, deleteGame, visitorDays, store, themeImages } = deps;
+  const { db, now, load, stats, said, health, signInEmailCap, photoBytes, deleteGame, visitorDays, store, themeImages, demoData } = deps;
   const routes = new Hono();
 
   /** Everyone who has signed in, newest first: when, whether a feedback email is OK, and what they've made. */
@@ -131,6 +136,19 @@ export function adminRoutes(deps: {
     if (!db.select({ id: games.id }).from(games).where(eq(games.id, id)).get()) return c.json({ error: "No such Game" }, 404);
     deleteGame(id);
     return c.body(null, 204);
+  });
+
+  /** What Delete demo data would delete, to show before it's confirmed. */
+  routes.get("/api/admin/demo-data", (c) => c.json(demoData.preview()));
+
+  /** Deletes the demo visitors and their demo Games, after a backup (named in the answer). Real Games stay. */
+  routes.post("/api/admin/demo-data/delete", async (c) => {
+    try {
+      return c.json(await demoData.remove());
+    } catch (e) {
+      console.error("Delete demo data: the backup failed, so nothing was deleted", e);
+      return c.json({ error: "The backup failed, so nothing was deleted." }, 500);
+    }
   });
 
   /**
