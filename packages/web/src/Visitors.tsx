@@ -58,7 +58,8 @@ export function Visitors({ days }: { days: VisitorDay[] }) {
         Different visitors a day, each counted once however many pages they open, without a cookie or anything that
         identifies them (so someone who comes back tomorrow counts again). Your own visits as admin don't count. Link
         previews (LinkedIn, Facebook, Slack…) and search engines are counted apart. Days run midnight to midnight UTC
-        (4 pm to 4 pm Pacific).
+        (4 pm to 4 pm Pacific). Where each visitor first landed, then what they did that day on any page: tried the
+        demo (or the guided tour), came from one of your ?ref= links.
       </p>
       <dl className="stat-tiles">
         <div>
@@ -68,6 +69,10 @@ export function Visitors({ days }: { days: VisitorDay[] }) {
         <div>
           <dt>Last 14 days</dt>
           <dd>{total}</dd>
+        </div>
+        <div>
+          <dt>Tried the demo</dt>
+          <dd>{days.reduce((n, d) => n + d.triedDemo, 0)}</dd>
         </div>
         <div>
           <dt>From your links</dt>
@@ -127,6 +132,7 @@ export function Visitors({ days }: { days: VisitorDay[] }) {
             <strong>{date(shown.day, { weekday: "short", month: "short", day: "numeric" })}</strong>
             <span>{plural(shown.visitors, "visitor")}</span>
             {shown.visitors > 0 && <span className="muted">First landed on: {landings(shown)}</span>}
+            {shown.triedDemo > 0 && <span className="muted">{shown.triedDemo} tried the demo</span>}
             {shown.fromLinks > 0 && <span className="muted">{shown.fromLinks} from your links</span>}
             {shown.previews > 0 && <span className="muted">{plural(shown.previews, "link preview")}</span>}
           </div>
@@ -140,10 +146,11 @@ export function Visitors({ days }: { days: VisitorDay[] }) {
             <tr>
               <th>Day</th>
               <th>Visitors</th>
-              <th>Front page</th>
-              <th>Demo</th>
-              <th>A Game's link</th>
-              <th>Other</th>
+              <th>Landed on the front page</th>
+              <th>Landed on the demo</th>
+              <th>Landed on a Game's link</th>
+              <th>Landed elsewhere</th>
+              <th>Tried the demo</th>
               <th>From your links</th>
               <th>Link previews</th>
             </tr>
@@ -157,6 +164,7 @@ export function Visitors({ days }: { days: VisitorDay[] }) {
                 <td>{d.demo}</td>
                 <td>{d.game}</td>
                 <td>{d.other}</td>
+                <td>{d.triedDemo}</td>
                 <td>{d.fromLinks}</td>
                 <td>{d.previews}</td>
               </tr>

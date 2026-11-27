@@ -1,5 +1,5 @@
 import { RECOMMENDED_OPTIONS } from "@elephant/rules";
-import { screen, waitFor, within } from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { browser, drawInOrder, openApp, startServer } from "./harness.js";
@@ -142,6 +142,20 @@ describe("Visitors on the Stats page", () => {
     expect(within(chart).getAllByTestId("visitor-bar")).toHaveLength(14);
     expect(within(section).getByText("Today (UTC)", { selector: "dt" }).nextElementSibling).toHaveTextContent(/^2$/);
     const rows = within(within(section).getByRole("table")).getAllByRole("row");
-    expect(rows[1]).toHaveTextContent(/2\s*1\s*1\s*0\s*0\s*1\s*1$/); // the latest day: visitors, front, demo, game, other, from links, previews
+    // The latest day: visitors, landed on the front page, the demo, a Game, elsewhere; tried the demo, from links, previews.
+    expect(rows[1]).toHaveTextContent(/2\s*1\s*1\s*0\s*0\s*1\s*1\s*1$/);
+  });
+
+  it("counts a visitor who taps through to the demo from the front page as trying it", async () => {
+    const server = await startServer({ adminEmails: ["boss@example.org"] });
+    const user = userEvent.setup();
+    openApp(browser(server.origin), "/");
+    await user.click(await screen.findByRole("link", { name: /try a demo/i }));
+    await screen.findByRole("button", { name: /create demo game/i });
+    cleanup();
+
+    openApp(await server.signedIn("boss@example.org"), "/admin/stats");
+    const section = await screen.findByRole("region", { name: /visitors/i });
+    await waitFor(() => expect(within(section).getByText("Tried the demo", { selector: "dt" }).nextElementSibling).toHaveTextContent(/^1$/));
   });
 });

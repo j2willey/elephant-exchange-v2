@@ -402,16 +402,18 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
 
     /**
      * Notes where this browser arrived from, if the page's address says (?ref=linkedin): the first source is kept,
-     * to go with a sign-in later, and each source is counted once per browser.
+     * to go with a sign-in later, and the server counts the visit (once a visitor a day, with the page load).
      */
     noteArrival(search: string) {
       const ref = new URLSearchParams(search).get("ref")?.toLowerCase();
       if (!ref || !/^[a-z0-9_-]{1,32}$/.test(ref)) return;
       if (!storage.getItem("ref")) storage.setItem("ref", ref);
-      const seen = storage.getItem("refsSeen")?.split(",") ?? [];
-      if (seen.includes(ref)) return;
-      storage.setItem("refsSeen", [...seen, ref].join(","));
       void postJson("/api/stats/visit", { ref }).catch(() => {});
+    },
+
+    /** Tells the statistics this visitor reached the demo, by a tap inside the app the server doesn't see. */
+    noteDemo() {
+      void postJson("/api/stats/visit", { demo: true }).catch(() => {});
     },
 
     async adminGames(): Promise<AdminGame[] | "notFound"> {

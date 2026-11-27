@@ -341,15 +341,6 @@ export function createStats(db: Db, now: () => Date) {
     db.update(orgStats).set({ deletedAt: now() }).where(eq(orgStats.orgId, orgId)).run();
   }
 
-  /** A browser arrived from a ?ref= link (each browser says so once per source). */
-  function recordVisit(ref: string) {
-    const day = now().toISOString().slice(0, 10);
-    db.insert(refVisits)
-      .values({ day, ref, visits: 1 })
-      .onConflictDoUpdate({ target: [refVisits.day, refVisits.ref], set: { visits: sql`${refVisits.visits} + 1` } })
-      .run();
-  }
-
   /** As many screens are watching a Game live as ever have at once, or more. */
   function notePeakScreens(gameId: string, screens: number) {
     if (!db.select({ id: gameStats.gameId }).from(gameStats).where(eq(gameStats.gameId, gameId)).get()) snapshotGame(gameId);
@@ -647,7 +638,6 @@ export function createStats(db: Db, now: () => Date) {
     recordPerson,
     recordOrg,
     orgDeleted,
-    recordVisit,
     notePeakScreens,
     noteFeature,
     gameCreated,

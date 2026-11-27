@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createServer } from "../src/server.js";
 import { capturingMailer, signIn } from "./support.js";
-import { dailyCounts, openDb, visitorDays, visitorsSeen } from "../src/db.js";
+import { dailyCounts, openDb, refVisits, visitorDays, visitorsSeen } from "../src/db.js";
 import { createVisitors } from "../src/visitors.js";
 
 /** Visitors on a fresh database, with a clock the test moves. */
@@ -38,9 +38,51 @@ describe("Counting visitors", () => {
     visitors.arrived({ ip: "3.3.3.3", userAgent: PHONE, path: "/try", ref: "linkedin" });
     visitors.arrived({ ip: "4.4.4.4", userAgent: PHONE, path: "/games/a.xyz" });
     visitors.arrived({ ip: "5.5.5.5", userAgent: PHONE, path: "/login" });
-    visitors.arrived({ ip: "1.1.1.1", userAgent: PHONE, path: "/games/a.xyz", ref: "facebook" }); // already counted
+    visitors.arrived({ ip: "1.1.1.1", userAgent: PHONE, path: "/games/a.xyz", ref: "facebook" }); // a visitor already, but from a link
 
-    expect(today(visitors)).toMatchObject({ visitors: 5, front: 2, demo: 1, game: 1, other: 1, fromLinks: 1 });
+    expect(today(visitors)).toMatchObject({ visitors: 5, front: 2, demo: 1, game: 1, other: 1, fromLinks: 2 });
+  });
+
+  it("counts the guided tour as the demo, and a ?ref= on it as from a link and from that source", () => {
+    const { db, visitors } = setup();
+    visitors.arrived({ ip: "1.1.1.1", userAgent: PHONE, path: "/guided/happy-path", ref: "linkedin" });
+
+    expect(today(visitors)).toMatchObject({ visitors: 1, demo: 1, triedDemo: 1, fromLinks: 1 });
+    expect(db.select().from(refVisits).all()).toEqual([{ day: "2026-11-23", ref: "linkedin", visits: 1 }]);
+  });
+
+  it("counts a visitor who reaches the demo from the front page as trying it, once a day however often", () => {
+    const { visitors, nextDay } = setup();
+    visitors.arrived({ ip: "1.1.1.1", userAgent: PHONE, path: "/" });
+    // Taps inside the app, which the browser reports: the server sees no page load.
+    visitors.told({ ip: "1.1.1.1", userAgent: PHONE, demo: true });
+    visitors.told({ ip: "1.1.1.1", userAgent: PHONE, demo: true });
+    visitors.arrived({ ip: "1.1.1.1", userAgent: PHONE, path: "/try" }); // a reload
+    visitors.arrived({ ip: "2.2.2.2", userAgent: PHONE, path: "/" }); // never tries it
+
+    expect(today(visitors)).toMatchObject({ visitors: 2, front: 2, demo: 0, triedDemo: 1 });
+    nextDay();
+    visitors.told({ ip: "1.1.1.1", userAgent: PHONE, demo: true });
+    expect(today(visitors)).toMatchObject({ triedDemo: 1 });
+  });
+
+  it("counts each source once a visitor a day, from the page load or the browser, whichever says so first", () => {
+    const { db, visitors, nextDay } = setup();
+    visitors.arrived({ ip: "1.1.1.1", userAgent: PHONE, path: "/try", ref: "linkedin" });
+    visitors.told({ ip: "1.1.1.1", userAgent: PHONE, ref: "linkedin" }); // the same arrival, as the browser says it
+    visitors.arrived({ ip: "1.1.1.1", userAgent: PHONE, path: "/", ref: "facebook" }); // later, the other post
+    visitors.told({ ip: "2.2.2.2", userAgent: PHONE, ref: "linkedin" });
+    visitors.told({ ip: "3.3.3.3", userAgent: "LinkedInBot/1.0 (compatible; Mozilla/5.0)", ref: "linkedin" }); // a preview
+
+    expect(today(visitors)).toMatchObject({ fromLinks: 2 });
+    const refs = () => db.select().from(refVisits).all().map((r) => [r.day, r.ref, r.visits]);
+    expect(refs()).toEqual([
+      ["2026-11-23", "linkedin", 2],
+      ["2026-11-23", "facebook", 1],
+    ]);
+    nextDay(); // a new day: counted again
+    visitors.told({ ip: "1.1.1.1", userAgent: PHONE, ref: "linkedin" });
+    expect(refs()).toContainEqual(["2026-11-24", "linkedin", 1]);
   });
 
   it("counts link previews and crawlers apart from visitors", () => {
@@ -126,5 +168,27 @@ describe("Visitors, on the server", () => {
     const stats = (await (await app.request("/api/admin/stats", { headers: { cookie: jim } })).json()) as { visitors: { visitors: number; demo: number; fromLinks: number; previews: number }[] };
     expect(stats.visitors).toHaveLength(14);
     expect(stats.visitors.at(-1)).toMatchObject({ visitors: 1, demo: 1, fromLinks: 1, previews: 1 });
+  });
+
+  it("hears from the browser when a visitor moves to the demo or arrived from a link, counting each once with the page load", async () => {
+    const webRoot = mkdtempSync(join(tmpdir(), "visitors-web-"));
+    writeFileSync(join(webRoot, "index.html"), "<!doctype html><title>Elephant Exchange</title>");
+    const { sent, mailer } = capturingMailer();
+    const { app } = createServer({ dbPath: ":memory:", mailer, webRoot, adminEmails: ["jim@example.org"] });
+    const jim = await signIn(app, sent, "jim@example.org");
+    const tell = (body: object, headers: Record<string, string> = {}) =>
+      app.request("/api/stats/visit", { method: "POST", headers: { "content-type": "application/json", "user-agent": PHONE, ...headers }, body: JSON.stringify(body) });
+    const today = async () =>
+      ((await (await app.request("/api/admin/stats", { headers: { cookie: jim } })).json()) as { visitors: { visitors: number; triedDemo: number; fromLinks: number }[]; sources: { ref: string; visits: number }[] });
+
+    // Lands on the front page from the Facebook post, then taps Try a Demo.
+    await app.request("/?ref=facebook", { headers: { "user-agent": PHONE } });
+    expect((await tell({ ref: "facebook" })).status).toBe(204);
+    expect((await tell({ demo: true })).status).toBe(204);
+    await tell({ demo: true }, { cookie: jim }); // Jim checking: not counted
+
+    const stats = await today();
+    expect(stats.visitors.at(-1)).toMatchObject({ visitors: 1, triedDemo: 1, fromLinks: 1 });
+    expect(stats.sources).toEqual([{ ref: "facebook", visits: 1, signUps: 0 }]);
   });
 });
