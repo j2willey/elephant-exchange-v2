@@ -58,6 +58,8 @@ export function createPeople<G, Result = unknown>(deps: {
   /** Tell the screens watching: the Feed changed; the Staff (or a waiting name) changed. */
   postsChanged: (gameId: string) => void;
   staffChanged: (gameId: string) => void;
+  /** The time, for a mute that ends by itself. */
+  now: () => Date;
 }) {
   const { db, latest, approveNames, command, renameAuthor, postsChanged, staffChanged } = deps;
   const rosterIds = (game: G) => deps.rosterOf(game).map((p) => p.id);
@@ -478,25 +480,42 @@ export function createPeople<G, Result = unknown>(deps: {
     }
   }
 
-  /** Whether the Staff have muted this person: they can't post or reply in the Game. */
-  const isMuted = (gameId: string, email: string) => nameRow(gameId, email)?.muted ?? false;
-  /** Everyone muted in the Game. */
-  const mutedIn = (gameId: string): Set<string> =>
-    new Set(
+  /** Whether a mute still holds: one for a while ends by itself. */
+  const holds = (row: { muted: boolean; mutedUntil: Date | null } | undefined) =>
+    Boolean(row?.muted) && (row!.mutedUntil === null || row!.mutedUntil.getTime() > deps.now().getTime());
+  /**
+   * Whether the Staff have muted this person (they can't post or reply in the Game), and for a mute for a while,
+   * the seconds left; null seconds for a mute that lasts until they're unmuted.
+   */
+  function muteOf(gameId: string, email: string): { muted: boolean; seconds: number | null } {
+    const row = nameRow(gameId, email);
+    if (!holds(row)) return { muted: false, seconds: null };
+    const until = row!.mutedUntil;
+    return { muted: true, seconds: until === null ? null : Math.ceil((until.getTime() - deps.now().getTime()) / 1000) };
+  }
+  const isMuted = (gameId: string, email: string) => muteOf(gameId, email).muted;
+  /** Everyone muted in the Game now, with the seconds left on each mute for a while (null: until unmuted). */
+  const mutedIn = (gameId: string): Map<string, number | null> =>
+    new Map(
       db
-        .select({ email: gameNames.email })
+        .select({ email: gameNames.email, muted: gameNames.muted, mutedUntil: gameNames.mutedUntil })
         .from(gameNames)
         .where(and(eq(gameNames.gameId, gameId), eq(gameNames.muted, true)))
         .all()
-        .map((r) => r.email),
+        .filter(holds)
+        .map((r) => [r.email, r.mutedUntil === null ? null : Math.ceil((r.mutedUntil.getTime() - deps.now().getTime()) / 1000)] as const),
     );
-  /** The Staff mute someone, or unmute them (what it does to their Posts is the Feed's). */
-  const setMuted = (gameId: string, email: string, muted: boolean) =>
-    void db
-      .insert(gameNames)
-      .values({ gameId, email, muted })
-      .onConflictDoUpdate({ target: [gameNames.gameId, gameNames.email], set: { muted } })
+  /**
+   * The Staff mute someone, until unmuted or for `minutes`, or unmute them (what it does to their Posts is the
+   * Feed's). Muting again replaces the time.
+   */
+  const setMuted = (gameId: string, email: string, muted: boolean, minutes?: number) => {
+    const mutedUntil = muted && minutes !== undefined ? new Date(deps.now().getTime() + minutes * 60_000) : null;
+    db.insert(gameNames)
+      .values({ gameId, email, muted, mutedUntil })
+      .onConflictDoUpdate({ target: [gameNames.gameId, gameNames.email], set: { muted, mutedUntil } })
       .run();
+  };
 
   return {
     join,
@@ -509,6 +528,7 @@ export function createPeople<G, Result = unknown>(deps: {
     guestList,
     standInEmail,
     isMuted,
+    muteOf,
     mutedIn,
     setMuted,
     panel,

@@ -63,11 +63,12 @@ describe("Muting a poster from the Feed", () => {
 
     await user.click(within(await feedPost(/gus/i)).getByRole("button", { name: /^.*mute gus/i }));
     const form = within(await feedPost(/gus/i)).getByRole("form", { name: /mute gus/i });
+    await user.click(within(form).getByRole("radio", { name: /until unmuted/i }));
     await user.click(within(form).getByRole("checkbox", { name: /also hide their posts/i }));
     await user.click(within(form).getByRole("button", { name: /^mute$/i }));
 
     await waitFor(async () => expect(await shown(eve, id)).toEqual(["Dot replies", "Eve alone"]));
-    expect((await gus.game(id))!.muted).toBe(true);
+    expect(await gus.game(id)).toMatchObject({ muted: true, mutedSeconds: null });
     await waitFor(async () => expect(await feedPost(/gus/i)).toHaveTextContent(/muted/i));
 
     await user.click(within(await feedPost(/gus/i)).getByRole("button", { name: /unmute gus/i }));
@@ -83,5 +84,54 @@ describe("Muting a poster from the Feed", () => {
 
     await screen.findByText(/the host has paused your posting/i);
     expect(screen.queryByRole("form", { name: /post to the chat/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("Muting a poster for a while", () => {
+  it("mutes for 15 minutes unless the Host picks longer, and marks how long is left", async () => {
+    const { host, gus, id, user } = await party();
+    openApp(host, `/games/${id}`);
+
+    await user.click(within(await feedPost(/gus/i)).getByRole("button", { name: /^.*mute gus/i }));
+    const form = within(await feedPost(/gus/i)).getByRole("form", { name: /mute gus/i });
+    expect(within(form).getByRole("radio", { name: /15 minutes/i })).toBeChecked();
+    await user.click(within(form).getByRole("button", { name: /^mute$/i }));
+
+    await waitFor(async () => expect((await gus.game(id))!.mutedSeconds).toBeGreaterThan(14 * 60));
+    await waitFor(async () => expect(await feedPost(/gus/i)).toHaveTextContent(/muted · 15 min left/i));
+  });
+
+  it("tells the muted person until when, and gives the form back when the time is up", async () => {
+    const { host, gus, id } = await party();
+    await host.mute(id, (await host.posts(id)).find((p) => p.text === "Rude start")!.id, true, false, 1);
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ["setTimeout", "clearTimeout", "Date"] });
+    try {
+      openApp(gus, `/games/${id}`);
+      await onTab(/^post/i);
+      await screen.findByText(/the host has paused your posting until \d/i);
+
+      await vi.advanceTimersByTimeAsync(61_000);
+      expect(await screen.findByRole("form", { name: /post to the chat/i })).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("Deleting a Post for good from the Feed", () => {
+  it("is offered once a Post is hidden, asks first, and then it's gone for everyone, its poster too", async () => {
+    const { host, gus, id, user } = await party();
+    openApp(host, `/games/${id}`);
+    expect(within(await feedPost(/gus/i)).queryByRole("button", { name: /delete for good/i })).not.toBeInTheDocument();
+
+    await user.click(within(await feedPost(/gus/i)).getByRole("button", { name: /^hide$/i }));
+    await user.click(await within(await feedPost(/gus/i)).findByRole("button", { name: /delete for good/i }));
+    const ask = within(await feedPost(/gus/i)).getByRole("form", { name: /delete gus's post/i });
+    expect(ask).toHaveTextContent(/can't be brought back/i);
+    await user.click(within(ask).getByRole("button", { name: /delete for good/i }));
+
+    await waitFor(async () => expect((await gus.posts(id)).map((p) => p.text)).not.toContain("Rude start"));
+    await waitFor(() => expect(within(screen.getByRole("feed", { name: /chat/i })).queryByText("Rude start")).not.toBeInTheDocument());
+    expect((await host.posts(id)).find((p) => p.text === "Dot replies")!.replyTo).toMatchObject({ removed: true });
   });
 });

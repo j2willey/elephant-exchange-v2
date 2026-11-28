@@ -78,7 +78,7 @@ export function Feed({
           <article key={p.id} id={`feed-post-${p.id}`} tabIndex={-1} aria-label={`Post from ${p.author}`} className={`post ${p.status}`}>
             <p className="post-meta">
               <strong>{p.author}</strong>
-              {p.authorMuted && <span className="badge">Muted</span>}
+              {p.authorMuted && <span className="badge">{p.authorMutedSeconds ? `Muted · ${minutesLeft(p.authorMutedSeconds)} min left` : "Muted"}</span>}
               {p.giftId && giftName(p.giftId) && (
                 <span className="muted">
                   {" · "}
@@ -122,9 +122,12 @@ export function Feed({
               <div className="inline">
                 {p.status === "pending" && <button onClick={() => void setStatus(p, "visible")}>Approve</button>}
                 {p.status === "hidden" ? (
-                  <button className="link" onClick={() => void setStatus(p, "visible")}>
-                    Show again
-                  </button>
+                  <>
+                    <button className="link" onClick={() => void setStatus(p, "visible")}>
+                      Show again
+                    </button>
+                    <DeleteButton gameId={game.id} post={p} onDone={reload} />
+                  </>
                 ) : (
                   <>
                     <button className="link danger" onClick={() => void setStatus(p, "hidden")}>
@@ -389,7 +392,7 @@ export function Composer({
   const ids = useId();
 
   if (game.moderation === "paused") return <p className="muted">The Host has paused posting for now.</p>;
-  if (game.muted) return <p className="muted">The Host has paused your posting.</p>;
+  if (game.muted) return <MutedNote seconds={game.mutedSeconds} />;
   if (signedIn === "loading") return null;
   if (!signedIn) return offerSignIn ? <SignInForm next={pathname} heading="Sign in to post" /> : <p className="muted">Sign in above to post.</p>;
 
@@ -550,20 +553,41 @@ function usePreview(file: File | null): string | undefined {
   return url;
 }
 
+/** Whole minutes left, rounded up, so a mute never says 0 while it still holds. */
+const minutesLeft = (seconds: number) => Math.max(1, Math.ceil(seconds / 60));
+
+/** Tells a muted person they can't post, and until when if the mute ends by itself. */
+function MutedNote({ seconds }: { seconds: number | null }) {
+  // The server says the seconds left; this phone's own clock says what time that is.
+  const [until] = useState(() => (seconds === null ? null : new Date(Date.now() + seconds * 1000)));
+  if (!until) return <p className="muted">The Host has paused your posting.</p>;
+  return <p className="muted">The Host has paused your posting until {until.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.</p>;
+}
+
+/** How long a mute can last: a short break, longer, or until the Host or a Co-host unmutes them. */
+const MUTE_LENGTHS = [
+  { label: "15 minutes", minutes: 15 },
+  { label: "1 hour", minutes: 60 },
+  { label: "Until unmuted", minutes: undefined },
+] as const;
+
 /**
- * For the Host and Co-hosts: mutes whoever wrote a Post, so they can't post or reply (asking first, with the choice
- * to hide all their Posts too), or unmutes them, bringing back what the mute hid.
+ * For the Host and Co-hosts: mutes whoever wrote a Post, so they can't post or reply (asking first for how long, with
+ * the choice to hide all their Posts too), or unmutes them, bringing back what the mute hid.
  */
 function MuteButton({ gameId, post, onDone }: { gameId: string; post: Post; onDone: () => void }) {
   const api = useApi();
   const [asking, setAsking] = useState(false);
   const [hidePosts, setHidePosts] = useState(false);
+  const [length, setLength] = useState(0);
+  const ids = useId();
 
   async function mute(muted: boolean, e?: FormEvent) {
     e?.preventDefault();
-    if (await api.mute(gameId, post.id, muted, muted && hidePosts)) {
+    if (await api.mute(gameId, post.id, muted, muted && hidePosts, muted ? MUTE_LENGTHS[length]!.minutes : undefined)) {
       setAsking(false);
       setHidePosts(false);
+      setLength(0);
       onDone();
     }
   }
@@ -582,12 +606,21 @@ function MuteButton({ gameId, post, onDone }: { gameId: string; post: Post; onDo
     );
   return (
     <form className="stack mute-form" aria-label={`Mute ${post.author}`} onSubmit={(e) => void mute(true, e)}>
-      <p className="muted hint">{post.author} won't be able to post or reply in this Game until unmuted. They can still react.</p>
+      <p className="muted hint">{post.author} won't be able to post or reply in this Game for that long. They can still react.</p>
+      <fieldset className="mute-length">
+        <legend>For how long</legend>
+        {MUTE_LENGTHS.map((l, i) => (
+          <label key={l.label} className="check">
+            <input type="radio" name={`${ids}-length`} checked={length === i} onChange={() => setLength(i)} /> {l.label}
+          </label>
+        ))}
+      </fieldset>
+      <p className="muted hint">When a time runs out, they can post again. Posts you hid stay hidden until you show them again.</p>
       <label className="check">
         <input type="checkbox" checked={hidePosts} onChange={(e) => setHidePosts(e.target.checked)} /> Also hide their posts
       </label>
       <div className="inline">
-        <button type="submit" className="danger">
+        <button type="submit" className="danger-solid">
           Mute
         </button>
         <button type="button" className="secondary" onClick={() => setAsking(false)}>
@@ -648,6 +681,52 @@ function AttachToGift({ game, post, onDone }: { game: GameView; post: Post; onDo
           {error}
         </p>
       )}
+    </form>
+  );
+}
+
+/**
+ * For the Host and Co-hosts, on a Post already hidden: deletes it for good, Photo and all, after asking. Hiding is
+ * the usual answer (the Post can be talked over later, or shown again); this is for something too bad to keep.
+ */
+function DeleteButton({ gameId, post, onDone }: { gameId: string; post: Post; onDone: () => void }) {
+  const api = useApi();
+  const [asking, setAsking] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  async function remove(e: FormEvent) {
+    e.preventDefault();
+    if (await api.deletePost(gameId, post.id)) {
+      setAsking(false);
+      onDone();
+    } else setFailed(true);
+  }
+
+  if (!asking)
+    return (
+      <button type="button" className="link danger" onClick={() => setAsking(true)}>
+        Delete for good
+      </button>
+    );
+  return (
+    <form className="stack mute-form" aria-label={`Delete ${post.author}'s post`} onSubmit={(e) => void remove(e)}>
+      <p className="muted hint">
+        {post.photo ? "This Post and its Photo are" : "This Post is"} deleted for everyone, {post.author} included, and can't be brought back. Replies
+        stay.
+      </p>
+      {failed && (
+        <p className="error" role="alert">
+          That didn't delete. Please try again.
+        </p>
+      )}
+      <div className="inline">
+        <button type="submit" className="danger-solid">
+          Delete for good
+        </button>
+        <button type="button" className="secondary" onClick={() => setAsking(false)}>
+          Cancel
+        </button>
+      </div>
     </form>
   );
 }

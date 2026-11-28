@@ -177,6 +177,8 @@ export const gameNames = sqliteTable(
     pending: text("pending"),
     /** Muted by the Host or a Co-host: they can't post or reply in this Game (they can still react). */
     muted: integer("muted", { mode: "boolean" }).notNull().default(false),
+    /** When a mute for a while ends by itself; null for one that lasts until they're unmuted. */
+    mutedUntil: integer("muted_until", { mode: "timestamp_ms" }),
     /**
      * In a Host-entered Game, a Guest who brought a gift asks to be added as a Player, by this name; null when not
      * asking. The Host or a Co-host adds them with one tap, or says they're not playing.

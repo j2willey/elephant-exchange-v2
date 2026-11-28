@@ -30,6 +30,7 @@ function setup() {
     renameAuthor: (tx, id, email, name) => feed.renameAuthor(tx, id, email, name),
     postsChanged: (id) => feed.changed(id),
     staffChanged: () => undefined,
+    now: () => new Date(),
   });
   const feed = createFeed({ db, now, store, photos, muted: people, signal: () => undefined, signalMs: 0 });
   const lastWords: string[] = [];

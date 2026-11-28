@@ -570,8 +570,12 @@ export function Playbook() {
         </p>
         <ul>
           <li>
-            <strong>Hide</strong> any Post (or a Post with all its replies), and <strong>Mute</strong> someone so they can
-            no longer post.
+            <strong>Hide</strong> any Post (or a Post with all its replies). A hidden Post stays where you can show it
+            again, or talk it over after the party. If one is too bad to keep at all, <strong>Delete it for good</strong>,
+            Photo and all.
+          </li>
+          <li>
+            <strong>Mute</strong> someone so they can't post for 15 minutes, an hour, or until you unmute them.
           </li>
           <li>
             <strong>Rename</strong> anyone and lock the name, so they can't change it back. Guests can change their own

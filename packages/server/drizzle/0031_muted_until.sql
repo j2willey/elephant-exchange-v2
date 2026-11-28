@@ -1,0 +1,1 @@
+ALTER TABLE `game_names` ADD `muted_until` integer;

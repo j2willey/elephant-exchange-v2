@@ -38,6 +38,8 @@ export interface Viewer {
   myName: { name: string | null; locked: boolean; pending: string | null } | null;
   /** Whether the Host or a Co-host has muted the person looking: they can't post or reply here. */
   muted: boolean;
+  /** For a mute for a while: the seconds until they may post again. Null when not muted, or muted until unmuted. */
+  mutedSeconds: number | null;
   /** The Gift the person looking voted the worst, if they have. */
   myVote: string | null;
   /** In a Host-entered Game: they've asked the Host to add them as a Player, and are waiting. */
