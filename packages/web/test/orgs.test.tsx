@@ -49,10 +49,13 @@ describe("Organizations", () => {
     fireEvent.input(screen.getByLabelText(/main color/i), { target: { value: "#c8102e" } });
     fireEvent.input(screen.getByLabelText(/page color/i), { target: { value: "#fff8f0" } });
     await user.click(screen.getByRole("button", { name: /save colors/i }));
-    await waitFor(async () => expect((await me.myOrgs())[0]).toMatchObject({ color: "#c8102e", page: "#fff8f0" }));
+    // Saved once the page offers to hand the page color back (a slow CI machine can take over a second).
+    const handBack = await screen.findByRole("button", { name: /use the app's page color/i }, { timeout: 5000 });
+    expect((await me.myOrgs())[0]).toMatchObject({ color: "#c8102e", page: "#fff8f0" });
 
-    await user.click(screen.getByRole("button", { name: /use the app's page color/i }));
-    await waitFor(async () => expect((await me.myOrgs())[0]).toMatchObject({ color: "#c8102e", page: null }));
+    await user.click(handBack);
+    await waitFor(() => expect(screen.queryByRole("button", { name: /use the app's page color/i })).not.toBeInTheDocument(), { timeout: 5000 });
+    expect((await me.myOrgs())[0]).toMatchObject({ color: "#c8102e", page: null });
   });
 
   it("lets the Organizer add a logo and a background, and take them off", async () => {
