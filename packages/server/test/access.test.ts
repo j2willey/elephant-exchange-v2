@@ -31,6 +31,7 @@ function setup() {
     renameAuthor: () => undefined,
     postsChanged: () => undefined,
     staffChanged: () => undefined,
+    now: () => new Date(),
   });
   const access = createAccess<FakeGame>({
     sessionEmail: (token) => token,

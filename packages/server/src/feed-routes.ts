@@ -50,7 +50,7 @@ export function feedRoutes(deps: {
   nameToPostAs: (id: string, email: string, asked: string | undefined) => { author: string; settle: () => void } | undefined;
   noteFeature: (gameId: string, feature: string) => void;
   /** People's Muted flag. */
-  setMuted: (gameId: string, email: string, muted: boolean) => void;
+  setMuted: (gameId: string, email: string, muted: boolean, minutes?: number) => void;
 }) {
   const { access, feed, photos, now, nameToPostAs, noteFeature, setMuted } = deps;
   const routes = new Hono();
@@ -254,8 +254,14 @@ export function feedRoutes(deps: {
     const { id } = c.var.access;
     const body = await parseBody(c, muteBody);
     if (!body.ok) return body.res;
-    const { postId, muted, hidePosts } = body.data;
-    const no = feed.mute(id, postId, muted, hidePosts ?? false, (email, on) => setMuted(id, email, on));
+    const { postId, muted, hidePosts, minutes } = body.data;
+    const no = feed.mute(id, postId, muted, hidePosts ?? false, (email, on) => setMuted(id, email, on, minutes));
+    return no ? refused(c, no) : c.body(null, 204);
+  });
+
+  /** The Host or a Co-host deletes a Post for good, Photo and all: for something too bad to keep even hidden. */
+  routes.delete("/api/games/:id/posts/:postId", access.need("staff", "Only the Host and Co-hosts can moderate this Game"), (c) => {
+    const no = feed.remove(c.var.access.id, c.req.param("postId"));
     return no ? refused(c, no) : c.body(null, 204);
   });
 

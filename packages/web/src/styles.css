@@ -3698,3 +3698,26 @@ kbd {
 .demo-hint-watch a {
   font-weight: 600;
 }
+
+/* The Mute form's "For how long": its choices in a row. */
+.mute-length {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+.mute-length legend {
+  font-weight: 600;
+  margin-bottom: 4px;
+  padding: 0;
+}
+
+/* A Host's question on a Post (Mute, Delete for good) opens on a row of its own under the buttons. */
+.post > .inline:has(> .mute-form) {
+  flex-wrap: wrap;
+}
+.inline > .mute-form {
+  flex-basis: 100%;
+}

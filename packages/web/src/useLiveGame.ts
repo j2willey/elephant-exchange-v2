@@ -38,6 +38,7 @@ export function useLiveGame(
           me: known?.me ?? null,
           myName: known?.myName ?? null,
           muted: known?.muted ?? false,
+          mutedSeconds: known?.mutedSeconds ?? null,
           myVote: known?.myVote ?? null,
           asking: known?.asking ?? false,
           ...viewer,
@@ -65,8 +66,8 @@ export function useLiveGame(
           // here. This answer is a one-off snapshot that may have been on its way a while; the live connection sends a
           // copy after every change, so on a tie the copy already shown is kept.
           if (!known || newer(loaded, known)) return loaded;
-          const { role, me, myName, muted, myVote, asking } = loaded;
-          return { ...known, role, me, myName, muted, myVote, asking };
+          const { role, me, myName, muted, mutedSeconds, myVote, asking } = loaded;
+          return { ...known, role, me, myName, muted, mutedSeconds, myVote, asking };
         });
       });
     void load();
@@ -86,6 +87,14 @@ export function useLiveGame(
       stop();
     };
   }, [api, id, accept]);
+
+  // Muted for a while: posting comes back by itself when the time is up (the server says how long is left).
+  const mutedSeconds = game !== "loading" && game !== null && game.muted ? game.mutedSeconds : null;
+  useEffect(() => {
+    if (mutedSeconds === null) return;
+    const timer = setTimeout(() => accept(null, { muted: false, mutedSeconds: null }), mutedSeconds * 1000);
+    return () => clearTimeout(timer);
+  }, [mutedSeconds, accept]);
 
   return [game, accept, feedChanges, staffChanges];
 }

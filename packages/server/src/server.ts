@@ -301,6 +301,7 @@ export function createServer({
     renameAuthor: (tx, id, email, name) => feed.renameAuthor(tx, id, email, name),
     postsChanged: (id) => postsChanged(id),
     staffChanged: (id) => staffChanged(id),
+    now,
   });
   /** Game access (access.ts): who is asking about a Game, and whether they may. */
   const access = createAccess<LoadedGame>({
@@ -311,7 +312,7 @@ export function createServer({
   });
   /** Who is asking: the signed-in person, or the made-up Player a demo page's sample phone is. */
   const signedInAs = access.emailOf;
-  const { roleIn, nameRow, nameIn } = people;
+  const { roleIn, nameRow, nameIn, muteOf } = people;
   /** Every Game a request asks for, and every change to one (game-store.ts). */
   const store = createGameStore({ db, now, draw, orgTheme: (orgId) => orgTheme(orgId) });
   const load = (id: string) => store.get(id);
@@ -728,7 +729,7 @@ export function createServer({
       role: role ?? null,
       me: playerId ? { playerId } : null,
       myName: email ? nameIn(id, email, game) : null,
-      muted: email ? (nameRow(id, email)?.muted ?? false) : false,
+      ...(email ? (({ muted, seconds }) => ({ muted, mutedSeconds: seconds }))(muteOf(id, email)) : { muted: false, mutedSeconds: null }),
       myVote: (email && game.vote.ballots.get(email)) ?? null,
       asking: email ? Boolean(nameRow(id, email)?.asksToPlay) && !playerId : false,
     } satisfies Wire.Viewer;

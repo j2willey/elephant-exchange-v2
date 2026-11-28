@@ -71,7 +71,7 @@ export function createFeed(deps: {
   store: GameStore;
   photos: ReturnType<typeof photoStore>;
   /** Who the Staff have muted (People's). */
-  muted: { isMuted: (gameId: string, email: string) => boolean; mutedIn: (gameId: string) => ReadonlySet<string> };
+  muted: { isMuted: (gameId: string, email: string) => boolean; mutedIn: (gameId: string) => ReadonlyMap<string, number | null> };
   signal: (gameId: string) => void;
   signalMs: number;
 }) {
@@ -146,7 +146,7 @@ export function createFeed(deps: {
     const seenById = new Map(rows.map((p) => [p.id, p]));
     const replies = new Map<string, number>();
     for (const p of rows) if (p.replyTo && p.status === "visible") replies.set(p.replyTo, (replies.get(p.replyTo) ?? 0) + 1);
-    const mutedPeople = staff ? deps.muted.mutedIn(id) : new Set<string>();
+    const mutedPeople = staff ? deps.muted.mutedIn(id) : new Map<string, number | null>();
     const quote = (replyTo: string | null) => {
       if (!replyTo) return null;
       const o = seenById.get(replyTo);
@@ -168,8 +168,9 @@ export function createFeed(deps: {
       pitchFor: p.pitchFor,
       tagline: p.tagline,
       bumpedAt: p.bumpedAt?.getTime() ?? null,
-      // For the Host and Co-hosts: whether its poster is muted, so they can unmute from here.
-      ...(staff ? { authorMuted: mutedPeople.has(p.email) } : {}),
+      // For the Host and Co-hosts: whether its poster is muted, so they can unmute from here, and for a mute for a
+      // while, the seconds left (null: until unmuted).
+      ...(staff ? { authorMuted: mutedPeople.has(p.email), authorMutedSeconds: mutedPeople.get(p.email) ?? null } : {}),
     }));
   }
 
@@ -453,7 +454,8 @@ export function createFeed(deps: {
   /**
    * The Staff mute whoever wrote a Post (they can't post or reply), hiding everything they posted if `hidePosts`,
    * or unmute them, which brings back what the mute hid and nothing hidden for another reason. The Muted flag is
-   * People's: `setMuted` writes it, in the same transaction as the hiding.
+   * People's: `setMuted` writes it, in the same transaction as the hiding. A mute for a while (People's too) ends by
+   * itself and brings nothing back: the Host shows each hidden Post again if they want it back.
    */
   function mute(id: string, postId: string, muted: boolean, hidePosts: boolean, setMuted: (email: string, muted: boolean) => void): Refusal | null {
     const by = db
@@ -476,6 +478,28 @@ export function createFeed(deps: {
           .where(and(theirs, eq(posts.hiddenWith, "mute")))
           .run();
     });
+    changed(id);
+    return null;
+  }
+
+  /**
+   * The Staff delete a Post for good (for something too bad to keep even hidden): its row, its Reactions and its
+   * Photo's files. Its replies stay, quoting it as removed; a reply hidden along with it stays hidden, to be shown
+   * again on its own.
+   */
+  function remove(id: string, postId: string): Refusal | null {
+    const at = and(eq(posts.gameId, id), eq(posts.id, postId));
+    const row = db.select({ photoWidth: posts.photoWidth }).from(posts).where(at).get();
+    if (!row) return refuse("NotFound", "Post not found");
+    db.transaction((tx) => {
+      tx.delete(postReactions).where(and(eq(postReactions.gameId, id), eq(postReactions.postId, postId))).run();
+      tx.update(posts)
+        .set({ hiddenWith: null })
+        .where(and(eq(posts.gameId, id), eq(posts.hiddenWith, postId)))
+        .run();
+      tx.delete(posts).where(at).run();
+    });
+    if (row.photoWidth) photos.remove(id, postId);
     changed(id);
     return null;
   }
@@ -517,6 +541,7 @@ export function createFeed(deps: {
     setStatus,
     moveToGift,
     mute,
+    remove,
     photoFor,
     album,
     renameAuthor,

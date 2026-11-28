@@ -31,6 +31,7 @@ function setup() {
       renameAuthor: feed.renameAuthor,
       postsChanged: (id) => (feed.changed(id), signals.push("posts")),
       staffChanged: () => void signals.push("staff"),
+      now: () => new Date(),
     });
   const people = make();
   db.transaction((tx) => {
@@ -153,7 +154,7 @@ describe("People in a Game", () => {
     expect(feed.list("g", staff).map((p) => [p.status, p.authorMuted])).toEqual([["hidden", true]]);
 
     feed.mute("g", "p1", false, false, (email, on) => people.setMuted("g", email, on));
-    expect(people.mutedIn("g")).toEqual(new Set());
+    expect(people.mutedIn("g")).toEqual(new Map());
     expect(feed.list("g", staff).map((p) => p.status)).toEqual(["visible"]);
   });
 

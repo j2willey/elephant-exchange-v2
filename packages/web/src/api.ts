@@ -683,9 +683,18 @@ export function createApi(fetchFn: typeof fetch = (input, init) => fetch(input, 
       return res.status === 204;
     },
 
-    /** Mutes or unmutes whoever wrote a Post; muting can hide all their Posts too, which unmuting brings back. */
-    async mute(gameId: string, postId: string, muted: boolean, hidePosts = false): Promise<boolean> {
-      return (await postJson(`/api/games/${encodeURIComponent(gameId)}/mute`, { postId, muted, ...(hidePosts ? { hidePosts } : {}) })).status === 204;
+    /**
+     * Mutes or unmutes whoever wrote a Post; muting can hide all their Posts too, which unmuting brings back, and
+     * last `minutes` (it then ends by itself) rather than until unmuted.
+     */
+    async mute(gameId: string, postId: string, muted: boolean, hidePosts = false, minutes?: number): Promise<boolean> {
+      const body = { postId, muted, ...(hidePosts ? { hidePosts } : {}), ...(minutes !== undefined ? { minutes } : {}) };
+      return (await postJson(`/api/games/${encodeURIComponent(gameId)}/mute`, body)).status === 204;
+    },
+    /** The Host or a Co-host deletes a Post for good, Photo and all. */
+    async deletePost(gameId: string, postId: string): Promise<boolean> {
+      const res = await fetchFn(`/api/games/${encodeURIComponent(gameId)}/posts/${encodeURIComponent(postId)}`, { method: "DELETE" });
+      return res.status === 204;
     },
 
     /** Changes the name the person looking goes by in this Game, unless the Host has locked it. */

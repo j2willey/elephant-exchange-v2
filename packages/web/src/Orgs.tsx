@@ -248,8 +248,14 @@ export function ThemeColors({
 }) {
   const [main, setMain] = useState(color ?? APP_COLORS.color);
   const [background, setBackground] = useState(page ?? APP_COLORS.page);
-  useEffect(() => setMain(color ?? APP_COLORS.color), [color]);
-  useEffect(() => setBackground(page ?? APP_COLORS.page), [page]);
+  // When the saved colors change (a save, a Ready look, a hand-back), the fields show them. Only then: an effect
+  // that ran on first showing could land after the first pick and throw it away.
+  const [shown, setShown] = useState({ color, page });
+  if (shown.color !== color || shown.page !== page) {
+    setShown({ color, page });
+    if (shown.color !== color) setMain(color ?? APP_COLORS.color);
+    if (shown.page !== page) setBackground(page ?? APP_COLORS.page);
+  }
 
   return (
     <section className="card">

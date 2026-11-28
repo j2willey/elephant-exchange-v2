@@ -112,8 +112,16 @@ export const pitchBody = z.object({
 /** "Pitch it again": whose part (a Host may send any holder's). */
 export const repitchBody = z.object({ playerId: id.optional() });
 export const postGiftBody = z.object({ giftId: z.string().min(1).max(64).nullable() });
-/** Mutes or unmutes whoever wrote a Post; muting may hide all their Posts too, which unmuting brings back. */
-export const muteBody = z.object({ postId: z.string().min(1).max(64), muted: z.boolean(), hidePosts: z.boolean().optional() });
+/**
+ * Mutes or unmutes whoever wrote a Post; muting may hide all their Posts too, which unmuting brings back. `minutes`:
+ * a mute for a while (up to a day), which ends by itself; without it, until they're unmuted.
+ */
+export const muteBody = z.object({
+  postId: z.string().min(1).max(64),
+  muted: z.boolean(),
+  hidePosts: z.boolean().optional(),
+  minutes: z.number().int().min(1).max(24 * 60).optional(),
+});
 
 export const joinBody = z.object({ name });
 /** The Host or a Co-host renames someone, found by their Player or by one of their Posts, and locks the name or not. */
